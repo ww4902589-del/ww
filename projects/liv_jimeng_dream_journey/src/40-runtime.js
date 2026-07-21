@@ -15,7 +15,8 @@ function frame(now) {
 
   ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
   ctx.clearRect(0, 0, state.width, state.height);
-  const imageRect = drawImageLayer(loopPhase, quietFactor);
+  const imageRect = drawImageLayer(loopPhase, elapsed, quietFactor);
+  drawBackgroundMotion(imageRect, loopPhase, quietFactor);
   drawCharacterInteraction(imageRect, loopPhase, quietFactor);
   drawAtmosphere(loopPhase, quietFactor);
   drawParticles(loopPhase, quietFactor);
@@ -132,9 +133,17 @@ window.wallpaperPropertyListener = {
 
 window.addEventListener('resize', resize);
 window.addEventListener('pointerdown', ensureAudioContext, { once: true });
-art.addEventListener('load', () => {
+
+let animationStarted = false;
+function startWallpaperAnimation() {
+  if (animationStarted) return;
+  animationStarted = true;
   titleNode.classList.add('canvas-rendered');
   resize();
   buildParticles();
   requestAnimationFrame(frame);
-});
+}
+
+art.addEventListener('load', startWallpaperAnimation);
+if (art.complete && art.naturalWidth) startWallpaperAnimation();
+

@@ -1,0 +1,51 @@
+{
+  "contentrating": "Everyone",
+  "description": "《战双帕弥什》丽芙·霁梦同人互动动态壁纸。人物呼吸、伸手与眨眼动作，12秒无缝循环，鼠标光路互动、点击双涟漪、音频响应、昼夜主题与静谧模式。非商业二创，角色与作品版权归库洛游戏所有。\n\nFan-made interactive wallpaper inspired by Punishing: Gray Raven. Character breathing, reaching and blinking, cursor-responsive light, audio response and a seamless 12-second loop. Non-commercial fan work. All character and franchise rights belong to Kuro Games.",
+  "file": "index.html",
+  "general": {
+    "properties": {
+      "quality": {
+        "order": 1,
+        "text": "画质 / Quality",
+        "type": "combo",
+        "value": 2,
+        "options": [
+          {"label": "低 / Low", "value": 1},
+          {"label": "中 / Medium", "value": 2},
+          {"label": "高 / High", "value": 3}
+        ]
+      },
+      "motion": {"order": 2, "text": "动态强度 / Motion", "type": "slider", "min": 0, "max": 100, "value": 60},
+      "characteraction": {"order": 3, "text": "人物动作 / Character action", "type": "slider", "min": 0, "max": 100, "value": 78},
+      "audioresponse": {"order": 4, "text": "音频响应 / Audio response", "type": "slider", "min": 0, "max": 100, "value": 50},
+      "theme": {
+        "order": 5,
+        "text": "环境主题 / Theme",
+        "type": "combo",
+        "value": 0,
+        "options": [
+          {"label": "自动昼夜 / Auto", "value": 0},
+          {"label": "冰蓝 / Ice blue", "value": 1},
+          {"label": "粉白 / Pink-white", "value": 2},
+          {"label": "淡紫 / Lavender", "value": 3}
+        ]
+      },
+      "showtitle": {"order": 6, "text": "显示艺术标题 / Show artistic title", "type": "bool", "value": true},
+      "ambient": {"order": 7, "text": "晶体环境音 / Crystal ambience", "type": "bool", "value": false},
+      "interaction": {"order": 20, "text": "鼠标与点击互动 / Interaction", "type": "bool", "value": true},
+      "parallax": {"order": 21, "text": "鼠标视差 / Mouse parallax", "type": "slider", "min": 0, "max": 100, "value": 45},
+      "interactionstrength": {"order": 22, "text": "互动强度 / Interaction strength", "type": "slider", "min": 0, "max": 100, "value": 82},
+      "particles": {"order": 23, "text": "星尘粒子 / Particles", "type": "bool", "value": true},
+      "quietmode": {"order": 24, "text": "静谧模式 / Quiet mode", "type": "bool", "value": true},
+      "idletime": {"order": 25, "text": "静谧等待秒数 / Idle seconds", "type": "slider", "min": 15, "max": 300, "value": 60},
+      "imagescale": {"order": 26, "text": "画面缩放 / Image scale", "type": "slider", "min": 100, "max": 130, "value": 108},
+      "offsetx": {"order": 27, "text": "水平位置 / Horizontal position", "type": "slider", "min": -20, "max": 20, "value": 0}
+    }
+  },
+  "monetization": false,
+  "preview": "preview.jpg",
+  "tags": ["Anime", "Game", "Relaxing"],
+  "title": "丽芙·霁梦：溯梦归途",
+  "type": "web",
+  "visibility": "private"
+}

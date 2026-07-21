@@ -1,55 +1,141 @@
 'use strict';
 
-function applyCharacterClip(r) {
+function applyNormalizedEllipseClip(r, region, insetAmount = 0) {
+  const centerX = r.x + r.w * (region.x + region.width * 0.5);
+  const centerY = r.y + r.h * (region.y + region.height * 0.5);
   ctx.beginPath();
-  // Keep the face locked to the base frame. Animate only hair tips, shoulders/torso,
-  // reaching arm and skirt so cross-frame interpolation cannot create facial ghosting.
-  ctx.ellipse(r.x + r.w * 0.195, r.y + r.h * 0.47, r.w * 0.19, r.h * 0.40, -0.08, 0, TAU);
-  ctx.ellipse(r.x + r.w * 0.415, r.y + r.h * 0.46, r.w * 0.145, r.h * 0.235, -0.08, 0, TAU);
-  ctx.moveTo(r.x + r.w * 0.47, r.y + r.h * 0.31);
-  ctx.lineTo(r.x + r.w * 0.65, r.y + r.h * 0.25);
-  ctx.lineTo(r.x + r.w * 0.69, r.y + r.h * 0.35);
-  ctx.lineTo(r.x + r.w * 0.50, r.y + r.h * 0.42);
-  ctx.closePath();
-  ctx.ellipse(r.x + r.w * 0.34, r.y + r.h * 0.71, r.w * 0.225, r.h * 0.24, 0.05, 0, TAU);
+  ctx.ellipse(
+    centerX,
+    centerY,
+    r.w * region.width * (0.5 - insetAmount),
+    r.h * region.height * (0.5 - insetAmount),
+    -0.06,
+    0,
+    TAU
+  );
   ctx.clip();
 }
 
-function drawCharacterAction(r, loopPhase, quietFactor) {
+function drawTransformedImageRegion(image, r, region, transform) {
+  const pivotX = r.x + r.w * (region.pivotX ?? (region.x + region.width * 0.5));
+  const pivotY = r.y + r.h * (region.pivotY ?? (region.y + region.height * 0.5));
+  ctx.save();
+  applyNormalizedEllipseClip(r, region, transform.clipInsetAmount || 0);
+  ctx.globalAlpha = transform.alpha;
+  ctx.translate(pivotX + transform.translateXPx, pivotY + transform.translateYPx);
+  ctx.rotate(transform.rotationRadians);
+  ctx.scale(transform.scaleX, transform.scaleY);
+  ctx.translate(-pivotX, -pivotY);
+  ctx.drawImage(image, r.x, r.y, r.w, r.h);
+  ctx.restore();
+}
+
+function calculateBlinkFrame(elapsedSeconds) {
+  const blink = motionTuning.blink;
+  let nearestDistanceSeconds = motionTuning.loopDurationSeconds;
+  for (const centerSeconds of blink.centersSeconds) {
+    const directDistanceSeconds = Math.abs(elapsedSeconds - centerSeconds);
+    nearestDistanceSeconds = Math.min(
+      nearestDistanceSeconds,
+      directDistanceSeconds,
+      motionTuning.loopDurationSeconds - directDistanceSeconds
+    );
+  }
+  const halfDurationSeconds = blink.durationSeconds * 0.5;
+  if (nearestDistanceSeconds >= halfDurationSeconds) return null;
+  const progress = 1 - nearestDistanceSeconds / halfDurationSeconds;
+  return progress > 0.58 ? 'closed' : 'half';
+}
+
+function drawBlinkLocal(r, elapsedSeconds, quietFactor) {
+  const blinkFrame = calculateBlinkFrame(elapsedSeconds);
+  if (!blinkFrame || !blinkArt.complete || !blinkArt.naturalWidth) return;
+  const eyes = layerRegions.eyes;
+  const sourceX = blinkArt.naturalWidth * eyes.x;
+  const sourceY = blinkArt.naturalHeight * eyes.y;
+  const sourceWidth = blinkArt.naturalWidth * eyes.width;
+  const sourceHeight = blinkArt.naturalHeight * eyes.height;
+  const destinationX = r.x + r.w * eyes.x;
+  const destinationY = r.y + r.h * eyes.y;
+  const destinationWidth = r.w * eyes.width;
+  const destinationHeight = r.h * eyes.height;
+  const verticalScale = blinkFrame === 'closed' ? 1 : 0.72;
+
+  ctx.save();
+  applyNormalizedEllipseClip(r, eyes, 0.04);
+  ctx.globalAlpha = quietFactor;
+  ctx.drawImage(
+    blinkArt,
+    sourceX,
+    sourceY,
+    sourceWidth,
+    sourceHeight,
+    destinationX,
+    destinationY + destinationHeight * (1 - verticalScale) * 0.35,
+    destinationWidth,
+    destinationHeight * verticalScale
+  );
+  ctx.restore();
+}
+
+function drawCharacterAction(r, loopPhase, elapsedSeconds, quietFactor) {
   if (!motionArt.complete || !motionArt.naturalWidth) return;
+  const motionAmount = config.characterAction * config.motion * quietFactor;
+  const headTurnAmount = calculateHeadTurnAmount(elapsedSeconds) * motionAmount;
+  const breathingPhase = elapsedSeconds / motionTuning.character.breathing.cycleSeconds * TAU;
+  const breathingAmount = (0.5 - 0.5 * Math.cos(breathingPhase)) * motionAmount;
   const cycleReach = 0.5 - 0.5 * Math.cos(loopPhase * TAU);
   const cursorNearHand = config.interaction
     ? clamp((state.mouse.sx - 0.38) * 1.8, 0, 1) * clamp(1 - Math.abs(state.mouse.sy - 0.34) * 2.1, 0, 1)
     : 0;
   const clickResponse = performance.now() < state.responseUntil ? 1 : 0;
-  const actionMix = clamp(Math.max(cycleReach * 0.82, cursorNearHand, clickResponse) * config.characterAction * quietFactor, 0, 0.95);
-
-  ctx.save();
-  applyCharacterClip(r);
-  const actionAlpha = actionMix <= 0.08 ? 0 : ease(clamp((actionMix - 0.08) / 0.22, 0, 1));
-  ctx.globalAlpha = actionAlpha;
-  ctx.drawImage(motionArt, r.x, r.y, r.w, r.h);
-  ctx.restore();
-
-  if (blinkArt.complete && blinkArt.naturalWidth) {
-    const blinkA = Math.max(
-      clamp(1 - cyclicDistance(loopPhase, 0.265) / 0.018, 0, 1),
-      clamp(1 - cyclicDistance(loopPhase, 0.735) / 0.015, 0, 1)
-    );
-    if (blinkA > 0) {
-      ctx.save();
-      const face = imagePoint(r, 0.425, 0.267);
-      ctx.beginPath();
-      ctx.ellipse(face.x, face.y, r.w * 0.034, r.h * 0.025, -0.08, 0, TAU);
-      ctx.clip();
-      ctx.globalAlpha = ease(blinkA) * quietFactor;
-      ctx.drawImage(blinkArt, r.x, r.y, r.w, r.h);
-      ctx.restore();
-    }
-  }
+  const actionAmount = clamp(Math.max(cycleReach * 0.82, cursorNearHand, clickResponse) * motionAmount, 0, 1);
+  const head = motionTuning.character.head;
+  drawTransformedImageRegion(art, r, layerRegions.head, {
+    translateXPx: head.shiftXPx * headTurnAmount,
+    translateYPx: head.shiftYPx * headTurnAmount - breathingAmount,
+    rotationRadians: degreesToRadians(head.rotationDeg * headTurnAmount),
+    scaleX: 1,
+    scaleY: 1,
+    alpha: 0.96
+  });
+  drawTransformedImageRegion(motionArt, r, layerRegions.torso, {
+    translateXPx: 0,
+    translateYPx: -motionTuning.character.breathing.shoulderLiftPx * breathingAmount,
+    rotationRadians: degreesToRadians(-0.8 * headTurnAmount),
+    scaleX: 1 + motionTuning.character.breathing.torsoScaleAmount * breathingAmount,
+    scaleY: 1 + motionTuning.character.breathing.torsoScaleAmount * breathingAmount,
+    alpha: clamp(0.22 + breathingAmount * 0.35, 0, 0.62)
+  });
+  drawTransformedImageRegion(motionArt, r, layerRegions.arm, {
+    translateXPx: motionTuning.character.arm.reachDistancePx * actionAmount,
+    translateYPx: -1.5 * actionAmount,
+    rotationRadians: degreesToRadians(motionTuning.character.arm.rotationDeg * actionAmount),
+    scaleX: 1,
+    scaleY: 1,
+    alpha: ease(actionAmount)
+  });
+  const delayedSway = Math.sin(loopPhase * TAU - 0.52) * motionAmount;
+  drawTransformedImageRegion(motionArt, r, layerRegions.hairBack, {
+    translateXPx: motionTuning.character.hair.backDriftPx * delayedSway,
+    translateYPx: 2 * delayedSway,
+    rotationRadians: degreesToRadians(1.6 * delayedSway),
+    scaleX: 1,
+    scaleY: 1,
+    alpha: 0.42
+  });
+  drawTransformedImageRegion(motionArt, r, layerRegions.cloth, {
+    translateXPx: motionTuning.character.cloth.skirtDriftPx * Math.sin(loopPhase * TAU - 0.82) * motionAmount,
+    translateYPx: 2.5 * breathingAmount,
+    rotationRadians: degreesToRadians(1.5 * Math.sin(loopPhase * TAU - 0.82) * motionAmount),
+    scaleX: 1,
+    scaleY: 1,
+    alpha: 0.38
+  });
+  drawBlinkLocal(r, elapsedSeconds, quietFactor);
 }
 
-function drawImageLayer(loopPhase, quietFactor) {
+function drawImageLayer(loopPhase, elapsedSeconds, quietFactor) {
   const motion = config.motion * quietFactor;
   const px = (state.mouse.sx - 0.5) * config.parallax * 38 * config.interactionPower * quietFactor;
   const py = (state.mouse.sy - 0.5) * config.parallax * 22 * config.interactionPower * quietFactor;
@@ -58,7 +144,7 @@ function drawImageLayer(loopPhase, quietFactor) {
   const breath = 1 + Math.sin(loopPhase * TAU) * 0.0028 * motion;
   const r = coverRect(config.scale * breath, px + orbitX, py + orbitY);
   ctx.drawImage(art, r.x, r.y, r.w, r.h);
-  drawCharacterAction(r, loopPhase, quietFactor);
+  drawCharacterAction(r, loopPhase, elapsedSeconds, quietFactor);
 
   // Localized crystalline highlights: they pulse but never cover the face or fingers.
   const memoryPulse = 0.035 + (0.04 + state.audioSmooth * 0.12) * (0.5 + 0.5 * Math.sin(loopPhase * TAU - 0.8));
@@ -126,3 +212,4 @@ function radialGlow(x, y, radius, color, alpha) {
   ctx.fillStyle = g;
   ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
 }
+

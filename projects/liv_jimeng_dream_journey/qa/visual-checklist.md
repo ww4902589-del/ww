@@ -7,6 +7,7 @@
 - [x] No rectangular blink crop was visible in the captured frame.
 - [x] Character remains the primary focus and crystal remains secondary.
 - [x] Debug guide confirms head, eye, torso, arm, hair, cloth and crystal regions.
+- [x] Wallpaper Engine accepts and runs the v6 project at 1920×1080 from an ASCII QA path.
 
 ## Wallpaper Engine editor checks still required
 
@@ -17,5 +18,4 @@
 - [ ] Exercise high, medium and low quality modes for at least five minutes each.
 - [ ] Exercise audio response, click cooldown, title toggle and quiet mode.
 - [ ] Compare the frame immediately before 12 s with the frame at 0 s.
-
 

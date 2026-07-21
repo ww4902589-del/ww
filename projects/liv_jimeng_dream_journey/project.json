@@ -1,6 +1,6 @@
 {
   "contentrating": "Everyone",
-  "description": "《战双帕弥什》丽芙·霁梦同人互动动态壁纸。人物呼吸、伸手与眨眼动作，12秒无缝循环，鼠标光路互动、点击双涟漪、音频响应、昼夜主题与静谧模式。非商业二创，角色与作品版权归库洛游戏所有。\n\nFan-made interactive wallpaper inspired by Punishing: Gray Raven. Character breathing, reaching and blinking, cursor-responsive light, audio response and a seamless 12-second loop. Non-commercial fan work. All character and franchise rights belong to Kuro Games.",
+  "description": "《战双帕弥什》丽芙·霁梦同人互动动态壁纸 v6。包含局部转头、呼吸、伸手、无虚影局部眨眼、星河碎片与晶体流光，保持12秒无缝循环、鼠标互动、音频响应和静谧模式。非商业二创，角色与作品版权归库洛游戏所有。\n\nFan-made v6 interactive wallpaper inspired by Punishing: Gray Raven, with localized character and background motion and a seamless 12-second loop. Non-commercial fan work. All character and franchise rights belong to Kuro Games.",
   "file": "index.html",
   "general": {
     "properties": {
@@ -45,7 +45,8 @@
   "monetization": false,
   "preview": "preview.jpg",
   "tags": ["Anime", "Game", "Relaxing"],
-  "title": "丽芙·霁梦：溯梦归途",
+  "title": "丽芙·霁梦：溯梦归途 v6",
   "type": "web",
   "visibility": "private"
 }
+

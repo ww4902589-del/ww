@@ -1,0 +1,14 @@
+{
+  "sourceSize": { "width": 1920, "height": 1080 },
+  "coordinateSpace": "normalized-to-master-image",
+  "regions": {
+    "head": { "x": 0.365, "y": 0.145, "width": 0.105, "height": 0.235, "pivotX": 0.43, "pivotY": 0.32 },
+    "eyes": { "x": 0.397, "y": 0.252, "width": 0.057, "height": 0.035 },
+    "torso": { "x": 0.315, "y": 0.33, "width": 0.17, "height": 0.31, "pivotX": 0.40, "pivotY": 0.48 },
+    "arm": { "x": 0.47, "y": 0.255, "width": 0.19, "height": 0.19, "pivotX": 0.50, "pivotY": 0.37 },
+    "hairBack": { "x": 0.035, "y": 0.105, "width": 0.34, "height": 0.61, "pivotX": 0.34, "pivotY": 0.38 },
+    "cloth": { "x": 0.18, "y": 0.50, "width": 0.29, "height": 0.46, "pivotX": 0.38, "pivotY": 0.60 },
+    "crystal": { "x": 0.70, "y": 0.08, "width": 0.24, "height": 0.72, "pivotX": 0.81, "pivotY": 0.45 }
+  }
+}
+

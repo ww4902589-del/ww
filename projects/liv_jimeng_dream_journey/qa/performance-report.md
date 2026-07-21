@@ -18,10 +18,16 @@
 - Full-frame blink overlay guard: passed.
 - 12-second position and velocity closure: passed.
 
-## Environment limitations
+## Wallpaper Engine smoke test
 
-- Wallpaper Engine was not found in the common local Steam paths, so editor FPS, memory and desktop runtime measurements remain pending.
-- `ffmpeg` and ImageMagick are not installed, so an encoded 12-second comparison video was not produced in this environment.
+- Wallpaper Engine was located under `E:\steam` and loaded the project in a 1920×1080 pop-out window from an ASCII-only QA path.
+- The main Wallpaper Engine process and new `webwallpaper64` renderer processes remained responsive after launch; the renderer working set was approximately 122–144 MB during the smoke check.
+- No new load or parse error was appended for the ASCII-path run. The QA window was closed after verification.
+- Wallpaper Engine's CLI could not parse the original Chinese project path, so the isolated `C:\Users\wyj\Desktop\codex_wallpaper_v6_qa` copy was used for this test.
+
+## Remaining environment limitations
+
+- `ffmpeg` and ImageMagick are not installed, so an encoded 12-second comparison video was not produced.
 - The first in-app-browser preview rendered without console errors; further localhost reloads were blocked by browser URL policy.
-
+- Frame-by-frame artistic inspection and multi-minute FPS sampling still require an interactive editor session.
 

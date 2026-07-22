@@ -1,0 +1,33 @@
+{
+  "version":"v8",
+  "canvas":"1920x1080",
+  "format":"PNG",
+  "alpha":"required",
+  "total_expected_assets":"79-83",
+  "generation_rules":{
+    "same_character_identity":true,
+    "same_anchor_positions":true,
+    "no_glow_noise":true,
+    "no_chain_pattern":true,
+    "no_fake_blink_overlay":true,
+    "no_full_image_stretch":true
+  },
+  "groups":{
+    "base":{"count":4,"required":true},
+    "head":{"count":9,"required":true,"motion":"rotation_sequence"},
+    "eyes":{"count":5,"required":true,"motion":"blink_sequence"},
+    "arm":{"count":9,"required":true,"motion":"shoulder_elbow_wrist"},
+    "hair":{"count":10,"required":true},
+    "cloth":{"count":8,"required":true},
+    "background":{"count":16,"required":true},
+    "fragments":{"count":12,"required":true},
+    "memories":{"count":6,"required":false}
+  },
+  "quality_gate":[
+    "no_ai_identity_drift",
+    "no_hand_deformation",
+    "no_eye_ghosting",
+    "no_alpha_halo",
+    "no_noise_particles"
+  ]
+}

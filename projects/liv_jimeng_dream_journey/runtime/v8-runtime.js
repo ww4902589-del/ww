@@ -15,6 +15,7 @@
       this.lastState = null;
       this.options = {
         motion: 1,
+        characterAction: 1,
         quietFactor: 1,
         audioBoost: 0
       };
@@ -49,7 +50,12 @@
       const currentTime = Number.isFinite(now) ? now : performance.now();
       const elapsedSeconds = (currentTime - this.startTime) / 1000;
       const frame = this.timeline.runtimeFrame(elapsedSeconds, this.loopSeconds, this.fps);
-      const state = this.timeline.resolveFrameState(this.frameMap, frame);
+      const characterEnabled = Number(this.options.characterAction) > 0.01;
+      const characterFrame = characterEnabled ? frame : 0;
+      const state = this.timeline.resolveFrameState(this.frameMap, characterFrame);
+
+      state.runtimeFrame = frame;
+      state.characterFrame = characterFrame;
       state.elapsedSeconds = elapsedSeconds;
       state.loopPhase = frame / this.frameMap.frame_count;
       state.audioBoost = this.options.audioBoost;

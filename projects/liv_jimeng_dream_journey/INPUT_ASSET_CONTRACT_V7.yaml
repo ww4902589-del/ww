@@ -1,0 +1,25 @@
+canonical_source:
+  character_master: assets/master-keyframe.png
+  status: needs_checksum_verification
+
+reference_only:
+  - assets/motion-blink.png
+  - assets/motion-reach.png
+
+runtime_forbidden:
+  - assets/motion-blink.png
+  - assets/motion-reach.png
+  - baked_character_background
+
+required_artifacts:
+  - layered_psd
+  - occlusion_repair
+  - cubism_cmo3
+  - moc3
+  - model3_json
+  - physics3_json
+  - motion3_json
+
+missing_artifact_behavior:
+  status: BLOCKED_BY_ASSET_PRODUCTION
+  action: stop_and_report

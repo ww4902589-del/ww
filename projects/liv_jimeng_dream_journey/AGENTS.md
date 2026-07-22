@@ -1,74 +1,97 @@
-# Codex Agent Guardrails
+# Codex Agent Guardrails — v7
 
 ## Scope
 
-Work only inside `projects/liv_jimeng_dream_journey/` unless the handoff explicitly authorizes another path.
+Work only inside `projects/liv_jimeng_dream_journey/` unless explicitly authorized.
 
-## Objective
+## Primary objective
 
-Upgrade the Wallpaper Engine Web wallpaper from full-frame image blending to controlled local motion. The primary character action is a subtle head turn. Preserve two blinks per 12-second loop while replacing the current ghost-prone blink implementation. Strengthen starfield rotation, layered fragment drift, crystal flow, breathing, hair and cloth motion.
+Convert the wallpaper from ghost-prone full-frame character blending into a real layered animation pipeline:
+
+- Live2D Cubism character runtime
+- E1 ghost-free local eye motion through Live2D parameters
+- independent starfield layers
+- independent floating fragment particles
+- preserved Wallpaper Engine interactions
+
+## Rendering architecture
+
+Allowed:
+
+- Live2D Cubism WebGL canvas for the character
+- Canvas 2D for background and effects
+- existing Wallpaper Engine Web wallpaper packaging
+
+The previous prohibition on WebGL/Live2D applies only to replacing the project with an unrelated framework. It does NOT prohibit the approved Cubism runtime route.
+
+Forbidden:
+
+- full-frame character crossfades
+- baked character behind Live2D
+- complete `motion-blink.png` face overlay
+- complete `motion-reach.png` character overlay
+- video replacement of the interactive wallpaper
+- unrelated UI/framework migration
 
 ## Required execution order
 
-1. Inspect and validate the current baseline.
-2. Restore the binary assets listed in `assets/ASSET_MANIFEST.md`.
-3. Create a backup before implementation changes.
-4. Implement character motion.
-5. Implement and validate local blinking as a separate milestone.
-6. Implement background motion.
-7. Integrate, profile and validate the seamless loop.
-8. Package only after all checks pass.
+1. Input asset audit
+2. Character asset production gate
+3. Cubism model gate
+4. Web runtime integration
+5. Background starfield and fragments
+6. QA and Wallpaper Engine validation
 
-Do not work on several milestones at the same time.
+Do not bypass failed gates.
 
-## Allowed changes
+## Capability boundary
 
-- JavaScript rendering and animation code.
-- Local masks, transparent PNG layers and motion metadata under `assets/`.
-- `project.json` only when a user-facing tuning property is required.
-- Validation scripts and QA records.
+Code agents may create code, validators, configuration and runtime integration.
 
-## Prohibited changes
+They cannot honestly claim completion of:
 
-- Do not redesign the character, costume, face, headpiece or palette.
-- Do not replace the Canvas 2D Web wallpaper with video, WebGL, Three.js, React, Vue or another framework.
-- Do not delete mouse interaction, click ripples, audio response, title rendering, quality presets or quiet mode.
-- Do not solve motion by repeatedly cross-fading complete character frames.
-- Do not use the complete `motion-blink.png` as a transparent face overlay in the final blink implementation.
-- Do not add unrelated UI, narrative text, effects or dependencies.
-- Do not edit `main` directly.
+- PSD separation
+- occlusion repainting
+- Cubism mesh/deformer creation
+- physics tuning
+- runtime model export
+
+without actual artifacts.
+
+Missing art assets must result in `BLOCKED_BY_ASSET_PRODUCTION`.
 
 ## Motion limits
 
-- Head rotation: 2–4 degrees.
-- Head translation: 4–8 px horizontally and 2–4 px vertically at 1920×1080.
-- Shoulder movement: 1–4 px.
-- Arm reach: 6–12 px.
-- Wrist rotation: 2–5 degrees.
-- Front hair drift: 1–4 px.
-- Long hair drift: 8–18 px.
-- Skirt drift: 8–16 px.
-- Ribbon drift: 12–24 px.
-- Starfield rotation: 4–8 degrees over 12 seconds.
+Final visible motion:
 
-## Blink acceptance gate
+- Head turn: 2–4 degrees
+- Head shift: 4–8 px horizontal
+- Hair: delayed secondary motion
+- Skirt/ribbon: subtle physics motion
+- Starfield: 4–8 degrees over 12 seconds
 
-Blink timing remains twice per 12-second loop, around 2.8 s and 8.1 s. Use local open, half-closed and closed eye assets with a soft mask, or an equivalent local eyelid solution. Reject the milestone when any of the following appears:
+Model parameter ranges are not final animation keyframes.
 
-- double eyelashes;
-- iris or eye-socket ghosting;
-- grey facial haze;
-- face, hair or headpiece flicker;
-- nose or mouth movement;
-- visible rectangular crop edges.
+## Blink gate
 
-Do not begin background integration until this gate passes.
+Reject if any appears:
 
-## Coding rules
+- double eyelashes
+- iris ghosting
+- grey eye haze
+- face crop edge
+- nose/mouth movement
+- hair/headpiece flicker
 
-- Keep all tuning values in one configuration object instead of scattering constants.
-- Use full descriptive names and suffix units such as `Px`, `Deg` and `Seconds`.
-- All looped position, rotation, opacity and velocity curves must match at 0 and 12 seconds.
-- Reuse arrays and cached masks; do not allocate large objects every frame.
-- Disabled features must skip their rendering work.
-- Record every meaningful decision in the pull request or `HANDOFF.md`.
+Blink centers:
+
+- 2.8 seconds
+- 8.1 seconds
+
+## Code rules
+
+- Keep tuning values centralized.
+- Use explicit units in names.
+- All loops must match at 0 and 12 seconds.
+- Cache assets.
+- Record decisions in HANDOFF/PR notes.

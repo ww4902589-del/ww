@@ -83,7 +83,15 @@
       this.images = new Map();
       this.records = new Map();
       this.manifests = null;
-      this.report = { ok: false, status: 'NOT_STARTED', loaded: [], missing: [], errors: [] };
+      this.report = {
+        ok: false,
+        status: 'NOT_STARTED',
+        loaded: [],
+        missing: [],
+        missingRequired: [],
+        missingOptional: [],
+        errors: []
+      };
     }
 
     async loadManifests() {
@@ -108,7 +116,7 @@
           path: assetPath(this.baseUrl, id),
           format: 'png',
           alphaRequired: id !== 'background_clean',
-          required: true
+          required: !id.startsWith('memory_')
         });
       }
       return Array.from(this.records.values());
@@ -122,6 +130,8 @@
       const queue = records.slice();
       const loaded = [];
       const missing = [];
+      const missingRequired = [];
+      const missingOptional = [];
       const errors = [];
 
       const worker = async () => {
@@ -134,18 +144,29 @@
             loaded.push(record.id);
           } catch (error) {
             missing.push(record.id);
-            errors.push({ id: record.id, path: record.path, message: error.message });
+            if (record.required) missingRequired.push(record.id);
+            else missingOptional.push(record.id);
+            errors.push({
+              id: record.id,
+              path: record.path,
+              required: record.required,
+              message: error.message
+            });
           }
         }
       };
 
       await Promise.all(Array.from({ length: concurrency }, () => worker()));
       this.report = {
-        ok: missing.length === 0,
-        status: missing.length === 0 ? 'READY' : 'BLOCKED_BY_ASSET_PRODUCTION',
+        ok: missingRequired.length === 0,
+        status: missingRequired.length === 0 ? 'READY' : 'BLOCKED_BY_ASSET_PRODUCTION',
         expectedCount: records.length,
+        requiredCount: records.filter(record => record.required).length,
+        optionalCount: records.filter(record => !record.required).length,
         loaded,
         missing,
+        missingRequired,
+        missingOptional,
         errors
       };
       return this.report;
@@ -167,6 +188,8 @@
       return Object.assign({}, this.report, {
         loaded: this.report.loaded.slice(),
         missing: this.report.missing.slice(),
+        missingRequired: this.report.missingRequired.slice(),
+        missingOptional: this.report.missingOptional.slice(),
         errors: this.report.errors.slice()
       });
     }

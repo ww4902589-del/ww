@@ -1,0 +1,49 @@
+project: liv_jimeng_dream_journey
+version: V8
+status: BLOCKED_BY_ASSET_PRODUCTION
+phase: FRAME_PIPELINE_PREPARATION
+
+objective: >-
+  Create a layered frame-sequence animated wallpaper using transparent image assets.
+  Replace failed full-frame stretching and overlay animation approaches.
+
+completed:
+  - HANDOFF.md updated to v8 authority chain
+  - AGENTS.md updated with v8 execution rules
+  - V8_ASSET_PROMPTS_AND_CODEX_TASKS.md added
+  - frame-timeline-v8.json added
+  - z-order-v8.json added
+  - asset-checklist-v8.json added
+
+current_blockers:
+  - real separated character layer assets are not available
+  - production PNG frame assets are not available
+  - final animation cannot be honestly marked complete
+
+forbidden_shortcuts:
+  - whole-image deformation
+  - fake transparent placeholders
+  - crop based character movement
+  - duplicated baked character layers
+  - fabricated QA evidence
+
+next_tasks:
+  - create frame loader
+  - create asset validator
+  - create background phase scheduler
+  - import real layered PNG assets after production
+  - run visual QA in Wallpaper Engine
+
+acceptance:
+  character:
+    - visible head turn
+    - visible arm structural motion
+    - clean blink at 2.8s and 8.1s
+  background:
+    - independent starfield motion
+    - floating fragments
+    - crystal glow phase changes
+  quality:
+    - no glow noise
+    - no chain textures
+    - seamless 12 second loop

@@ -1,0 +1,32 @@
+version: v7
+status: PLANNING_REPAIRED
+implementation: NOT_COMPLETE
+blocked_reason: ASSET_PRODUCTION_REQUIRED
+
+selected_route:
+  character: Live2D_Cubism
+  blink: E1_Live2D_eyelid_parameters
+  background:
+    - starfield_independent_layer
+    - fragment_particle_system
+
+stage:
+  current: 0
+  next: input_asset_audit
+
+approval:
+  stage_1_assets: false
+  stage_2_cubism: false
+
+forbidden_completion_claims:
+  - placeholder_models
+  - empty_moc3
+  - fake_psd
+  - documentation_only
+  - syntax_check_only
+
+last_review:
+  issues_found:
+    - conflicting_v6_and_v7_instructions
+    - ambiguous_blink_implementation
+    - unclear_codex_capability_boundary

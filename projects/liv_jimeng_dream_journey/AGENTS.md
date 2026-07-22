@@ -1,97 +1,136 @@
-# Codex Agent Guardrails — v7
+# Codex Agent Guardrails — v8
 
 ## Scope
 
-Work only inside `projects/liv_jimeng_dream_journey/` unless explicitly authorized.
+Work only inside `projects/liv_jimeng_dream_journey/` unless the root `HANDOFF.md` explicitly authorizes another path.
 
 ## Primary objective
 
-Convert the wallpaper from ghost-prone full-frame character blending into a real layered animation pipeline:
+Implement a real layered frame-sequence wallpaper using multiple transparent image assets. The approved route is no longer Live2D/Cubism.
 
-- Live2D Cubism character runtime
-- E1 ghost-free local eye motion through Live2D parameters
-- independent starfield layers
-- independent floating fragment particles
+Required visual systems:
+
+- head frame sequence
+- arm frame sequence with visible shoulder/elbow/wrist/finger changes
+- local eye frame sequence for two blinks
+- hair, skirt and ribbon frame sequences
+- independent background starfield phases
+- independent crystal glow phases
+- independent fragment and memory-shard assets
 - preserved Wallpaper Engine interactions
 
-## Rendering architecture
+## Canonical route
 
-Allowed:
+- Loop duration: 12 seconds
+- Playback clock: 24 FPS
+- Runtime frames: 288
+- Artwork strategy: approximately 80–90 reusable transparent layered images
+- Runtime: Wallpaper Engine Web wallpaper
+- Renderer: Canvas 2D unless a later approved contract states otherwise
 
-- Live2D Cubism WebGL canvas for the character
-- Canvas 2D for background and effects
-- existing Wallpaper Engine Web wallpaper packaging
-
-The previous prohibition on WebGL/Live2D applies only to replacing the project with an unrelated framework. It does NOT prohibit the approved Cubism runtime route.
+## Visual hard constraints
 
 Forbidden:
 
-- full-frame character crossfades
-- baked character behind Live2D
-- complete `motion-blink.png` face overlay
-- complete `motion-reach.png` character overlay
-- video replacement of the interactive wallpaper
-- unrelated UI/framework migration
+- glow noise, dirty light speckles or glitter-like random particles
+- chain textures, chain-link motifs or restraint-like mechanical patterns
+- whole-image scaling as character breathing or body motion
+- full-frame/local crop redraws as head or arm animation
+- semi-transparent eye overlays as blinking
+- duplicated baked character behind active frame layers
+- using `motion-blink.png` or `motion-reach.png` as runtime character overlays
+- fabricated transparent assets, fabricated QA evidence or placeholder art reported as finished
 
-## Required execution order
+Allowed:
 
-1. Input asset audit
-2. Character asset production gate
-3. Cubism model gate
-4. Web runtime integration
-5. Background starfield and fragments
-6. QA and Wallpaper Engine validation
+- character pose adjustments
+- head-direction changes
+- arm-pose changes
+- controlled background appearance/disappearance
+- memory-shard count and content changes
+- crystal composition changes
 
-Do not bypass failed gates.
+## Required reading order
+
+1. root `HANDOFF.md`
+2. this file
+3. `MULTI_IMAGE_SPRITE_ANIMATION_V8.md`
+4. `V8_ASSET_PROMPTS_AND_CODEX_TASKS.md`
+5. `TASKS_V8.md`
+6. `PROJECT_STATUS_V8.yaml`
+7. files under `assets/frame-v8/manifests/`
+
+Older v6/v7 documents are historical only when they conflict with the v8 authority chain.
 
 ## Capability boundary
 
-Code agents may create code, validators, configuration and runtime integration.
+Code agents may create:
 
-They cannot honestly claim completion of:
+- directories and manifests
+- asset validators
+- frame loaders and schedulers
+- background reveal/hide logic
+- interaction integration
+- build and QA automation
 
-- PSD separation
-- occlusion repainting
-- Cubism mesh/deformer creation
-- physics tuning
-- runtime model export
+Code agents may not claim to have created final artwork unless genuine image assets exist and pass validation.
 
-without actual artifacts.
+Missing real frame assets must produce:
 
-Missing art assets must result in `BLOCKED_BY_ASSET_PRODUCTION`.
+`BLOCKED_BY_ASSET_PRODUCTION`
 
-## Motion limits
+## Asset rules
 
-Final visible motion:
+Every production frame asset must:
 
-- Head turn: 2–4 degrees
-- Head shift: 4–8 px horizontal
-- Hair: delayed secondary motion
-- Skirt/ribbon: subtle physics motion
-- Starfield: 4–8 degrees over 12 seconds
+- be a real PNG file
+- use transparent background where specified
+- have stable alignment with adjacent frames
+- avoid white/black matte edges
+- contain only the intended layer/group
+- use approved naming from `asset-checklist-v8.json`
 
-Model parameter ranges are not final animation keyframes.
+Do not create empty PNG placeholders to satisfy the validator.
 
 ## Blink gate
+
+Blink centers:
+
+- first: approximately 2.8 seconds
+- second: approximately 8.1 seconds
 
 Reject if any appears:
 
 - double eyelashes
 - iris ghosting
 - grey eye haze
-- face crop edge
-- nose/mouth movement
-- hair/headpiece flicker
+- face patch rectangle
+- nose or mouth jump
+- front-hair flicker
 
-Blink centers:
+## Arm-motion gate
 
-- 2.8 seconds
-- 8.1 seconds
+The arm sequence must visibly show at least three structural changes:
+
+- shoulder/upper-arm change
+- elbow/forearm change
+- wrist or finger change
+
+A single translated arm block is not acceptable.
+
+## Background gate
+
+- background motion must be perceptible within two seconds without mouse input
+- far, mid and near layers must not all move in lockstep
+- reveal/hide transitions must be smooth and intentional
+- memory shards and crystal fragments must be independent assets
 
 ## Code rules
 
-- Keep tuning values centralized.
+- Keep timing data in manifests, not scattered constants.
 - Use explicit units in names.
-- All loops must match at 0 and 12 seconds.
-- Cache assets.
-- Record decisions in HANDOFF/PR notes.
+- Derive runtime state from `(elapsedSeconds % 12)`; avoid unbounded incremental drift.
+- Cache decoded images.
+- Fail closed when required assets are missing.
+- Preserve mouse parallax, click ripple, audio response, title, quality levels, quiet mode and ultrawide support.
+- Record implementation status honestly in `PROJECT_STATUS_V8.yaml`.

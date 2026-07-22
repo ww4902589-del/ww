@@ -5,34 +5,34 @@
   "frame_count": 288,
   "channels": {
     "head": {
-      "frames": ["head_00_front","head_01_turn","head_02_turn","head_03_turn","head_04_turn","head_05_hold","head_06_return","head_07_return","head_08_front"],
+      "frames": ["head_00", "head_01", "head_02", "head_03", "head_04", "head_05", "head_06", "head_07", "head_08"],
       "segments": [[0,55,0],[56,67,1],[68,79,2],[80,91,3],[92,107,4],[108,183,5],[184,199,6],[200,231,7],[232,287,8]]
     },
     "eyes": {
-      "default":"eye_open",
-      "blink_windows":[{"start_frame":67,"end_frame":71},{"start_frame":194,"end_frame":198}],
-      "sequence":["eye_open","eye_half","eye_closed","eye_half_return","eye_open_hold"]
+      "default": "eye_open",
+      "blink_windows": [{"start_frame":67,"end_frame":71},{"start_frame":194,"end_frame":198}],
+      "sequence": ["eye_open","eye_half","eye_closed","eye_half_return","eye_open_hold"]
     },
     "arm": {
-      "frames":["arm_00_rest","arm_01_lift","arm_02_lift_more","arm_03_extend","arm_04_extend_more","arm_05_hold","arm_06_wrist_turn","arm_07_return","arm_08_rest"],
-      "segments":[[0,47,0],[48,59,1],[60,71,2],[72,87,3],[88,107,4],[108,159,5],[160,183,6],[184,243,7],[244,287,8]]
+      "frames": ["arm_00", "arm_01", "arm_02", "arm_03", "arm_04", "arm_05", "arm_06", "arm_07", "arm_08"],
+      "segments": [[0,47,0],[48,59,1],[60,71,2],[72,87,3],[88,107,4],[108,159,5],[160,183,6],[184,243,7],[244,287,8]]
     },
     "hair": {
-      "mode":"ping_pong",
-      "sequence":[0,1,2,3,4,3,2,1,0],
-      "back_cycle_frames":144,
-      "front_offset_frames":12
+      "mode": "ping_pong",
+      "sequence": [0,1,2,3,4,3,2,1,0],
+      "back_cycle_frames": 144,
+      "front_offset_frames": 12
     },
     "cloth": {
-      "skirt":"ping_pong_144",
-      "ribbon":"ping_pong_96"
+      "skirt": "ping_pong_144",
+      "ribbon": "ping_pong_96"
     },
     "background": {
-      "far_cycle_frames":288,
-      "mid_cycle_frames":192,
-      "near_cycle_frames":144,
-      "crystal_cycle_frames":96,
-      "fragment_cycles":{"frag_lt":120,"frag_top":144,"frag_mid":168,"frag_rb":96}
+      "far_cycle_frames": 288,
+      "mid_cycle_frames": 192,
+      "near_cycle_frames": 144,
+      "crystal_cycle_frames": 96,
+      "fragment_cycles": {"frag_lt":120,"frag_top":144,"frag_mid":168,"frag_rb":96}
     }
   }
 }

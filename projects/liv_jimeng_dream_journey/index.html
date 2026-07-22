@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
   <title>丽芙·霁梦：溯梦归途 v8</title>
-  <link rel="stylesheet" href="styles.css?v=8.0">
+  <link rel="stylesheet" href="styles.css?v=8.1">
 </head>
 <body>
   <canvas id="wallpaper" aria-label="丽芙·霁梦：溯梦归途多图片分层动态壁纸"></canvas>
@@ -13,6 +13,19 @@
     <strong data-role="state">LOADING_V8_ASSETS</strong>
     <span data-role="detail">正在初始化。</span>
   </div>
+
+  <aside id="v8-diagnostic" aria-label="V8诊断状态" hidden>
+    <strong>V8 DIAGNOSTIC</strong>
+    <dl>
+      <div><dt>MODE</dt><dd data-role="mode">-</dd></div>
+      <div><dt>STATUS</dt><dd data-role="status">-</dd></div>
+      <div><dt>FRAME</dt><dd data-role="frame">- / 287</dd></div>
+      <div><dt>FPS</dt><dd data-role="fps">-</dd></div>
+      <div><dt>ASSETS</dt><dd data-role="assets">- / 79</dd></div>
+      <div><dt>MISSING</dt><dd data-role="missing">-</dd></div>
+    </dl>
+    <small>仅用于图层、时间轴和运行性能诊断，不代表生产素材完成。</small>
+  </aside>
 
   <div id="title" aria-hidden="true">
     <div class="title-row">
@@ -24,14 +37,15 @@
     <i class="title-rule"><b></b></i>
   </div>
 
-  <script src="runtime/timeline.js?v=8.0"></script>
-  <script src="runtime/asset-validator.js?v=8.0"></script>
-  <script src="runtime/frame-loader.js?v=8.0"></script>
-  <script src="runtime/layer-manager.js?v=8.0"></script>
-  <script src="runtime/background-engine.js?v=8.0"></script>
-  <script src="runtime/v8-runtime.js?v=8.0"></script>
-  <script src="runtime/renderer.js?v=8.0"></script>
-  <script src="runtime/boot-v8.js?v=8.0"></script>
-  <script src="runtime/entry-v8.js?v=8.0"></script>
+  <script src="runtime/config-v8-diagnostic.js?v=8.1"></script>
+  <script src="runtime/timeline.js?v=8.1"></script>
+  <script src="runtime/asset-validator.js?v=8.1"></script>
+  <script src="runtime/frame-loader.js?v=8.1"></script>
+  <script src="runtime/layer-manager.js?v=8.1"></script>
+  <script src="runtime/background-engine.js?v=8.1"></script>
+  <script src="runtime/renderer.js?v=8.1"></script>
+  <script src="runtime/v8-runtime.js?v=8.1"></script>
+  <script src="runtime/boot-v8.js?v=8.1"></script>
+  <script src="runtime/entry-v8.js?v=8.1"></script>
 </body>
 </html>

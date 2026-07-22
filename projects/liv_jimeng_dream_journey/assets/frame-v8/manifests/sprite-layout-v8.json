@@ -1,0 +1,54 @@
+{
+  "schema_version": 2,
+  "canvas": {
+    "width": 1920,
+    "height": 1080,
+    "fit": "cover",
+    "origin": "top-left"
+  },
+  "rendering": {
+    "asset_alignment": "full_canvas",
+    "default_draw": {
+      "x": 0,
+      "y": 0,
+      "width": 1920,
+      "height": 1080
+    },
+    "pixel_interpolation": "high"
+  },
+  "layers": {
+    "background_clean": {"content_bbox": [0, 0, 1920, 1080], "pivot": [960, 540], "parallax_px": [0, 0]},
+    "starfield_far": {"content_bbox": [0, 0, 1920, 1080], "pivot": [960, 540], "parallax_px": [2, 2]},
+    "starfield_mid": {"content_bbox": [0, 0, 1920, 1080], "pivot": [960, 540], "parallax_px": [6, 5]},
+    "hair_back": {"content_bbox": [0, 80, 1025, 930], "pivot": [650, 295], "parallax_px": [2, 1]},
+    "fragments_far": {"content_bbox": [0, 0, 1920, 1080], "pivot": [960, 540], "parallax_px": [4, 3]},
+    "body_base": {"content_bbox": [420, 300, 660, 725], "pivot": [748, 610], "parallax_px": [4, 2]},
+    "skirt": {"content_bbox": [250, 525, 830, 500], "pivot": [745, 610], "parallax_px": [4, 2]},
+    "ribbon": {"content_bbox": [420, 630, 330, 410], "pivot": [650, 665], "parallax_px": [5, 3]},
+    "arm": {
+      "content_bbox": [790, 275, 475, 205],
+      "pivot": [815, 410],
+      "joint_anchors": {"shoulder": [815, 410], "elbow": [1015, 380], "wrist": [1150, 345]},
+      "parallax_px": [5, 3]
+    },
+    "head": {"content_bbox": [590, 90, 320, 350], "pivot": [742, 405], "neck_anchor": [742, 405], "parallax_px": [5, 3]},
+    "hair_front": {"content_bbox": [620, 165, 290, 260], "pivot": [748, 305], "parallax_px": [5, 3]},
+    "eyes": {"content_bbox": [710, 260, 135, 90], "pivot": [775, 315], "parallax_px": [5, 3]},
+    "starfield_near": {"content_bbox": [0, 0, 1920, 1080], "pivot": [960, 540], "parallax_px": [12, 9]},
+    "crystal_glow": {"content_bbox": [1430, 15, 410, 835], "pivot": [1630, 425], "parallax_px": [8, 5]},
+    "memory_shards": {"content_bbox": [0, 0, 1920, 1080], "pivot": [960, 540], "parallax_px": [10, 7]},
+    "title": {"content_bbox": [1320, 820, 520, 190], "pivot": [1580, 915], "parallax_px": [0, 0]}
+  },
+  "fragment_regions": {
+    "frag_lt": {"content_bbox": [80, 15, 570, 270], "pivot": [365, 150], "depth": "far"},
+    "frag_top": {"content_bbox": [1000, 70, 290, 245], "pivot": [1145, 192], "depth": "mid"},
+    "frag_mid": {"content_bbox": [1050, 495, 370, 220], "pivot": [1235, 605], "depth": "mid"},
+    "frag_rb": {"content_bbox": [1410, 650, 430, 330], "pivot": [1625, 815], "depth": "near"}
+  },
+  "alignment_tolerances": {
+    "head_neck_anchor_px": 3,
+    "arm_shoulder_anchor_px": 3,
+    "eye_patch_position_px": 1,
+    "alpha_matte_rgb_max": 8
+  }
+}

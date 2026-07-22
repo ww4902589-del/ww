@@ -6,6 +6,7 @@ const path = require('node:path');
 
 const ROOT = path.resolve(__dirname, '..');
 const MANIFEST_DIR = path.join(ROOT, 'assets', 'frame-v8', 'manifests');
+const DIAGNOSTIC_ROOT = path.join(ROOT, 'assets', 'frame-v8', 'diagnostic');
 const OUTPUT_DIR = path.join(ROOT, 'qa');
 const OUTPUT = path.join(OUTPUT_DIR, 'diagnostic-report-v8.json');
 
@@ -26,19 +27,20 @@ function run() {
   const present = [];
 
   for (const asset of required) {
-    const file = path.join(ROOT, 'assets', 'frame-v8', asset.path);
+    const file = path.join(DIAGNOSTIC_ROOT, asset.path);
     if (exists(file)) present.push(asset.id);
     else missing.push({ id: asset.id, path: asset.path });
   }
 
-  const frameCount = frameMap.timeline?.loop?.total_frames || 288;
-  const fps = frameMap.timeline?.loop?.fps || 24;
-  const seconds = frameMap.timeline?.loop?.seconds || 12;
+  const frameCount = frameMap.frame_count || 288;
+  const fps = frameMap.fps || 24;
+  const seconds = frameMap.loop_seconds || 12;
 
   const report = {
     version: 'v8',
     generated_at: new Date().toISOString(),
     mode: 'DIAGNOSTIC_QA',
+    source: 'assets/frame-v8/diagnostic',
     timeline: {
       frames: frameCount,
       fps,
@@ -52,16 +54,16 @@ function run() {
       ready: missing.length === 0,
       missing
     },
-    production_ready: missing.length === 0 && frameCount === fps * seconds,
+    production_ready: false,
     notes: [
-      'This report validates pipeline structure, not artistic quality.',
-      'Diagnostic assets must never replace final character assets.'
+      'This report validates diagnostic pipeline structure, not artistic quality.',
+      'Diagnostic assets must never replace final character assets.',
+      'Production readiness requires genuine artwork and Wallpaper Engine visual QA.'
     ]
   };
 
   fs.mkdirSync(OUTPUT_DIR, { recursive: true });
   fs.writeFileSync(OUTPUT, `${JSON.stringify(report, null, 2)}\n`);
-
   console.log(JSON.stringify(report, null, 2));
 }
 

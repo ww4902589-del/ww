@@ -1,0 +1,20 @@
+{
+  "layers": [
+    "background_clean",
+    "starfield_far",
+    "starfield_mid",
+    "hair_back",
+    "fragments_far",
+    "body_base",
+    "skirt",
+    "ribbon",
+    "arm",
+    "head",
+    "hair_front",
+    "eyes",
+    "starfield_near",
+    "crystal_glow",
+    "memory_shards",
+    "title"
+  ]
+}

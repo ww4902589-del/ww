@@ -3,11 +3,17 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-  <title>丽芙·霁梦：溯梦归途</title>
-  <link rel="stylesheet" href="styles.css?v=6.0">
+  <title>丽芙·霁梦：溯梦归途 v8</title>
+  <link rel="stylesheet" href="styles.css?v=8.0">
 </head>
 <body>
-  <canvas id="wallpaper" aria-label="丽芙·霁梦：溯梦归途互动动态壁纸"></canvas>
+  <canvas id="wallpaper" aria-label="丽芙·霁梦：溯梦归途多图片分层动态壁纸"></canvas>
+
+  <div id="runtime-status" role="status" aria-live="polite" hidden>
+    <strong data-role="state">LOADING_V8_ASSETS</strong>
+    <span data-role="detail">正在初始化。</span>
+  </div>
+
   <div id="title" aria-hidden="true">
     <div class="title-row">
       <b class="title-gem"></b>
@@ -17,11 +23,15 @@
     <span class="title-sub">LIV · DREAMWEAVER</span>
     <i class="title-rule"><b></b></i>
   </div>
-  <script src="src/00-core.js?v=6.0"></script>
-  <script src="src/10-character.js?v=6.0"></script>
-  <script src="src/20-effects.js?v=6.0"></script>
-  <script src="src/30-title.js?v=6.0"></script>
-  <script src="src/40-runtime.js?v=6.0"></script>
+
+  <script src="runtime/timeline.js?v=8.0"></script>
+  <script src="runtime/asset-validator.js?v=8.0"></script>
+  <script src="runtime/frame-loader.js?v=8.0"></script>
+  <script src="runtime/layer-manager.js?v=8.0"></script>
+  <script src="runtime/background-engine.js?v=8.0"></script>
+  <script src="runtime/v8-runtime.js?v=8.0"></script>
+  <script src="runtime/renderer.js?v=8.0"></script>
+  <script src="runtime/boot-v8.js?v=8.0"></script>
+  <script src="runtime/entry-v8.js?v=8.0"></script>
 </body>
 </html>
-

@@ -1,70 +1,99 @@
-# Handoff — 丽芙·霁梦动态壁纸 v7
+# Handoff — 丽芙·霁梦动态壁纸 v8
 
 ## Current status
 
-`PLANNING_REPAIRED / IMPLEMENTATION_NOT_COMPLETE / BLOCKED_BY_ASSET_PRODUCTION`
+`V8_SCAFFOLDING_IN_PROGRESS / IMPLEMENTATION_NOT_COMPLETE / BLOCKED_BY_ASSET_PRODUCTION`
 
-The former v6 Canvas overlay implementation failed visual review: the character action was not perceptible, blinking disappeared or ghosted, and repeated full-frame/local crops increased double images. Do not continue tuning that implementation.
+The v6 Canvas crop/overlay route failed visual review because it produced picture stretching, weak arm motion, missing blinking and barely visible background motion. The v7 Live2D route is no longer the selected implementation because the required layered PSD and Cubism export package are unavailable.
 
-## User-approved route
+## User-approved v8 route
 
-- Character: **Live2D Cubism**
-- Blink: **E1 implemented as Live2D eyelid/eye-open parameters**
-- Background: **independent starfield layers + independent fragment particles**
 - Runtime: Wallpaper Engine Web wallpaper
-- Rendering: one Live2D WebGL canvas for the character, Canvas 2D for background/effects
+- Animation method: layered frame-sequence animation using multiple transparent images
+- Loop: 12 seconds
+- Playback: 24 FPS, 288 runtime frames
+- Art target: approximately 80–90 reusable layered frame assets, not 288 full-screen images
+- Character motion: head frames, arm frames, eye frames, hair frames, cloth frames
+- Background motion: independent starfield phases, crystal glow phases, fragments and memory shards
+- Background elements may appear and disappear during the loop
+
+## Visual hard constraints
+
+- No glow noise, dirty light speckles or glitter-like random particles
+- No chain textures, chain-link motifs or restraint-like mechanical patterns
+- No whole-image stretching as character motion
+- No full-frame crop overlays as head or arm animation
+- No semi-transparent eye overlay as blinking
+- No duplicated baked character behind the frame character
+- Natural hands and fingers are mandatory
+
+## Reference images
+
+Repository-embedded previews:
+
+- `projects/liv_jimeng_dream_journey/assets/frame-v8/references/reference_A_standing.svg`
+- `projects/liv_jimeng_dream_journey/assets/frame-v8/references/reference_B_sitting.svg`
+
+Reference A is the primary standing-composition reference. Reference B is the supplementary pose, atmosphere and background-reveal reference. The SVG files contain embedded reduced previews for repository review; use the original user-provided high-resolution images for final asset production.
 
 ## Authority order
 
-The next agent must read these files in this exact order:
+The next agent must read these files in this order:
 
 1. `HANDOFF.md`
 2. `projects/liv_jimeng_dream_journey/AGENTS.md`
-3. `projects/liv_jimeng_dream_journey/EXECUTION_CONTRACT_V7.md`
-4. `projects/liv_jimeng_dream_journey/PROJECT_STATUS_V7.yaml`
-5. `projects/liv_jimeng_dream_journey/INPUT_ASSET_CONTRACT_V7.yaml`
-6. `projects/liv_jimeng_dream_journey/TASKS.md`
-7. `projects/liv_jimeng_dream_journey/QA_EVIDENCE_REQUIREMENTS_V7.md`
+3. `projects/liv_jimeng_dream_journey/MULTI_IMAGE_SPRITE_ANIMATION_V8.md`
+4. `projects/liv_jimeng_dream_journey/V8_ASSET_PROMPTS_AND_CODEX_TASKS.md`
+5. `projects/liv_jimeng_dream_journey/TASKS_V8.md`
+6. `projects/liv_jimeng_dream_journey/PROJECT_STATUS_V8.yaml`
+7. `projects/liv_jimeng_dream_journey/assets/frame-v8/manifests/asset-checklist-v8.json`
+8. `projects/liv_jimeng_dream_journey/assets/frame-v8/manifests/frame-timeline-v8.json`
+9. `projects/liv_jimeng_dream_journey/assets/frame-v8/manifests/z-order-v8.json`
+10. `projects/liv_jimeng_dream_journey/assets/frame-v8/manifests/sprite-layout-v8.json`
 
-When any other project document conflicts with the files above, the authority order above wins.
+When any older v6/v7 document conflicts with the authority order above, the v8 files win.
 
-## Superseded material
+## Superseded routes
 
-The following files describe the failed v6 route or earlier option selection. They are retained only for history and must not drive implementation:
+The following are historical only and must not drive implementation:
 
-- `projects/liv_jimeng_dream_journey/IMPLEMENTATION_PLAN.md`
-- `projects/liv_jimeng_dream_journey/MOTION_DESIGN_OPTIONS.md`
-- earlier v6 text in Git history
+- v6 full-frame/local crop animation
+- v7 Live2D/Cubism implementation contract
+- `EXECUTION_CONTRACT_V7.md`
+- `PROJECT_STATUS_V7.yaml`
+- `INPUT_ASSET_CONTRACT_V7.yaml`
+- `QA_EVIDENCE_REQUIREMENTS_V7.md`
 
-`UNFINISHED_IMPLEMENTATION_METHODS_AND_TOOLS.md` is supplemental background only. `EXECUTION_CONTRACT_V7.md` is the single executable specification.
+Do not delete the historical files; mark them as superseded through this handoff and avoid executing them.
 
-## Non-negotiable rules
+## Allowed Codex work now
 
-- Do not render the baked character from `master-keyframe.png` behind a visible Live2D character.
-- Do not draw `motion-reach.png` or `motion-blink.png` as runtime character overlays.
-- Do not implement E1 as three semi-transparent eye images over an already rendered Live2D eye.
-- Do not fabricate `.psd`, `.cmo3`, `.moc3`, `.model3.json`, `.physics3.json`, `.motion3.json`, screenshots, videos, or QA results.
-- Do not claim completion when only folders, placeholders, loaders, documentation, or automated syntax checks exist.
-- Do not fetch runtime libraries or model assets from an online CDN.
-- Do not commit Cubism Core to the public repository until its redistribution terms have been reviewed and explicitly recorded.
+Codex may:
 
-## Capability boundary
+1. Create and validate the v8 directory structure.
+2. Maintain asset manifests, layout coordinates, z-order and timeline data.
+3. Implement the frame-sequence loader and fail-closed asset validation.
+4. Implement the background reveal/hide, starfield, fragment and memory-shard scheduler after real assets exist.
+5. Preserve mouse interaction, click ripple, audio response, title, quality levels, quiet mode and ultrawide support.
 
-Codex may implement repository text/code, asset validators, build scripts, Canvas background code, Live2D Web integration, fallback behavior, configuration, and QA automation.
+## Asset gate
 
-Actual art separation, occlusion repainting, Cubism mesh/deformer/physics work, and Runtime model export require the corresponding GUI tools and a human or tool-enabled operator. If those outputs are absent, record `BLOCKED_BY_ASSET_PRODUCTION`; do not replace them with fake files or the failed Canvas crop method.
+Actual production PNG frames are not yet present. Missing assets must produce:
 
-## Current allowed work
+`BLOCKED_BY_ASSET_PRODUCTION`
 
-The next agent may:
-
-1. Audit inputs and record exact checksums/dimensions.
-2. Create non-binary scaffolding that clearly fails closed when Live2D assets/Core are missing.
-3. Implement and test the independent starfield/fragment engine behind a static fallback, provided the baked character is not duplicated.
-4. Prepare validators and QA evidence templates.
-
-The next agent may not mark Stage 1 or Stage 2 complete without genuine PSD/Cubism deliverables and human approval recorded in `PROJECT_STATUS_V7.yaml`.
+Codex must not resolve the blocker by reusing the failed complete-image crop method, by fabricating transparent assets, or by claiming that placeholder files are finished artwork.
 
 ## Completion definition
 
-The project is complete only when all acceptance items in `EXECUTION_CONTRACT_V7.md` and `QA_EVIDENCE_REQUIREMENTS_V7.md` are supported by committed or explicitly referenced evidence, and Wallpaper Engine visibly runs one Live2D character with two ghost-free blinks, independent starfield layers, independent fragment assets, preserved interactions, and a seamless 12-second loop.
+The project is complete only when:
+
+- real layered frame assets exist;
+- the head visibly changes direction;
+- the arm sequence visibly changes shoulder, elbow, wrist and fingers;
+- two clean blinks occur near 2.8s and 8.1s;
+- background movement is perceptible within two seconds;
+- background reveal/hide is controlled and clean;
+- no glow noise or chain-like pattern is present;
+- the 0s and 12s states close seamlessly;
+- the preserved Wallpaper Engine interactions pass regression testing.

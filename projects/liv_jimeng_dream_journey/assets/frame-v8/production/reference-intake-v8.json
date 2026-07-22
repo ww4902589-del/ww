@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "project": "liv_jimeng_dream_journey",
+  "version": "v8",
+  "status": "CANDIDATE_REFERENCE_LOCATED_NOT_IMPORTED",
+  "reference_candidates": [
+    {
+      "display_name": "丽芙·霁梦角色设计参考板.png",
+      "source": "user_file_library",
+      "role": "character_identity_and_design_board",
+      "available_in_repository": false,
+      "approved_as_original_high_resolution_reference": false,
+      "limitations": [
+        "The candidate is a composite reference board rather than a verified original single official character render.",
+        "The repository connector does not contain the original image bytes.",
+        "Production layer extraction must not begin from the embedded 160x90 SVG thumbnail."
+      ]
+    },
+    {
+      "display_name": "reference_A_standing.svg",
+      "source": "repository",
+      "path": "../references/reference_A_standing.svg",
+      "role": "low_resolution_preview_only",
+      "available_in_repository": true,
+      "approved_as_original_high_resolution_reference": false,
+      "limitations": [
+        "160x90 embedded preview",
+        "not suitable for production layer extraction",
+        "not acceptable as evidence of character-detail accuracy"
+      ]
+    }
+  ],
+  "required_import": {
+    "target_path": "../references/reference_A_original.png",
+    "accepted_formats": ["PNG", "lossless WebP"],
+    "minimum_recommended_dimensions": [1920, 1080],
+    "preferred_character_height_px": 800,
+    "must_preserve": [
+      "official face and eye proportions",
+      "hair style and hair accessories",
+      "costume construction and color relationships",
+      "natural hand anatomy",
+      "non-increased exposure level"
+    ],
+    "must_not_contain": [
+      "watermark over the character",
+      "heavy compression artifacts",
+      "cropped head, arm, hand or costume connection areas",
+      "AI-redesigned face or outfit"
+    ]
+  },
+  "freeze_record": {
+    "reference_imported": false,
+    "identity_approved": false,
+    "composition_approved": false,
+    "anchors_approved": false,
+    "canvas": [1920, 1080],
+    "planned_anchors": {
+      "head_neck": [742, 405],
+      "arm_shoulder": [815, 410],
+      "arm_elbow": [1015, 380],
+      "arm_wrist": [1150, 345],
+      "eyes_pivot": [775, 315]
+    },
+    "anchor_tolerances_px": {
+      "head_neck": 3,
+      "arm_shoulder": 3,
+      "eyes": 1
+    },
+    "reviewer": null,
+    "reviewed_at": null,
+    "notes": []
+  },
+  "gate": {
+    "allow_body_base": false,
+    "allow_head_00": false,
+    "allow_arm_00": false,
+    "blocking_reasons": [
+      "Original high-resolution reference bytes are not imported into the repository.",
+      "Character identity and 1920x1080 composition are not yet frozen."
+    ]
+  }
+}

@@ -1,0 +1,168 @@
+{
+  "schema_version": 1,
+  "project": "liv_jimeng_dream_journey",
+  "version": "v8",
+  "batch_id": "mother-frame-batch-01",
+  "batch_scope": "body_base, head_00, arm_00, hair_back_00, hair_front_00, eye_open",
+  "review_status": "PENDING_ASSET_PRODUCTION",
+  "reviewer": null,
+  "reviewed_at": null,
+  "source_reference": {
+    "primary_preview": "../references/reference_A_standing.svg",
+    "original_high_resolution_reference_required": true,
+    "original_reference_available_to_reviewer": false,
+    "character_mother_frame_approved": false,
+    "notes": "仓库 SVG 仅为缩略预览。审核前必须取得用户提供的原始高清参考图。"
+  },
+  "automated_validation": {
+    "command": "node scripts/verify_frame_assets.js --write-report=qa/first-batch-validation-v8.json",
+    "report_path": "qa/first-batch-validation-v8.json",
+    "status": "NOT_RUN",
+    "run_at": null,
+    "fatal_errors_for_batch_assets": [],
+    "warnings_for_batch_assets": []
+  },
+  "assets": {
+    "body_base": {
+      "path": "../base/body_base.png",
+      "production_status": "MISSING",
+      "source_frame": null,
+      "sha256": null,
+      "checks": {
+        "dimensions_1920x1080": null,
+        "rgba_png": null,
+        "non_owned_regions_transparent": null,
+        "head_removed": null,
+        "independent_arm_removed": null,
+        "front_and_back_hair_removed": null,
+        "skirt_and_ribbon_removed": null,
+        "no_duplicate_character_parts": null,
+        "no_alpha_halo": null
+      },
+      "notes": []
+    },
+    "head_00": {
+      "path": "../head/head_00.png",
+      "production_status": "MISSING",
+      "source_frame": null,
+      "sha256": null,
+      "checks": {
+        "dimensions_1920x1080": null,
+        "rgba_png": null,
+        "reference_identity_match": null,
+        "neck_anchor_within_3px": null,
+        "face_and_hair_accessories_consistent": null,
+        "eyes_not_baked_twice": null,
+        "no_face_patch_rectangle": null,
+        "non_head_regions_transparent": null
+      },
+      "notes": []
+    },
+    "arm_00": {
+      "path": "../arm/arm_00.png",
+      "production_status": "MISSING",
+      "source_frame": null,
+      "sha256": null,
+      "checks": {
+        "dimensions_1920x1080": null,
+        "rgba_png": null,
+        "shoulder_anchor_within_3px": null,
+        "shoulder_elbow_wrist_structure_clear": null,
+        "finger_count_correct": null,
+        "hands_and_fingers_natural": null,
+        "sleeve_and_accessories_consistent": null,
+        "non_arm_regions_transparent": null
+      },
+      "notes": []
+    },
+    "hair_back_00": {
+      "path": "../hair/hair_back_00.png",
+      "production_status": "MISSING",
+      "source_frame": null,
+      "sha256": null,
+      "checks": {
+        "dimensions_1920x1080": null,
+        "rgba_png": null,
+        "hair_root_aligned": null,
+        "hair_length_volume_color_consistent": null,
+        "contains_only_back_hair": null,
+        "no_alpha_halo": null
+      },
+      "notes": []
+    },
+    "hair_front_00": {
+      "path": "../hair/hair_front_00.png",
+      "production_status": "MISSING",
+      "source_frame": null,
+      "sha256": null,
+      "checks": {
+        "dimensions_1920x1080": null,
+        "rgba_png": null,
+        "front_hair_aligned": null,
+        "eye_replacement_region_unobstructed": null,
+        "contains_only_front_hair_and_bound_accessories": null,
+        "no_alpha_halo": null
+      },
+      "notes": []
+    },
+    "eye_open": {
+      "path": "../eyes/eye_open.png",
+      "production_status": "MISSING",
+      "source_frame": null,
+      "sha256": null,
+      "checks": {
+        "dimensions_1920x1080": null,
+        "rgba_png": null,
+        "eye_position_within_1px": null,
+        "iris_color_and_shape_consistent": null,
+        "eyes_no_ghosting": null,
+        "no_double_iris_or_eyelashes": null,
+        "no_face_patch_rectangle": null,
+        "contains_only_eye_region": null
+      },
+      "notes": []
+    }
+  },
+  "composite_preview": {
+    "status": "NOT_CREATED",
+    "preview_path": null,
+    "checks": {
+      "head_neck_seam_approved": null,
+      "shoulder_seam_approved": null,
+      "front_back_hair_order_approved": null,
+      "eyes_visible_and_aligned": null,
+      "body_proportion_approved": null,
+      "no_duplicate_character_parts": null,
+      "no_alpha_edge_contamination": null
+    },
+    "notes": []
+  },
+  "batch_checks": {
+    "reference_identity_match": null,
+    "body_proportion_approved": null,
+    "head_neck_seam_approved": null,
+    "shoulder_seam_approved": null,
+    "hands_and_fingers_natural": null,
+    "eyes_aligned_and_clean": null,
+    "no_glow_noise": null,
+    "no_chain_or_restraint_pattern": null,
+    "no_alpha_halo": null,
+    "layer_isolation_correct": null
+  },
+  "gate": {
+    "allow_head_01_to_08": false,
+    "allow_arm_01_to_08": false,
+    "allow_full_asset_batch": false,
+    "blocking_reasons": [
+      "six mother-frame PNG assets are not yet present",
+      "automated validation has not run",
+      "composite preview has not been approved",
+      "manual review is pending"
+    ]
+  },
+  "approval": {
+    "approved_by": null,
+    "approved_at": null,
+    "approval_statement": null
+  }
+}

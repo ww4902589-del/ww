@@ -1,49 +1,113 @@
 project: liv_jimeng_dream_journey
 version: V8
-status: BLOCKED_BY_ASSET_PRODUCTION
-phase: FRAME_PIPELINE_PREPARATION
+handoff_status: CODEX_HANDOFF_READY
+production_status: BLOCKED_BY_ASSET_PRODUCTION
+phase: ENGINE_INTEGRATED_ASSET_BLOCKED
 
 objective: >-
-  Create a layered frame-sequence animated wallpaper using transparent image assets.
-  Replace failed full-frame stretching and overlay animation approaches.
+  Deliver a Wallpaper Engine Web wallpaper using a real layered frame-sequence
+  pipeline with transparent PNG assets. The approved route replaces the failed
+  whole-image stretching, crop-overlay and Live2D-without-source-assets routes.
+
+runtime_contract:
+  duration_seconds: 12
+  fps: 24
+  runtime_frames: 288
+  expected_assets: 79
+  required_assets: 73
+  optional_assets: 6
+  renderer: Canvas 2D
+  production_asset_root: assets/frame-v8
+  diagnostic_asset_root: assets/frame-v8/diagnostic
 
 completed:
-  - HANDOFF.md updated to v8 authority chain
-  - AGENTS.md updated with v8 execution rules
-  - V8_ASSET_PROMPTS_AND_CODEX_TASKS.md added
-  - frame-timeline-v8.json added
-  - z-order-v8.json added
-  - asset-checklist-v8.json added
+  - v8 authority chain and Codex guardrails
+  - exact 79-entry asset checklist
+  - frame map, timeline, layout and z-order manifests
+  - frame-sequence timeline resolver
+  - deterministic background scheduler
+  - fail-closed frame loader
+  - PNG signature, dimensions and alpha-channel validation
+  - production and diagnostic asset modes
+  - isolated diagnostic PNG generator
+  - diagnostic QA report generator
+  - Canvas layered renderer
+  - Wallpaper Engine property integration
+  - mouse parallax and click ripple integration
+  - audio-response integration
+  - quiet mode, quality controls and ultrawide support
+  - static fallback when required production assets are unavailable
+  - diagnostic status panel
+
+verified_in_repository:
+  - production entry loads the v8 runtime chain
+  - diagnostic mode selects assets/frame-v8/diagnostic
+  - production mode selects assets/frame-v8
+  - required asset failure blocks animated production mode
+  - diagnostic assets are explicitly marked non-production
+
+not_yet_verified:
+  - diagnostic generator has not been executed in this handoff session
+  - diagnostic QA script has not been executed in this handoff session
+  - browser console and renderer have not been tested in a local checkout
+  - Wallpaper Engine has not been used for final runtime regression testing
+  - visual quality has not been evaluated with genuine production PNG layers
 
 current_blockers:
-  - real separated character layer assets are not available
-  - production PNG frame assets are not available
-  - final animation cannot be honestly marked complete
+  - real separated character layers are not present
+  - the 73 required production PNG assets are not present
+  - six optional memory-shard assets are not present
+  - final artwork identity, anatomy, hand quality and alpha edges cannot be approved
+  - seamless 0s-to-12s visual closure cannot be approved without real artwork
 
 forbidden_shortcuts:
-  - whole-image deformation
-  - fake transparent placeholders
-  - crop based character movement
-  - duplicated baked character layers
+  - whole-image deformation as character animation
+  - crop-based character movement
+  - duplicated baked character behind active layers
+  - semi-transparent eye overlays as blinking
+  - empty or fabricated PNG placeholders reported as final artwork
+  - diagnostic assets copied into the production asset root
   - fabricated QA evidence
 
 next_tasks:
-  - create frame loader
-  - create asset validator
-  - create background phase scheduler
-  - import real layered PNG assets after production
-  - run visual QA in Wallpaper Engine
+  - run the Codex first-run commands in CODEX_FIRST_RUN_V8.md
+  - fix any syntax, manifest or renderer errors found by diagnostic execution
+  - record diagnostic evidence without marking production complete
+  - import genuine production PNG layers using asset-checklist-v8.json
+  - run scripts/verify_frame_assets.js against production assets
+  - perform browser and Wallpaper Engine regression testing
+  - complete manual-review-v8.json only after genuine visual inspection
+  - write QA_RESULT_V8.md with evidence and unresolved defects
 
 acceptance:
   character:
-    - visible head turn
-    - visible arm structural motion
-    - clean blink at 2.8s and 8.1s
+    - head direction changes are structurally visible
+    - arm motion changes shoulder, elbow, wrist and fingers
+    - two clean blinks occur near 2.8 and 8.1 seconds
+    - hands and fingers are natural
+    - no duplicated character or eye ghosting appears
   background:
-    - independent starfield motion
-    - floating fragments
-    - crystal glow phase changes
+    - far, mid and near starfields move independently
+    - fragments and memories are separate assets
+    - crystal glow changes by phase
+    - movement is perceptible within two seconds
+    - reveal and hide transitions are controlled
   quality:
-    - no glow noise
-    - no chain textures
-    - seamless 12 second loop
+    - no glow noise or dirty light speckles
+    - no chain or restraint-like textures
+    - no white or black alpha matte edges
+    - the 0-second and 12-second states close seamlessly
+  regression:
+    - mouse parallax works
+    - click ripple works
+    - audio response works
+    - title visibility works
+    - quality settings work
+    - quiet mode works
+    - ultrawide rendering works
+
+completion_rule: >-
+  CODEX_HANDOFF_READY means the implementation contract and code scaffold are
+  ready for Codex. It does not mean that the wallpaper is production-ready.
+  Production completion is forbidden until genuine layered PNG assets exist and
+  all automated and manual QA gates pass.

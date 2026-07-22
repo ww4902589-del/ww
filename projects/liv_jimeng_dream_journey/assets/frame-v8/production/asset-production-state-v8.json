@@ -1,0 +1,277 @@
+{
+  "schema_version": 1,
+  "project": "liv_jimeng_dream_journey",
+  "version": "v8",
+  "updated_at": null,
+  "overall_status": "BLOCKED_BY_ASSET_PRODUCTION",
+  "runtime_mode_until_assets_ready": "STATIC_FALLBACK",
+  "current_phase": "PHASE_1_MOTHER_FRAME",
+  "current_gate": "MOTHER_FRAME_BATCH_NOT_APPROVED",
+  "authority_files": [
+    "production/FIRST_BATCH_TASKS_V8.md",
+    "production/PROMPT_TEMPLATES_V8.md",
+    "production/ASSET_PRODUCTION_GUIDE_V8.md",
+    "production/first-batch-review-v8.json",
+    "manifests/frame-map-v8.json",
+    "manifests/sprite-layout-v8.json",
+    "manifests/z-order-v8.json"
+  ],
+  "phases": [
+    {
+      "id": "PHASE_0_REFERENCE_FREEZE",
+      "status": "WAITING_FOR_ORIGINAL_HIGH_RES_REFERENCE",
+      "entry_requirements": [],
+      "exit_requirements": [
+        "original high-resolution reference is available",
+        "character identity is approved",
+        "character placement on the 1920x1080 canvas is frozen",
+        "head, shoulder, elbow and wrist anchors are confirmed"
+      ],
+      "allowed_outputs": [
+        "reference approval record",
+        "anchor notes"
+      ],
+      "forbidden_outputs": [
+        "production animation frames"
+      ]
+    },
+    {
+      "id": "PHASE_1_MOTHER_FRAME",
+      "status": "ACTIVE_BLOCKED_BY_MISSING_PNG",
+      "entry_requirements": [
+        "PHASE_0_REFERENCE_FREEZE approved"
+      ],
+      "exit_requirements": [
+        "six mother-frame PNGs exist",
+        "automated checks for the six assets have no fatal errors",
+        "composite preview is approved",
+        "first-batch-review-v8.json review_status is APPROVED"
+      ],
+      "allowed_outputs": [
+        "base/body_base.png",
+        "head/head_00.png",
+        "arm/arm_00.png",
+        "hair/hair_back_00.png",
+        "hair/hair_front_00.png",
+        "eyes/eye_open.png",
+        "qa/first-batch-validation-v8.json",
+        "first batch composite preview"
+      ],
+      "forbidden_outputs": [
+        "head/head_01.png through head/head_08.png",
+        "arm/arm_01.png through arm/arm_08.png",
+        "full background animation batch",
+        "fake transparent placeholders",
+        "whole-image deformation"
+      ]
+    },
+    {
+      "id": "PHASE_2_HEAD_AND_BLINK",
+      "status": "LOCKED",
+      "entry_requirements": [
+        "PHASE_1_MOTHER_FRAME approved",
+        "gate.allow_head_01_to_08 is true"
+      ],
+      "exit_requirements": [
+        "head_01 through head_08 approved",
+        "eye_half, eye_closed, eye_half_return and eye_open_hold approved",
+        "blink windows at frames 67-71 and 194-198 are clean",
+        "head loop closes without visible seam"
+      ],
+      "allowed_outputs": [
+        "head/head_01.png through head/head_08.png",
+        "eyes/eye_half.png",
+        "eyes/eye_closed.png",
+        "eyes/eye_half_return.png",
+        "eyes/eye_open_hold.png"
+      ],
+      "forbidden_outputs": [
+        "independent redrawing of each frame from scratch",
+        "full-head mechanical rotation",
+        "face-patch blink overlays"
+      ]
+    },
+    {
+      "id": "PHASE_3_ARM_HAIR_CLOTH",
+      "status": "LOCKED",
+      "entry_requirements": [
+        "PHASE_1_MOTHER_FRAME approved",
+        "gate.allow_arm_01_to_08 is true"
+      ],
+      "exit_requirements": [
+        "arm_01 through arm_08 approved",
+        "hair_back_01 through hair_back_04 approved",
+        "hair_front_01 through hair_front_04 approved",
+        "skirt_00 through skirt_03 approved",
+        "ribbon_00 through ribbon_03 approved",
+        "hand and finger continuity approved"
+      ],
+      "allowed_outputs": [
+        "arm motion frames",
+        "hair motion frames",
+        "cloth motion frames"
+      ],
+      "forbidden_outputs": [
+        "rubber-arm stretching",
+        "duplicated or missing fingers",
+        "costume redesign",
+        "chain or restraint motifs"
+      ]
+    },
+    {
+      "id": "PHASE_4_BACKGROUND",
+      "status": "LOCKED",
+      "entry_requirements": [
+        "character phases are approved"
+      ],
+      "exit_requirements": [
+        "background_clean and crystal_base approved",
+        "far, mid and near starfield phases approved",
+        "crystal glow phases approved",
+        "fragment frames approved",
+        "no glow noise or random sparkle field"
+      ],
+      "allowed_outputs": [
+        "base/background_clean.png",
+        "base/crystal_base.png",
+        "background/starfield_*",
+        "background/crystal_glow_*",
+        "fragments/frag_*",
+        "optional memories/memory_01.png through memory_06.png"
+      ],
+      "forbidden_outputs": [
+        "all background layers moving in sync",
+        "random flashing particles",
+        "chain textures"
+      ]
+    },
+    {
+      "id": "PHASE_5_RUNTIME_QA",
+      "status": "LOCKED",
+      "entry_requirements": [
+        "all required production PNGs are present and valid"
+      ],
+      "exit_requirements": [
+        "12-second 24-FPS loop approved",
+        "head turn visible",
+        "arm structural motion visible",
+        "blinks clean",
+        "background independently animated",
+        "Wallpaper Engine settings preserved",
+        "no prohibited visual artifacts"
+      ],
+      "allowed_outputs": [
+        "qa reports",
+        "approved preview video",
+        "Wallpaper Engine runtime validation record"
+      ],
+      "forbidden_outputs": [
+        "marking complete without visual QA evidence"
+      ]
+    }
+  ],
+  "task_queue": [
+    {
+      "order": 1,
+      "task_id": "REFERENCE_ORIGINAL_HIGH_RES",
+      "asset": null,
+      "status": "BLOCKED_EXTERNAL_INPUT",
+      "blocking_reason": "Only the embedded thumbnail preview is in the repository; the original high-resolution user reference is required."
+    },
+    {
+      "order": 2,
+      "task_id": "PRODUCE_BODY_BASE",
+      "asset": "base/body_base.png",
+      "status": "LOCKED_BY_REFERENCE",
+      "depends_on": ["REFERENCE_ORIGINAL_HIGH_RES"]
+    },
+    {
+      "order": 3,
+      "task_id": "PRODUCE_HEAD_00",
+      "asset": "head/head_00.png",
+      "status": "LOCKED_BY_BODY_BASE",
+      "depends_on": ["PRODUCE_BODY_BASE"]
+    },
+    {
+      "order": 4,
+      "task_id": "PRODUCE_ARM_00",
+      "asset": "arm/arm_00.png",
+      "status": "LOCKED_BY_BODY_BASE",
+      "depends_on": ["PRODUCE_BODY_BASE"]
+    },
+    {
+      "order": 5,
+      "task_id": "PRODUCE_HAIR_BACK_00",
+      "asset": "hair/hair_back_00.png",
+      "status": "LOCKED_BY_HEAD_00",
+      "depends_on": ["PRODUCE_HEAD_00"]
+    },
+    {
+      "order": 6,
+      "task_id": "PRODUCE_HAIR_FRONT_00",
+      "asset": "hair/hair_front_00.png",
+      "status": "LOCKED_BY_HEAD_00",
+      "depends_on": ["PRODUCE_HEAD_00"]
+    },
+    {
+      "order": 7,
+      "task_id": "PRODUCE_EYE_OPEN",
+      "asset": "eyes/eye_open.png",
+      "status": "LOCKED_BY_HEAD_00",
+      "depends_on": ["PRODUCE_HEAD_00"]
+    },
+    {
+      "order": 8,
+      "task_id": "RUN_FIRST_BATCH_VALIDATION",
+      "asset": "qa/first-batch-validation-v8.json",
+      "status": "LOCKED_BY_SIX_MOTHER_FRAMES",
+      "depends_on": [
+        "PRODUCE_BODY_BASE",
+        "PRODUCE_HEAD_00",
+        "PRODUCE_ARM_00",
+        "PRODUCE_HAIR_BACK_00",
+        "PRODUCE_HAIR_FRONT_00",
+        "PRODUCE_EYE_OPEN"
+      ]
+    },
+    {
+      "order": 9,
+      "task_id": "APPROVE_FIRST_BATCH",
+      "asset": "production/first-batch-review-v8.json",
+      "status": "LOCKED_BY_VALIDATION_AND_VISUAL_REVIEW",
+      "depends_on": ["RUN_FIRST_BATCH_VALIDATION"]
+    }
+  ],
+  "gates": {
+    "reference_frozen": false,
+    "mother_frame_batch_approved": false,
+    "allow_head_01_to_08": false,
+    "allow_arm_01_to_08": false,
+    "allow_background_batch": false,
+    "allow_runtime_qa": false,
+    "allow_release_complete": false
+  },
+  "required_assets_summary": {
+    "total_required": 73,
+    "total_optional": 6,
+    "required_present": 0,
+    "optional_present": 0,
+    "source_of_truth": "scripts/verify_frame_assets.js"
+  },
+  "next_action": {
+    "task_id": "REFERENCE_ORIGINAL_HIGH_RES",
+    "description": "Provide or import the original high-resolution reference image, freeze the approved mother composition, then begin body_base.png.",
+    "do_not_skip_to": [
+      "head_01_to_08",
+      "arm_01_to_08",
+      "background_animation_batch"
+    ]
+  },
+  "completion_policy": {
+    "production_assets_must_be_real": true,
+    "static_fallback_does_not_count_as_completion": true,
+    "missing_required_assets_keep_project_blocked": true,
+    "optional_memory_assets_may_be_absent": true,
+    "fabricated_qa_evidence_forbidden": true
+  }
+}

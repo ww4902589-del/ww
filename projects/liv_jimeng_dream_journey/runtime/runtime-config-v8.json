@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "engine": "liv-v8-frame-runtime",
+  "canvas": {
+    "id": "wallpaper",
+    "width": 1920,
+    "height": 1080
+  },
+  "animation": {
+    "loop_seconds": 12,
+    "fps": 24,
+    "frame_count": 288
+  },
+  "features": {
+    "character_action": true,
+    "background_motion": true,
+    "memory_reveal": true,
+    "mouse_parallax": true,
+    "audio_response": true
+  },
+  "fallback": {
+    "missing_asset_status": "BLOCKED_BY_ASSET_PRODUCTION",
+    "allow_full_image_motion_fallback": false
+  }
+}

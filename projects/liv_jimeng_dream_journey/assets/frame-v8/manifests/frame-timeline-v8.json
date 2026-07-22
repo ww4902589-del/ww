@@ -1,0 +1,16 @@
+{
+  "duration_seconds": 12,
+  "fps": 24,
+  "runtime_frames": 288,
+  "events": [
+    {"time": 2.8, "event": "blink"},
+    {"time": 8.1, "event": "blink"}
+  ],
+  "phases": [
+    {"start": 0, "end": 47, "name": "idle"},
+    {"start": 48, "end": 119, "name": "head_turn_arm_extend"},
+    {"start": 120, "end": 183, "name": "hold_motion"},
+    {"start": 184, "end": 215, "name": "blink_hold"},
+    {"start": 216, "end": 287, "name": "return_loop"}
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "version": "v8",
+  "status": "BLOCKED_BY_ASSET_PRODUCTION",
+  "canvas": "1920x1080",
+  "format": "transparent PNG",
+  "groups": {
+    "base": 4,
+    "head": 9,
+    "eyes": 5,
+    "arm": 9,
+    "hair": 10,
+    "cloth": 8,
+    "background": 16,
+    "fragments": 12,
+    "memories": 6
+  },
+  "rules": {
+    "no_glow_noise": true,
+    "no_chain_pattern": true,
+    "allow_background_reveal": true,
+    "allow_pose_changes": true
+  }
+}

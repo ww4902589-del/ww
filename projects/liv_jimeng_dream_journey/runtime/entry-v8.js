@@ -6,37 +6,49 @@
     if (!panel || !config.diagnostic) return;
 
     panel.hidden = false;
-    const mode = panel.querySelector('[data-role="mode"]');
-    const status = panel.querySelector('[data-role="status"]');
-    const assets = panel.querySelector('[data-role="assets"]');
-    const missing = panel.querySelector('[data-role="missing"]');
-    const frame = panel.querySelector('[data-role="frame"]');
-    const fps = panel.querySelector('[data-role="fps"]');
+    const modeNode = panel.querySelector('[data-role="mode"]');
+    const statusNode = panel.querySelector('[data-role="status"]');
+    const assetsNode = panel.querySelector('[data-role="assets"]');
+    const missingNode = panel.querySelector('[data-role="missing"]');
+    const frameNode = panel.querySelector('[data-role="frame"]');
+    const fpsNode = panel.querySelector('[data-role="fps"]');
 
-    if (mode) mode.textContent = config.mode;
-    if (status) status.textContent = app.status;
-    if (assets) assets.textContent = `${app.report.loaded?.length || 0} / ${app.report.expectedCount || 79}`;
-    if (missing) missing.textContent = String(app.report.missingRequired?.length || 0);
+    if (modeNode) modeNode.textContent = config.mode;
+    if (statusNode) statusNode.textContent = app.status;
+    if (assetsNode) assetsNode.textContent = `${app.report.loaded?.length || 0} / ${app.report.expectedCount || 79}`;
+    if (missingNode) missingNode.textContent = String(app.report.missingRequired?.length || 0);
 
-    let previous = performance.now();
-    let count = 0;
+    let previousSampleAt = performance.now();
+    let renderedFrames = 0;
     let displayFps = 0;
 
     function update() {
-      if (!global.livV8App || !global.livV8App.runtime) return;
+      const currentApp = global.livV8App;
+      if (!currentApp || !currentApp.runtime) return;
+
       const now = performance.now();
-      count += 1;
-      if (now - previous >= 1000) {
-        displayFps = count;
-        count = 0;
-        previous = now;
+      renderedFrames += 1;
+      if (now - previousSampleAt >= 1000) {
+        displayFps = Math.round(renderedFrames * 1000 / Math.max(1, now - previousSampleAt));
+        renderedFrames = 0;
+        previousSampleAt = now;
       }
-      if (fps) fps.textContent = String(displayFps);
-      if (frame && global.livV8App.runtime.lastFrame != null) {
-        frame.textContent = `${global.livV8App.runtime.lastFrame} / 287`;
+
+      const runtimeState = typeof currentApp.runtime.getState === 'function'
+        ? currentApp.runtime.getState()
+        : currentApp.runtime.lastState;
+      const runtimeStatus = typeof currentApp.runtime.getStatus === 'function'
+        ? currentApp.runtime.getStatus()
+        : currentApp.status;
+
+      if (fpsNode) fpsNode.textContent = String(displayFps);
+      if (statusNode) statusNode.textContent = runtimeStatus || currentApp.status || '-';
+      if (frameNode && runtimeState && Number.isInteger(runtimeState.runtimeFrame)) {
+        frameNode.textContent = `${runtimeState.runtimeFrame} / 287`;
       }
       requestAnimationFrame(update);
     }
+
     requestAnimationFrame(update);
   }
 
@@ -50,7 +62,8 @@
           loaderOptions: {
             baseUrl: 'assets/frame-v8',
             manifestBaseUrl: 'assets/frame-v8/manifests'
-          }
+          },
+          fallbackUrl: 'assets/frame-v8/references/reference_A_standing.svg'
         };
 
       const app = await global.bootLivV8({
@@ -61,8 +74,13 @@
         fallbackUrl: runtimeConfig.fallbackUrl
       });
 
+      app.assetMode = runtimeConfig.mode;
+      app.productionUsable = runtimeConfig.productionUsable !== false;
+
       if (app.status !== 'READY') {
         console.warn('[LivV8] started in blocked mode', app.report);
+      } else if (runtimeConfig.diagnostic) {
+        console.warn('[LivV8] diagnostic assets are active; this is not production artwork.');
       }
 
       setupDiagnosticPanel(runtimeConfig, app);
@@ -73,8 +91,10 @@
       if (node) {
         node.hidden = false;
         node.dataset.state = 'BOOT_ERROR';
-        node.querySelector('[data-role="state"]').textContent = 'BOOT_ERROR';
-        node.querySelector('[data-role="detail"]').textContent = error.message;
+        const stateNode = node.querySelector('[data-role="state"]');
+        const detailNode = node.querySelector('[data-role="detail"]');
+        if (stateNode) stateNode.textContent = 'BOOT_ERROR';
+        if (detailNode) detailNode.textContent = error.message;
       }
       console.error('[LivV8] boot error', error);
       return null;

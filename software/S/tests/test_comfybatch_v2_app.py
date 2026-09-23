@@ -177,6 +177,45 @@ class ApplicationPreflightTests(unittest.TestCase):
             self.assertLessEqual(observed["refresh"], 0.2)
             self.assertGreater(observed["run"], 0)
 
+    def test_running_remote_client_cannot_be_hidden_by_loopback_configuration(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = pathlib.Path(temp)
+            comfy = root / "ComfyUI"
+            (comfy / "input").mkdir(parents=True)
+            image_buffer = io.BytesIO()
+            Image.new("RGB", (8, 8), "navy").save(image_buffer, format="PNG")
+            app = Application(settings_path=root / "settings.json")
+            app.comfy_root = comfy
+            bundle = app.import_images([{"filename": "safe.png", "raw": image_buffer.getvalue()}])
+            item = bundle.items[0]
+            remote_url = "https://remote.example.invalid:8188"
+            app.comfy_url = remote_url
+            app.runner.client.base_url = remote_url
+            app.runner._state["status"] = "running"
+
+            with self.assertRaisesRegex(ValueError, "运行或暂停期间不能更换"):
+                app.configure({"comfy_url": "http://127.0.0.1:8188"})
+            self.assertEqual(remote_url, app.comfy_url)
+            with self.assertRaisesRegex(ValueError, "只允许连接本机 ComfyUI"):
+                app.interrogate_task(1, item.metadata["source_image"], item.metadata["task_id"])
+
+    def test_interrogation_checks_the_actual_execution_client_url(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = pathlib.Path(temp)
+            comfy = root / "ComfyUI"
+            (comfy / "input").mkdir(parents=True)
+            image_buffer = io.BytesIO()
+            Image.new("RGB", (8, 8), "navy").save(image_buffer, format="PNG")
+            app = Application(settings_path=root / "settings.json")
+            app.comfy_root = comfy
+            bundle = app.import_images([{"filename": "safe.png", "raw": image_buffer.getvalue()}])
+            item = bundle.items[0]
+            app.comfy_url = "http://127.0.0.1:8188"
+            app.runner.client.base_url = "https://remote.example.invalid:8188"
+
+            with self.assertRaisesRegex(ValueError, "只允许连接本机 ComfyUI"):
+                app.interrogate_task(1, item.metadata["source_image"], item.metadata["task_id"])
+
     def test_resolves_selected_style_text_for_node_independent_compilation(self):
         with tempfile.TemporaryDirectory() as temp:
             root = pathlib.Path(temp)

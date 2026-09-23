@@ -630,7 +630,14 @@ class Application:
         if (not source_image or source_image not in self._trusted_source_images
                 or not candidate.is_relative_to(input_root) or not candidate.is_file()):
             raise ValueError("该任务没有可用于反推的本地图片")
-        if not is_loopback_url(self.comfy_url):
+        configured_url = self.comfy_url.rstrip("/")
+        runner_url = str(getattr(self.runner.client, "base_url", configured_url)).rstrip("/")
+        interrogator_url = str(
+            getattr(getattr(self.image_interrogator, "client", None), "base_url", configured_url)
+        ).rstrip("/")
+        execution_urls = {configured_url, runner_url, interrogator_url}
+        if (len(execution_urls) != 1
+                or any(not is_loopback_url(url) for url in execution_urls)):
             raise ValueError("提示词反推只允许连接本机 ComfyUI（127.0.0.1、localhost 或 ::1）")
 
         # Refresh at point of use so newly installed local nodes are found
@@ -1284,12 +1291,17 @@ class Application:
 
     def configure(self, value: dict) -> None:
         with self.lock:
+            runner_status = self.runner.status()["status"]
+            next_comfy_url = str(value.get("comfy_url") or self.comfy_url).rstrip("/")
+            if (runner_status in {"running", "paused", "starting"}
+                    and next_comfy_url != self.comfy_url):
+                raise ValueError("批量任务运行或暂停期间不能更换 ComfyUI 地址，请先结束当前任务")
             self.comfy_root = pathlib.Path(value.get("comfy_root") or self.comfy_root)
             roots = value.get("workflow_roots") or [str(root) for root in self.workflow_roots]
             self.workflow_roots = [pathlib.Path(root) for root in roots if str(root).strip()]
-            self.comfy_url = str(value.get("comfy_url") or self.comfy_url).rstrip("/")
+            self.comfy_url = next_comfy_url
             self.output_root = pathlib.Path(value.get("output_root") or self.output_root)
-            if self.runner.status()["status"] not in {"running", "paused", "starting"}:
+            if runner_status not in {"running", "paused", "starting"}:
                 self.runner = BatchRunner(self.comfy_root, ComfyClient(self.comfy_url))
                 self.image_interrogator = ImageInterrogator(self.runner.client)
 

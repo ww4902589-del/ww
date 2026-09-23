@@ -20,7 +20,7 @@ import unittest
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
-from fakes import css_source, html_source, js_source, page_source  # noqa: E402
+from fakes import app_source, css_source, html_source, js_source, page_source  # noqa: E402
 
 
 def script_blocks() -> list[str]:
@@ -423,6 +423,70 @@ class ParameterWorkbenchUiTests(unittest.TestCase):
         self.assertIn("rememberWrap.hidden=scope!=='batch'", html)
         self.assertIn("rememberNow=scope==='batch'&&$('rememberParams')&&$('rememberParams').checked", html)
         self.assertIn("if(rememberNow)body.remember=true", html)
+
+
+class SegmentControlsTests(unittest.TestCase):
+    """分段生成与断点续跑的页面控件。
+
+    这套控件最容易出错的不是「有没有按钮」，而是三处静默失配：
+    页面提交的字段名、按钮的可用时机、以及提示条该不该出现。三处都不会报错，
+    只会表现得像「功能没做」——所以逐条钉住。
+    """
+
+    def test_the_page_offers_a_segment_size_and_a_next_segment_button(self):
+        html = html_source()
+        for marker in ('id="segmentSize"', 'id="nextSegmentButton"', 'id="resumeBanner"'):
+            self.assertIn(marker, html, f"缺少分段控件标记 {marker}")
+        # 默认必须是「不分段」：改了默认值等于替用户做了「每 N 张就停」的决定。
+        self.assertIn('id="segmentSize" type="number" min="0" max="1000" step="1" value="0"', html)
+
+    def test_the_page_submits_the_field_the_backend_reads(self):
+        js = js_source()
+        self.assertIn("segment_size:Number($('segmentSize').value)||0", js,
+                      "页面提交的字段名和 BatchConfig.from_dict 读的键对不上")
+
+    def test_the_next_segment_button_only_lights_up_at_a_boundary(self):
+        js = js_source()
+        self.assertIn("s.status!=='segment'", js,
+                      "「下一段」没有按分段边界控制可用性")
+        # 正在提交的那几秒里轮询不能把按钮翻回来。
+        self.assertIn("!nextBtn.classList.contains('busy')", js)
+
+    def test_the_page_treats_a_segment_boundary_as_an_active_run(self):
+        """分段中的队列还活着，不能被视为「跑完了」或「可以再开一批」。"""
+        js = js_source()
+        self.assertIn("const ACTIVE_RUN_STATUSES=['starting','running','paused','segment']", js)
+        self.assertNotIn("['running','paused','starting'].includes(s.status)", js,
+                         "还有地方漏掉了 segment 状态")
+
+    def test_both_status_paths_carry_the_resume_offer(self):
+        """推送和轮询必须给出同一份「可续跑」信息。"""
+        page = page_source()
+        self.assertIn("renderResumeBanner(v.resumable)", page, "轮询路径没处理可续跑批次")
+        self.assertIn("renderResumeBanner(payload.resumable)", page, "推送路径没处理可续跑批次")
+        app_source_text = app_source()
+        snapshot = app_source_text.split("def snapshot(self, client_id", 1)[1].split("def params_payload", 1)[0]
+        self.assertIn('"resumable"', snapshot, "SSE 快照里没带 resumable，页面就只能靠轮询")
+
+    def test_resuming_hands_the_bundle_back_to_the_board(self):
+        js = js_source()
+        start = js.index("async function resumeInterrupted")
+        body = js[start:js.index("function renderResumeBanner", start)]
+        self.assertIn("/api/segment/resume", body)
+        self.assertIn("v.bundle", body, "续跑后没把提示词合集还给页面，看板会空掉")
+        self.assertIn("renderBundle()", body)
+
+    def test_the_resume_prompt_says_how_many_are_left(self):
+        """只说「没跑完」，用户还得自己数条数。
+
+        提示条要给出还剩几条、从第几条接着跑，并且把「停在分段边界」和
+        「上次没跑完就关了软件」分开——后者点「下一段」是没有用的。
+        """
+        js = js_source()
+        start = js.index("function renderResumeBanner")
+        body = js[start:js.index("function currentWorkflow", start)]
+        for marker in ("条没跑", "padStart(3,'0')", "entry.status==='segment'"):
+            self.assertIn(marker, body, f"续跑提示条缺少 {marker}")
 
 
 class ReadableSourceTests(unittest.TestCase):

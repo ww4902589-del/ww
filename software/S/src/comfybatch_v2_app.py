@@ -29,6 +29,7 @@ from comfybatch_nodeschema import NodeSchemaRegistry, active_registry, set_activ
 from comfybatch_hub import EditLease, InstanceLock, SSE_HEARTBEAT_SECONDS, StateHub
 from comfybatch_params import PARAMS, registry_payload, resolve as resolve_params
 from comfybatch_v2_core import (
+    ACTIVE_STATUSES,
     REDO_MODES,
     REVIEW_STATUSES,
     THUMBNAIL_SIZE,
@@ -42,6 +43,7 @@ from comfybatch_v2_core import (
     ResourceInventory,
     ResourceOverrideStore,
     ResultReviewStore,
+    RunProgressStore,
     WorkflowParamsStore,
     _safe_name,
 )
@@ -115,6 +117,7 @@ WRITE_ROUTES = frozenset({
     "/api/resource/apply", "/api/resource/forget", "/api/resource/reapply",
     "/api/preflight", "/api/start", "/api/pause", "/api/resume", "/api/cancel",
     "/api/review/confirm", "/api/review/note", "/api/review/redo", "/api/review/redo-batch",
+    "/api/segment/next", "/api/segment/resume",
     "/api/reload-schema", "/api/open-folder",
     "/api/restore-default-presets",
 })
@@ -482,7 +485,7 @@ class Application:
         #: Kept injectable for hermetic tests; callers only see imported tasks.
         self.image_extractor = ImageExtractor()
         self._style_thumbnail_lookup: dict[tuple[str, str], str] = {}
-        self.runner = BatchRunner(self.comfy_root, ComfyClient(self.comfy_url))
+        self.runner = self._new_runner()
         self.lock = threading.RLock()
         #: Node schema from the last successful ``/object_info`` fetch. Installed
         #: process-wide so the compiler can validate parameters and detect
@@ -740,6 +743,9 @@ class Application:
             "is_primary": self.is_primary,
             "lease": self.lease_status(client_id),
             "status": status,
+            # 和 ``/api/status`` 一样带上未跑完的批次：页面主要靠推送渲染，
+            # 只在轮询里给这一项，会让「续跑」按钮在推送路径上一直不出现。
+            "resumable": self.runner.resumable(),
             "bundle": self.bundle.to_dict() if self.bundle else None,
             "review": self.results_payload(),
             "schema_nodes": len(self.schema),
@@ -1188,6 +1194,31 @@ class Application:
             }
             self._save_settings()
 
+    def _new_runner(self) -> BatchRunner:
+        """A runner wired to the shared progress-snapshot store.
+
+        The store lives in the data directory, so 断点续跑 works across a restart:
+        a new process finds the snapshot of the batch the old one was running.
+        """
+        return BatchRunner(
+            self.comfy_root,
+            ComfyClient(self.comfy_url),
+            progress_store=RunProgressStore(data_dir() / "runs"),
+        )
+
+    def resume_interrupted(self, run_id: str = "") -> dict[str, Any]:
+        """Continue an unfinished batch, restoring the page's task list as well.
+
+        The snapshot carries the prompt collection, so after a restart the page
+        has to be given it back: without this the batch would run while the task
+        list sat empty, which reads as "it is generating something I cannot see".
+        """
+        state = self.runner.resume_interrupted(run_id)
+        restored = self.runner.last_bundle()
+        if restored is not None:
+            self.bundle = restored
+        return state
+
     def configure(self, value: dict) -> None:
         with self.lock:
             self.comfy_root = pathlib.Path(value.get("comfy_root") or self.comfy_root)
@@ -1195,8 +1226,8 @@ class Application:
             self.workflow_roots = [pathlib.Path(root) for root in roots if str(root).strip()]
             self.comfy_url = str(value.get("comfy_url") or self.comfy_url).rstrip("/")
             self.output_root = pathlib.Path(value.get("output_root") or self.output_root)
-            if self.runner.status()["status"] not in {"running", "paused", "starting"}:
-                self.runner = BatchRunner(self.comfy_root, ComfyClient(self.comfy_url))
+            if self.runner.status()["status"] not in ACTIVE_STATUSES:
+                self.runner = self._new_runner()
 
     def inventory(self) -> dict:
         result = self._inventory().snapshot()
@@ -1550,6 +1581,9 @@ class Handler(BaseHTTPRequestHandler):
                     "status": APP.runner.status(),
                     "bundle": APP.bundle.to_dict() if APP.bundle else None,
                     "review": APP.results_payload(),
+                    # 未跑完的批次（含上次进程中断留下的）在这里露出来，页面据此显示
+                    # 「续跑」；正在跑的批次不属于可续跑，runner 内部已经排除。
+                    "resumable": APP.runner.resumable(),
                     "lease": APP.lease_status(query.get("client_id", [""])[0]),
                     "activated_at": APP.hub.activated_at,
                     "instance_id": APP.instance_id,
@@ -1770,6 +1804,18 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"ok": True, "status": APP.runner.resume()})
             elif self.path == "/api/cancel":
                 self._json({"ok": True, "status": APP.runner.cancel()})
+            elif self.path == "/api/segment/next":
+                # 没有等待中的分段时 next_segment 会抛错，POST 分发器把错误消息
+                # 原样回给页面，所以这里不需要再包一层。
+                self._json({"ok": True, "status": APP.runner.next_segment()})
+            elif self.path == "/api/segment/resume":
+                state = APP.resume_interrupted(str(value.get("run_id") or ""))
+                self._json({
+                    "ok": True,
+                    "status": state,
+                    # 续跑后页面要能渲染任务清单，所以把恢复出来的合集一并回传。
+                    "bundle": APP.bundle.to_dict() if APP.bundle else None,
+                })
             elif self.path == "/api/review/confirm":
                 indexes = [int(item) for item in (value.get("indexes") or [])]
                 if not indexes and value.get("index") is not None:
@@ -2104,7 +2150,7 @@ def main() -> None:
         APP = Application()
         if args.comfy_url:
             APP.comfy_url = args.comfy_url
-            APP.runner = BatchRunner(APP.comfy_root, ComfyClient(args.comfy_url))
+            APP.runner = APP._new_runner()
     if args.data_dir:
         print(f"数据目录：{APP.settings_path.parent}")
 

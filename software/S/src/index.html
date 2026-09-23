@@ -305,6 +305,14 @@
         <button class="danger" onclick="control('cancel',this)">取消剩余任务</button>
         </div>
       </div>
+      <div class="run-controls segment-controls">
+        <div><b>分段生成</b><small>「每段条数」留 0 表示整批一口气跑完；填大于 0 时，每跑完这么多张就自动停下等你确认，再点「下一段」继续下一批，不必等到几百张跑完才发现苗头不对。半路关掉程序也没关系——重新打开后这里会提示把没跑完的批次接着跑。</small></div>
+        <div class="actions">
+        <label class="inline-field">每段条数<input id="segmentSize" type="number" min="0" max="1000" step="1" value="0"></label>
+        <button id="nextSegmentButton" class="secondary" onclick="nextSegment(this)" disabled>下一段</button>
+        </div>
+      </div>
+      <div id="resumeBanner" class="resume-banner" hidden></div>
       <div class="bar"><i id="progress"></i></div>
       <div class="metrics">
         <div class="metric"><span>总数</span><strong id="total">0</strong></div>

@@ -1451,9 +1451,11 @@ function renderReview(v){
   `:'';
   dupGroups=new Set();
   const seen=new Map();
-  // 疑似重复判定：seeds 与提示词完全一致的两张必然同图，只在这种强条件下标记。
+  // 疑似重复判定：种子与提示词完全一致的两张必然同图，只在这种强条件下标记。
+  // 优先用实际种子：读回成功时它才是"这张图用的那个数"，提交值只在我们没读到
+  // 实际值时才退而求其次。
   for(const row of s){
-    const key=JSON.stringify([(row.generation||{}).seeds||{},(row.compiled_prompt||row.prompt||'')]);
+    const key=JSON.stringify([seedKeyOf(row),(row.compiled_prompt||row.prompt||'')]);
     const first=seen.get(key);
     if(first!==undefined){
       dupGroups.add(first);
@@ -1520,7 +1522,7 @@ function cardHtml(x){
   x.index}">`:`<div class="help">${x.status==='completed'?'无成图':'尚未生成'}</div>`}
   </div>
   <div class="review-card-head">
-  <h4>${esc(x.index+'. '+(x.title||''))}</h4>${isDup?'<span class="badge dup">疑似重复产出</span>':''}<span class="badge ${BADGE_CLASS[status]||'pending'}">${esc(status)}</span>
+  <h4>${esc(x.index+'. '+(x.title||''))}</h4>${isDup?'<span class="badge dup">疑似重复产出</span>':''}${seedBadgeHtml(x)}<span class="badge ${BADGE_CLASS[status]||'pending'}">${esc(status)}</span>
   <input type="checkbox" class="review-pick" data-index="${x.index}" ${reviewPicks.has(x.index)?'checked':''} onclick="event.stopPropagation()" onchange="toggleReviewPick(${x.index},this.checked)">
   </div>
   <div class="review-actions">
@@ -2042,17 +2044,59 @@ async function openFolder(name){
 }
 
 /* Seed display: the seed is what decides whether a redo can reproduce an image,
-so it is shown on every card and carried in the review record. */
-function seedHtml(x){
-  const seeds=(x.generation||{}).seeds||{
+so it is shown on every card and carried in the review record.
+
+提交种子是"我们请求的"，实际种子是"这张图真正用的"。两者只有在读回成功时才可能
+不同 —— 所以这里先显示实际值并标注来源，读不回来就明说"未核对"，绝不用提交值冒充
+实际值。复现按钮也一律填实际种子：那才是能重出这张图的数。 */
+function seedKeyOf(x){
+  const gen=x.generation||{
   }
   ;
-  const keys=Object.keys(seeds);
-  if(!keys.length)return '';
-  return keys.map(k=>`<dt>种子</dt>
-  <dd>${esc(k)} = <code>${esc(String(seeds[k]))}</code>
-  <button class="secondary seed-reuse" type="button" onclick="event.stopPropagation();reuseSeed('${esc(String(seeds[k]))}')">复用</button>
+  const real=gen.real_seeds||{
+  }
+  ;
+  return Object.keys(real).length?real:(gen.seeds||{
+  }
+  );
+}
+
+function seedCheckHtml(x){
+  const gen=x.generation||{
+  }
+  , check=gen.seed_check||{
+  }
+  ;
+  if(!check.available&&gen.seed_source==='未核对'){
+    return `<span class="seed-note">${esc(gen.seed_note||'没有读到实际种子')}</span>`}
+  if(check.available&&check.effective===false){
+    const pairs=Object.entries(check.mismatched||{}).map(([k,v])=>`${esc(k)}：提交 ${esc(String(v.submitted))} → 实际 ${esc(String(v.executed))}`);
+    const missing=(check.missing||[]).map(k=>`${esc(k)}：提交图上没有`);
+    return `<span class="seed-note warn">与提交不一致（${esc([...pairs,...missing].join('；'))}）</span>`}
+  return ''}
+
+function seedHtml(x){
+  const gen=x.generation||{
+  }
+  , submitted=gen.seeds||{
+  }
+  ;
+  const real=seedKeyOf(x);
+  const keys=Object.keys(real);
+  if(!keys.length&&!Object.keys(submitted).length)return '';
+  const source=gen.seed_source||'提交图';
+  const label=source==='未核对'?'种子（未核对）':'实际种子';
+  const sourceNote=Object.keys(real).length&&source!=='未核对'?` · 来源：${esc(source)}`:'';
+  const rows=keys.map(k=>`<dt>${esc(label)}</dt>
+  <dd>${esc(k)} = <code>${esc(String(real[k]))}</code>
+  <button class="secondary seed-reuse" type="button" onclick="event.stopPropagation();reuseSeed('${esc(String(real[k]))}')">复用</button>
+  ${seedCheckHtml(x)}${sourceNote}
   </dd>`).join('');
+  if(rows)return rows;
+  return `${Object.keys(submitted).map(k=>`<dt>种子（未核对）</dt>
+  <dd>${esc(k)} = <code>${esc(String(submitted[k]))}</code>
+  ${seedCheckHtml(x)}
+  </dd>`).join('')}`;
 }
 
 function reuseSeed(value){
@@ -2062,6 +2106,16 @@ function reuseSeed(value){
   if($('seedValue'))$('seedValue').value=value;
   notify(`已把种子 ${value} 填入批次种子框`,'success');
 }
+
+/* 种子是否真的生效 —— 卡片上的独立标记，避免用户要展开详情才发现每次都换图。 */
+function seedBadgeHtml(x){
+  const gen=x.generation||{
+  }
+  , check=gen.seed_check||{
+  }
+  ;
+  if(check.available&&check.effective===false)return '<span class="badge seed-unchecked">种子未生效</span>';
+  return ''}
 
 async function openDrawer(which,btn){
   const drawer=$('drawer');
@@ -2197,6 +2251,8 @@ function effectiveFacts() {
   : null;
 
   const samplers = (eff.nodes && eff.nodes.samplers) || [];
+  const seed = eff.seed || {
+  };
   const upscales = (eff.nodes && eff.nodes.upscale) || [];
   return {
     name: wf.name || '',
@@ -2210,7 +2266,7 @@ function effectiveFacts() {
     model: (eff.model && eff.model.name) || '',
     base, predicted, scaleNotes,
     paramCount, replaced,
-    samplers, upscales,
+    samplers, upscales, seed,
     blocking: (ins.blocking || []).length,
     io: {
       prompt: ((eff.nodes && eff.nodes.prompt) || []).length,
@@ -2258,6 +2314,26 @@ function renderWorkflowFacts() {
   setText('ioSummary', `提示词 ${f.io.prompt} · 图片输入 ${f.io.image} · 输出 ${f.io.save}`);
 }
 
+/* 真相栏的「种子」格：说的是这个工作流允许我们固定哪些种子。
+固定种子只能落在编译图里那个具体的整数上；种子由上游节点提供、而上游自己也没有
+可写的种子参数时，勾「固定种子」是无效的 —— 这必须写在跑之前，而不是跑完才发现。 */
+function seedFactText(f){
+  const seed=f.seed||{
+  }
+  ;
+  if(!f.checked)return '尚未检查';
+  const pinnable=Object.keys(seed.pinnable||{
+  }
+  );
+  const uncontrollable=seed.uncontrollable||[];
+  if(!pinnable.length&&!uncontrollable.length){
+    if(!(seed.linked&&Object.keys(seed.linked).length))return '未发现';
+    return '没有可固定的具体种子'};
+  const parts=[];
+  if(pinnable.length)parts.push(`固定种子将写入 ${pinnable.length} 个节点（${pinnable.slice(0,3).join('、')}${pinnable.length>3?'…':''}）`);
+  if(uncontrollable.length)parts.push(`${uncontrollable.length} 处种子由上游节点决定，固定种子对它们无效`);
+  return parts.join(' · ')}
+
 function renderRail() {
   const f = effectiveFacts();
   // 已检查：显示真正生效的值。未检查：显示所选值并标注，避免把"选了什么"
@@ -2277,6 +2353,9 @@ function renderRail() {
   setText('railIO', f.checked
   ? `提示词 ${f.io.prompt} · 图片输入 ${f.io.image} · 输出 ${f.io.save}`
   : '尚未检查');
+  // 固定种子能不能落到图上，检查过一次就该看见。以前这一格不存在，用户选
+  // 「固定种子」而工作流的种子由上游节点提供时，每次都是随机图却毫无提示。
+  setText('railSeed', seedFactText(f));
   setText('railModel', mark(f.model || f.selected.model));
   setText('railSize', f.base.width
   ? (f.predicted

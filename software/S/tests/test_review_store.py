@@ -254,6 +254,7 @@ class RedoTests(unittest.TestCase):
             runner.start(one_bundle(), config)
             wait_for(runner)
             self.assertEqual(1, len(runner.status()["results"]))
+            original_revision = runner.status()["results"][0]["completed_revision"]
 
             runner.redo(1, "new_seed", note="换种子")
             status = wait_for(runner)
@@ -263,6 +264,7 @@ class RedoTests(unittest.TestCase):
             row = status["results"][0]
             self.assertEqual("completed", row["status"])
             self.assertEqual("new_seed", row["redo_mode"])
+            self.assertGreater(row["completed_revision"], original_revision)
             name = pathlib.Path(row["copied_to"]).name
             self.assertIn("redo-new_seed", name)
             # The redo prefix must appear exactly once; a doubled prefix was a

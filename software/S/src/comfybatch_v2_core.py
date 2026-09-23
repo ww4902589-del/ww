@@ -819,12 +819,22 @@ def real_seed_evidence(source: str | pathlib.Path, entry: dict[str, Any] | None)
     so rather than implying the seed was confirmed.
     """
     stamped = ImageSeedInspector.inspect(source)
-    if stamped["read"]:
+    if stamped["read"] and stamped["seeds"]:
         return {"seeds": stamped["seeds"], "available": True, "source": "图片内嵌提示", "reason": ""}
     executed = executed_graph(entry)
+    history_seeds = graph_seeds(executed) if executed else {}
+    if history_seeds:
+        return {"seeds": history_seeds, "available": True, "source": "执行历史", "reason": ""}
+    reasons: list[str] = []
+    if stamped["read"]:
+        reasons.append("图片内嵌提示未发现具体种子")
+    elif stamped["reason"]:
+        reasons.append(str(stamped["reason"]))
     if executed:
-        return {"seeds": graph_seeds(executed), "available": True, "source": "执行历史", "reason": ""}
-    return {"seeds": {}, "available": False, "source": "未核对", "reason": stamped["reason"]}
+        reasons.append("执行历史未发现具体种子")
+    else:
+        reasons.append("执行历史不可用")
+    return {"seeds": {}, "available": False, "source": "未核对", "reason": "；".join(reasons)}
 
 
 def seed_evidence_payload(planned: dict[str, Any], evidence: dict[str, Any]) -> dict[str, Any]:
@@ -2277,6 +2287,14 @@ class BatchRunner:
         self.adapter_registry: NodeSchemaRegistry | None = None
         #: Status to restore after a single-item redo finishes.
         self._redo_previous_status = ""
+        #: Monotonic completion order for "use latest". Result rows are kept in
+        #: task-number order for review, so their array position is not recency.
+        self._result_revision = 0
+
+    def _next_result_revision(self) -> int:
+        with self._lock:
+            self._result_revision += 1
+            return self._result_revision
 
     def _adapter(self, workflow_path: str) -> "Krea2WorkflowAdapter":
         return Krea2WorkflowAdapter.from_path(workflow_path, self.adapter_registry or active_registry())
@@ -2291,6 +2309,7 @@ class BatchRunner:
                 raise ValueError("已有批次正在运行")
             run_id = str(uuid.uuid4())
             self._state = {"status": "starting", "run_id": run_id, "total": len(bundle.items), "submitted": 0, "completed": 0, "errors": 0, "current": None, "results": [], "report": None, "output_dir": config.output_dir}
+            self._result_revision = 0
         self._cancel.clear()
         self._resume.set()
         self._last_bundle = bundle
@@ -2530,6 +2549,7 @@ class BatchRunner:
                 "elapsed": round(time.time() - started, 2),
                 "quality": quality,
                 "note": note,
+                "completed_revision": self._next_result_revision(),
                 "generation": {
                     "model": config.model, "styles": config.styles, "style_library": config.style_library,
                     "style_name": config.style_name, "loras": config.loras, "aspect_ratio": config.aspect_ratio,
@@ -2736,6 +2756,7 @@ class BatchRunner:
                             "quality": quality,
                             "attempts": attempts,
                             "review_status": "待确认",
+                            "completed_revision": self._next_result_revision(),
                         })
                         break
                     completed_count += 1

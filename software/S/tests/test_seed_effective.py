@@ -94,6 +94,11 @@ class SeedReportTests(unittest.TestCase):
         self.assertFalse(report["effective"])
         self.assertEqual(["13.seed"], report["missing"])
 
+    def test_an_unexpected_actual_seed_is_a_mismatch(self):
+        report = seed_report({"20.seed": 1}, {"20.seed": 1, "21.seed": 2})
+        self.assertFalse(report["effective"])
+        self.assertEqual(["21.seed"], report["extra"])
+
     def test_an_unreadable_seed_is_unknown_never_failed(self):
         report = seed_report({"20.seed": 1}, {}, available=False)
         self.assertFalse(report["available"])
@@ -269,6 +274,23 @@ class RealSeedEvidenceTests(unittest.TestCase):
             evidence = real_seed_evidence(path, entry)
             self.assertEqual({"20.seed": 99}, evidence["seeds"])
             self.assertEqual("执行历史", evidence["source"])
+
+    def test_history_is_used_when_the_image_graph_has_no_concrete_seed(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = png_with_prompt(pathlib.Path(temp) / "empty-seed.png", {"1": {"class_type": "SaveImage", "inputs": {}}})
+            entry = {"prompt": [1, "pid", seed_graph(99), {}, []]}
+            evidence = real_seed_evidence(path, entry)
+            self.assertEqual({"20.seed": 99}, evidence["seeds"])
+            self.assertEqual("执行历史", evidence["source"])
+
+    def test_seedless_image_and_history_are_unverified(self):
+        with tempfile.TemporaryDirectory() as temp:
+            graph = {"1": {"class_type": "SaveImage", "inputs": {}}}
+            path = png_with_prompt(pathlib.Path(temp) / "seedless.png", graph)
+            evidence = real_seed_evidence(path, {"prompt": [1, "pid", graph, {}, []]})
+            self.assertFalse(evidence["available"])
+            self.assertEqual("未核对", evidence["source"])
+            self.assertIn("未发现具体种子", evidence["reason"])
 
     def test_neither_source_reads_means_unverified(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -496,6 +518,25 @@ class SeedDisplayAssetTests(unittest.TestCase):
         self.assertIn("seedKeyOf", code)
         # 同一张图的实际种子重复＝必然同图；用提交值判会漏掉被上游改写的种子。
         self.assertIn("seedKeyOf(row)", code)
+
+    def test_reuse_requires_a_complete_actual_seed_sequence(self):
+        from fakes import js_source
+
+        code = js_source()
+        self.assertIn("function reusableSeedValue", code)
+        self.assertIn("function latestReusableSeed", code)
+        self.assertIn("row.completed_revision", code)
+        self.assertIn("实际种子基值", code)
+        self.assertIn("不能由单一基值完整复现", code)
+        self.assertIn("实际图额外出现", code)
+
+    def test_results_carry_monotonic_completion_order_for_latest_reuse(self):
+        runner = BatchRunner(pathlib.Path("."), client=object())
+        self.assertEqual(1, runner._next_result_revision())
+        self.assertEqual(2, runner._next_result_revision())
+        runner._state["status"] = "completed"
+        runner._result_revision = 7
+        self.assertEqual(8, runner._next_result_revision())
 
     def test_seed_note_styling_uses_the_page_tokens(self):
         from fakes import css_source

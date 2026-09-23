@@ -678,25 +678,29 @@ function updateSeedHint(){
   catch(e){
   }
 }
-function lastSeedValue(){
-  for(const row of (reviewState.results||[])){
-    const values=Object.values((row.generation||{}).seeds||{});
-    if(values.length)return values[0];
+function latestReusableSeed(){
+  const rows=reviewState.results||[];
+  let latest=null;
+  for(let index=0;index<rows.length;index++){
+    const row=rows[index];
+    const value=reusableSeedValue(row);
+    if(value===null)continue;
+    const revision=Number(row.completed_revision||0);
+    if(!latest||revision>latest.revision||(revision===latest.revision&&index>latest.index))latest={row,value,revision,index};
   }
-  return null;
+  return latest;
+}
+function lastSeedValue(){
+  return latestReusableSeed()?.value??null;
 }
 function useLastSeed(){
-  for(const row of (reviewState.results||[])){
-    const seeds=(row.generation||{}).seeds||{
-    }
-    ;
-    const values=Object.values(seeds);
-    if(values.length){
-      $('seedValue').value=String(values[0]);
-      notify(`已填入第 ${row.index} 张的种子 ${values[0]}`,'success');
-      return}
+  const found=latestReusableSeed();
+  if(found){
+    $('seedValue').value=String(found.value);
+    notify(`已填入第 ${found.row.index} 张的实际种子基值 ${found.value}`,'success');
+    return;
   }
-  notify('还没有可用的历史种子，先跑一次批次或重做','error');
+  notify('还没有能够用单一基值完整复现的实际种子','error');
 }
 
 async function openBatchOutput(){
@@ -2061,6 +2065,17 @@ function seedKeyOf(x){
   );
 }
 
+function reusableSeedValue(x){
+  const gen=x.generation||{}, real=gen.real_seeds||{}, submitted=gen.seeds||{};
+  const realKeys=Object.keys(real), submittedKeys=Object.keys(submitted);
+  if(!realKeys.length)return null;
+  const keys=submittedKeys.length?submittedKeys:realKeys;
+  if(keys.length!==realKeys.length||keys.some(k=>!Object.prototype.hasOwnProperty.call(real,k)))return null;
+  const base=Number(real[keys[0]]);
+  if(!Number.isSafeInteger(base))return null;
+  return keys.every((k,index)=>Number(real[k])===base+index)?base:null;
+}
+
 function seedCheckHtml(x){
   const gen=x.generation||{
   }
@@ -2072,7 +2087,8 @@ function seedCheckHtml(x){
   if(check.available&&check.effective===false){
     const pairs=Object.entries(check.mismatched||{}).map(([k,v])=>`${esc(k)}：提交 ${esc(String(v.submitted))} → 实际 ${esc(String(v.executed))}`);
     const missing=(check.missing||[]).map(k=>`${esc(k)}：提交图上没有`);
-    return `<span class="seed-note warn">与提交不一致（${esc([...pairs,...missing].join('；'))}）</span>`}
+    const extra=(check.extra||[]).map(k=>`${esc(k)}：实际图额外出现`);
+    return `<span class="seed-note warn">与提交不一致（${[...pairs,...missing,...extra].join('；')}）</span>`}
   return ''}
 
 function seedHtml(x){
@@ -2087,12 +2103,13 @@ function seedHtml(x){
   const source=gen.seed_source||'提交图';
   const label=source==='未核对'?'种子（未核对）':'实际种子';
   const sourceNote=Object.keys(real).length&&source!=='未核对'?` · 来源：${esc(source)}`:'';
-  const rows=keys.map(k=>`<dt>${esc(label)}</dt>
+  const reusable=reusableSeedValue(x);
+  const rows=keys.map((k,index)=>`<dt>${esc(label)}</dt>
   <dd>${esc(k)} = <code>${esc(String(real[k]))}</code>
-  <button class="secondary seed-reuse" type="button" onclick="event.stopPropagation();reuseSeed('${esc(String(real[k]))}')">复用</button>
+  ${index===0&&reusable!==null?`<button class="secondary seed-reuse" type="button" onclick="event.stopPropagation();reuseSeed('${esc(String(reusable))}')">复用整组</button>`:''}
   ${seedCheckHtml(x)}${sourceNote}
   </dd>`).join('');
-  if(rows)return rows;
+  if(rows)return rows+(reusable===null&&source!=='未核对'?'<dt></dt><dd><span class="seed-note">当前多节点种子不能由单一基值完整复现</span></dd>':'');
   return `${Object.keys(submitted).map(k=>`<dt>种子（未核对）</dt>
   <dd>${esc(k)} = <code>${esc(String(submitted[k]))}</code>
   ${seedCheckHtml(x)}

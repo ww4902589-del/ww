@@ -1013,7 +1013,7 @@ def seed_report(submitted: dict[str, Any], actual: dict[str, Any], *, available:
     extra = [key for key in actual if key not in submitted]
     return {
         "available": True,
-        "effective": not mismatched and not missing,
+        "effective": not mismatched and not missing and not extra,
         "mismatched": mismatched,
         "missing": missing,
         "extra": extra,

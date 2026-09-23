@@ -2629,3 +2629,15 @@ details[open] > .compact-module-summary .compact-toggle::after {
   font-size:11px;
   margin-left:6px
 }
+/* ---- V2.21 使用目的：工作流不支持所选用途时的提示 ---------------------- */
+/* 这一条只在预检已经判定"工作流干不了这件事"时出现，所以用强调色而不是
+   警告色的大面积填充：它是一个结论，不是一次闪烁。 */
+.help.purpose-unsupported {
+  padding:8px 11px;
+  border:1px solid var(--accent);
+  border-left-width:3px;
+  border-radius:10px;
+  background:#fdecef;
+  color:var(--accent-dark);
+  font-weight:600
+}

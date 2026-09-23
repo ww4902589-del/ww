@@ -37,6 +37,10 @@ class ErrorCategory:
     OUT_OF_MEMORY = "out_of_memory"
     EXECUTION_FAILED = "execution_failed"
     SAVE_FAILED = "save_failed"
+    #: The workflow is sound, but it cannot do what the user declared it is for.
+    #: Reported rather than tolerated: the batch would otherwise finish
+    #: successfully and hand back pictures that are not what was asked for.
+    PURPOSE_UNSUPPORTED = "purpose_unsupported"
     UNKNOWN = "unknown"
 
 
@@ -51,6 +55,7 @@ CATEGORY_TITLES = {
     ErrorCategory.OUT_OF_MEMORY: "显存不足",
     ErrorCategory.EXECUTION_FAILED: "执行失败",
     ErrorCategory.SAVE_FAILED: "保存失败",
+    ErrorCategory.PURPOSE_UNSUPPORTED: "工作流不支持所选用途",
     ErrorCategory.UNKNOWN: "未知错误",
 }
 
@@ -64,6 +69,8 @@ WORKFLOW_LEVEL = frozenset({
     ErrorCategory.VALUE_OUT_OF_RANGE,
     ErrorCategory.DANGLING_LINK,
     ErrorCategory.MISSING_INPUT,
+    # Retrying the other 44 prompts cannot make a workflow able to upscale.
+    ErrorCategory.PURPOSE_UNSUPPORTED,
 })
 
 #: Input names that address a file on disk. A ``value_not_in_list`` on one of

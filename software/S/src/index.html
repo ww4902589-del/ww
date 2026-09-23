@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ComfyBatch V2.20</title>
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<main>
+<div id="toasts" class="toast-stack" aria-live="polite"></div>
+
+<div class="top">
+  <div>
+    <div class="page-kicker">LOCAL COMFYUI CONTROL</div>
+    <h1>S · ComfyBatch V2.20</h1>
+    <div class="tag">按四个阶段完成导入、配置、检查与确认</div>
+  </div>
+  <div class="top-status"><div id="connection" class="status">正在检查</div></div>
+</div>
+
+<div class="workspace">
+  <aside class="step-nav">
+    <h3>工作阶段</h3>
+    <button class="step-tab active" data-step-target="1" onclick="goStep(1)"><span>1</span>文件与任务</button>
+    <button class="step-tab" data-step-target="2" onclick="goStep(2)"><span>2</span>生成配置</button>
+    <button class="step-tab" data-step-target="3" onclick="goStep(3)"><span>3</span>检查与运行</button>
+    <button class="step-tab" data-step-target="4" onclick="goStep(4)"><span>4</span>成图与确认</button>
+
+    <section class="truth-rail" id="truthRail">
+      <h3>生效摘要</h3>
+      <dl class="rail-list">
+        <dt>工作流</dt><dd id="railWorkflow">未选择</dd>
+        <dt>指纹</dt><dd id="railFingerprint">未读取</dd>
+        <dt>分支</dt><dd id="railBranch">未选择</dd>
+        <dt>采样</dt><dd id="railSamplers">尚未检查</dd>
+        <dt>输入输出</dt><dd id="railIO">尚未检查</dd>
+        <dt>模型</dt><dd id="railModel">未选择</dd>
+        <dt>尺寸</dt><dd id="railSize">未确定</dd>
+        <dt>参数</dt><dd id="railParams">无覆盖</dd>
+      </dl>
+      <div class="rail-sep"></div>
+      <button class="rail-blocking" id="railBlocking" onclick="openDrawer('inspect',this)">阻断问题：正在读取</button>
+      <dl class="rail-list rail-result">
+        <dt>结果</dt><dd id="railReview">尚无结果</dd>
+      </dl>
+      <div class="bar rail-bar"><i id="railProgress"></i></div>
+      <div id="railRun" class="help">空闲</div>
+    </section>
+  </aside>
+
+  <div class="content"><div class="grid">
+
+    <!-- ============ 阶段 1：文件与任务 ============ -->
+    <section class="card wide step-panel active" data-step="1">
+      <div class="section-lead">
+        <div><h2>文件与任务</h2><p>确认本地环境、导入提示词或图片，然后分配任务范围。</p></div>
+        <button class="secondary" onclick="refreshInventory(this)">重新扫描本地资源</button>
+      </div>
+
+      <div class="studio-intro">
+        <div>
+          <div class="page-kicker">START A BATCH</div>
+          <h3>把灵感变成可确认的结果。</h3>
+          <p>从提示词或图片开始，S 会在真正运行前检查资源、参数和工作流。</p>
+        </div>
+        <div class="studio-stats">
+          <div><strong>本地优先</strong><span>不上传原文件</span></div>
+          <div><strong>导入即预检</strong><span>提前发现阻断问题</span></div>
+          <div><strong>结果可追溯</strong><span>状态重启后保留</span></div>
+        </div>
+      </div>
+
+      <details class="advanced env-panel">
+        <summary>本地环境（ComfyUI 目录、地址、工作流与输出目录）</summary>
+        <div class="fields">
+          <label>ComfyUI 目录<input id="comfyRoot" placeholder="例如：D:\ComfyUI\ComfyUI"></label>
+          <label>ComfyUI 地址<input id="comfyUrl" value="http://127.0.0.1:8188"></label>
+          <label>工作流目录<input id="workflowRoot" placeholder="请选择工作流目录"></label>
+          <label>输出目录<input id="outputRoot" placeholder="请选择输出目录"></label>
+        </div>
+        <div id="counts" class="help"></div>
+        <div class="mode-note">基础功能完全本地运行，不启用 LLM 时不会消耗 Token。</div>
+      </details>
+
+      <div class="intake-card">
+      <div class="fields intake-fields">
+        <label>提示词文件<input id="bundleFile" type="file" accept=".json,.csv,.txt,.md,.docx,.xlsx"></label>
+        <label>图片合集<input id="imageFiles" type="file" multiple accept=".png,.jpg,.jpeg,.webp"></label>
+        <label>图片处理模式
+          <select id="imageMode">
+            <option value="faithful_upscale">保真像素放大</option>
+            <option value="ai_enhance" selected>AI 高清重绘</option>
+            <option value="outpaint">画布扩展</option>
+          </select>
+        </label>
+        <label>网页或 B 站链接<input id="imageUrl" type="url" placeholder="粘贴页面、视频或图片链接"></label>
+      </div>
+      <button id="extractImageUrl" class="secondary">提取链接图片</button>
+      <button id="mappingButton" class="secondary" onclick="openMappingDialog()" disabled>打开 Excel 字段映射窗口</button>
+      <div class="help">文档支持 JSON、TXT、Word 与 Excel；图片支持 PNG、JPG 和 WEBP。链接提取优先网页封面或 B 站视频封面，最多导入 12 张公开图片；图片会安全复制到 ComfyUI 输入目录，原文件不被修改。</div>
+      <div id="bundleInfo" class="help">尚未导入</div>
+      </div>
+
+      <div class="selection-tools">
+        <div class="fields">
+          <label>编号范围<input id="promptRange" placeholder="例如：1,3,5-12,20-25"></label>
+          <label>分配风格／LoRA 预设<select id="assignPreset"></select></label>
+          <label>分配图像规格<select id="assignImagePreset"></select></label>
+        </div>
+        <div class="actions">
+          <button class="secondary" onclick="selectRange()">选择编号</button>
+          <button class="secondary" onclick="selectAllPrompts()">全选</button>
+          <button class="secondary" onclick="invertPromptSelection()">反选</button>
+          <button class="secondary" onclick="clearPromptSelection()">清空</button>
+        </div>
+        <div class="actions">
+          <button onclick="assignPresetToSelection()">应用风格／LoRA</button>
+          <button class="secondary" onclick="assignPresetToSelection(true)">恢复全局风格</button>
+          <button onclick="assignImagePresetToSelection()">应用图像规格</button>
+          <button class="secondary" onclick="assignImagePresetToSelection(true)">恢复全局规格</button>
+        </div>
+        <div id="selectionStatus" class="help">已选择 0 条</div>
+        <div id="assignmentFeedback" class="help">可为同一批任务分别分配不同的风格组合和图像规格。</div>
+      </div>
+
+      <label>全局负面提示词（应用到全部任务）<textarea id="globalNegative" placeholder="例如：photorealistic, multiple people, character sheet, triptych"></textarea></label>
+
+      <div id="preview" class="preview"></div>
+    </section>
+
+    <!-- ============ 阶段 2：工作流与参数（原「工作流」+「参数工作台」合并） ============ -->
+    <!-- 参考 SwarmUI Simple Tab 的同屏构型：选流 → 看能力 → 调参数一遍完成。
+         两边的 id 全部原样保留（workflow/workflowFacts/paramWorkbench/paramGroups…），
+         check_review_ui.py 与结构基线钉着这些名字。 -->
+    <section id="paramWorkbench" class="card wide step-panel" data-step="2">
+      <div class="section-lead">
+        <div><h2>生成配置</h2><p>在同一页完成工作流、模型、风格、LoRA、图像规格与参数设置。</p></div>
+        <button class="secondary" onclick="loadWorkbench(this)">读取可用参数</button>
+      </div>
+
+      <div id="precheck" class="precheck" hidden></div>
+
+      <div class="control-deck">
+        <div class="control-deck-head">
+          <div><span class="step-number">01</span><b>工作流与模型</b><small>确定运行链路、基础模型和当前预设</small></div>
+          <span class="deck-status">所有选项均写入本次真实提交</span>
+        </div>
+        <div class="control-grid">
+          <label>工作流<select id="workflow" onchange="renderWorkflowVariants()"></select></label>
+          <label>执行分支<select id="workflowVariant" onchange="renderModels();renderConfigFeedback()"></select></label>
+          <label class="model-control">生成模型<select id="model" onchange="renderLoraOptions();renderConfigFeedback()"></select></label>
+          <label>风格应用
+            <select id="styleApplication" onchange="renderConfigFeedback()">
+              <option value="native" selected>工作流原生组合器</option>
+              <option value="prompt">提示词融合</option>
+            </select>
+          </label>
+          <label>风格／LoRA 预设<select id="presetPicker" onchange="loadPreset(true)"></select></label>
+          <label>种子模式<select id="seedMode" onchange="updateSeedHint()">
+            <option value="random" selected>默认变化（每张随机）</option>
+            <option value="fixed">固定种子（整批唯一，可复现）</option>
+          </select></label>
+          <label id="seedValueWrap" hidden>种子值<input id="seedValue" type="number" min="0" max="9007199254740991" placeholder="留空则自动用最近一次的种子"></label>
+        </div>
+        <div id="seedHint" class="help" hidden>固定种子下整批共用该种子（多采样器自动 +1）；提示词相同的任务会产出相同图片。</div>
+        <div class="preset-command-bar">
+          <label>预设名称<input id="presetName" placeholder="输入名称后可另存"></label>
+          <button class="secondary" onclick="savePreset(true)">另存新预设</button>
+          <button class="secondary" onclick="savePreset(false)">更新预设</button>
+          <button class="secondary" onclick="loadPreset(false)">重新载入</button>
+          <button class="danger" onclick="deletePreset()">删除预设</button>
+          <button class="secondary" onclick="restoreDefaultPresets(this)">恢复默认预设</button>
+        </div>
+      </div>
+
+      <details class="image-spec-module" aria-labelledby="imageSpecTitle">
+        <summary class="compact-module-summary">
+          <span class="step-number">02</span>
+          <div class="compact-module-title"><b id="imageSpecTitle">全局图像规格</b><small>画幅、像素预算与最终尺寸</small></div>
+          <strong id="imageSpecSummary">等待读取图像规格</strong>
+          <span class="compact-toggle">展开设置</span>
+        </summary>
+        <div class="image-spec-body">
+          <div class="image-spec-controls">
+            <label>规格预设<select id="globalImagePreset" onchange="applyGlobalImagePreset()"></select></label>
+            <label>画面比例
+              <select id="aspect" onchange="renderImageSpecSummary();renderConfigFeedback()">
+                <option>16:9 (Widescreen)</option>
+                <option>3:2 (Landscape)</option>
+                <option>4:3 (Landscape)</option>
+                <option>1:1 (Square)</option>
+                <option>9:16 (Portrait)</option>
+              </select>
+            </label>
+          </div>
+          <small id="imageSpecMeta">所选规格会写入尺寸节点，并可被任务级规格覆盖。</small>
+        </div>
+      </details>
+
+      <div id="workflowFacts" class="facts facts-strip">
+        <div class="fact"><span>工作流指纹</span><strong id="workflowFingerprint">尚未读取</strong></div>
+        <div class="fact"><span>实际分支</span><strong id="actualBranch">尚未选择</strong></div>
+        <div class="fact"><span>采样链路</span><strong id="chainSummary">尚未读取</strong></div>
+        <div class="fact"><span>输入／输出</span><strong id="ioSummary">尚未读取</strong></div>
+      </div>
+
+      <section class="style-lora-module">
+        <div class="module-head">
+          <div><span class="step-number">03</span><b>风格与 LoRA</b><small>风格和模型都在本页完成，不再跳转到独立页面。</small></div>
+          <span class="deck-status">任务级预设优先于这里的全局组合</span>
+        </div>
+        <div class="style-lora-grid">
+          <div class="style-column">
+            <div class="subsection-title"><b>风格组合</b><span>可叠加多个风格</span></div>
+            <div class="fields">
+              <label>风格库<select id="styleLibrary" onchange="renderStyles()"></select></label>
+              <label>具体风格<select id="styleName" onchange="renderStylePreview()"></select></label>
+            </div>
+            <div id="stylePreview" class="style-preview"></div>
+            <button class="secondary add-selection" onclick="addStyle()">加入风格组合</button>
+            <div id="styles" class="selection-list"></div>
+          </div>
+          <div class="lora-column">
+            <div class="subsection-title"><b>LoRA 组合</b><span>选择后可调整强度和触发词</span></div>
+            <label>可用 LoRA<select id="loraPick"></select></label>
+            <button class="secondary add-selection" onclick="addLora()">加入 LoRA</button>
+            <div id="loras" class="selection-list"></div>
+          </div>
+        </div>
+      </section>
+
+      <details class="parameter-console">
+        <summary class="parameter-console-head compact-module-summary">
+          <div><span class="step-number">04</span><b>参数工作台</b><small>按用途切换，只显示当前需要调整的一组</small></div>
+          <strong id="paramCompactSummary">沿用工作流默认参数</strong>
+          <span class="compact-toggle">展开参数</span>
+        </summary>
+        <div class="parameter-compact-tools">
+          <div class="parameter-scope">
+            <label>作用范围
+              <select id="paramScope" onchange="renderWorkbench()">
+                <option value="batch">整个批次</option>
+                <option value="workflow">工作流默认值</option>
+                <option value="task">仅选中的任务</option>
+              </select>
+            </label>
+            <label id="rememberWrap" class="wb-remember" hidden><input type="checkbox" id="rememberParams">记住这次的参数，作为工作流默认值</label>
+          </div>
+        </div>
+        <div id="paramScopeHint" class="scope-hint"></div>
+        <div id="paramGroups" class="wb-groups"></div>
+        <div class="parameter-footer">
+          <div id="paramFeedback" class="help"></div>
+          <div class="actions">
+            <button class="secondary" onclick="clearWorkbench(this)">清空未应用输入</button>
+            <button class="secondary" onclick="clearSavedParams(this)">清除已保存默认值…</button>
+            <button id="applyParams" onclick="applyWorkbench(this)">应用当前参数</button>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <!-- ============ 阶段 3：检查与运行 ============ -->
+    <section class="card wide step-panel" data-step="3">
+      <div class="section-lead">
+        <div><h2>检查与运行</h2><p>确认最终生效的工作流、分支、资源与预计尺寸，然后启动批次。</p></div>
+      </div>
+
+      <div id="configFeedback" class="feedback"><b>当前配置反馈</b>正在读取可用模型、风格、LoRA 与图像规格。</div>
+      <button id="preflightButton" class="secondary" onclick="preflightAction(this)">检查实际生效配置</button>
+      <div id="effective" class="effective"><b>实际生效检查：</b>尚未检查。</div>
+
+      <div class="output-destination">
+        <div>
+          <div class="plan-kicker">本批次输出位置</div>
+          <label>输出目录<input id="batchOutputDir" placeholder="默认使用环境中的输出目录"></label>
+          <div class="help">可按批次自由调整；目录不存在时会在启动批次或点「打开输出目录」时自动创建。</div>
+        </div>
+        <div class="actions output-actions">
+          <button class="secondary" onclick="useDefaultOutput()">使用默认目录</button>
+          <button class="secondary" onclick="openBatchOutput()">打开输出目录</button>
+        </div>
+      </div>
+
+      <details class="advanced">
+        <summary>高级生成保护与可选 LLM 精修</summary>
+        <label class="switch"><input id="singleSubject" type="checkbox" checked>单人单画面保护（检测明显三栏并自动重试）</label>
+        <label>最多重试次数<input id="maxRetries" type="number" min="0" max="5" value="2"></label>
+        <label class="switch"><input id="llmEnabled" type="checkbox" onchange="toggleLLM()">启用兼容 OpenAI 接口的分析（关闭时零 LLM token）</label>
+        <div id="llmFields" class="fields hidden">
+          <label>接口地址<input id="llmUrl" placeholder="http://127.0.0.1:1234/v1"></label>
+          <label>模型名<input id="llmModel" placeholder="本地或远程模型名"></label>
+          <label>API Key<input id="llmKey" type="password" autocomplete="off"></label>
+          <label>温度<input id="llmTemp" type="number" min="0" max="2" step="0.1" value="0.2"></label>
+          <label style="grid-column:1/-1">精修规则<textarea id="llmInstruction">在不改变原始服饰约束的前提下，补全为明确的二维服装设计提示词。保持每条设计、场景、姿势和构图彼此可辨识；只返回 JSON 数组，每项包含 title、prompt，可选包含 negative_prompt。</textarea></label>
+        </div>
+        <div class="help">启用后只发送提示词文本和提示词元数据；密钥不会写入运行报告。</div>
+      </details>
+
+      <div class="run-controls">
+        <div><b>任务控制</b><small>暂停只停止提交新任务，取消会停止剩余队列。</small></div>
+        <div class="actions">
+        <button class="secondary" onclick="control('pause',this)">暂停</button>
+        <button class="secondary" onclick="control('resume',this)">继续</button>
+        <button class="danger" onclick="control('cancel',this)">取消剩余任务</button>
+        </div>
+      </div>
+      <div class="bar"><i id="progress"></i></div>
+      <div class="metrics">
+        <div class="metric"><span>总数</span><strong id="total">0</strong></div>
+        <div class="metric"><span>已提交</span><strong id="submitted">0</strong></div>
+        <div class="metric"><span>已完成</span><strong id="completed">0</strong></div>
+        <div class="metric"><span>失败</span><strong id="errors">0</strong></div>
+      </div>
+      <div id="runText" class="help">等待导入与配置</div>
+      <div id="abortBanner" class="abort-banner" hidden></div>
+    </section>
+
+    <!-- ============ 阶段 4：成图与确认 ============ -->
+    <section class="card wide step-panel" data-step="4">
+      <div class="section-lead">
+        <div><h2>成图预览与确认</h2><p>逐张查看、通过、打回重做或记录问题；确认状态在重启后保留。</p></div>
+      </div>
+      <div class="review-toolbar">
+        <span class="help">审图快捷键：<b>J</b>/<b>K</b> 上下、<b>Y</b> 通过、<b>N</b> 打回、<b>Enter</b> 看原图</span>
+        <button class="secondary" id="confirmAllButton" onclick="confirmAllPending(this)">全部通过</button>
+        <button class="secondary" id="selectAllPendingButton" onclick="selectAllPending()">全选待审</button>
+        <button class="secondary" id="redoSelectedButton" onclick="openRejectBatchDialog()">打回选中</button>
+        <label>显示密度<select id="reviewDensity" onchange="setReviewDensity(this.value)">
+          <option value="compact" selected>紧凑</option>
+          <option value="standard">标准</option>
+          <option value="loose">宽松</option>
+        </select></label>
+        <button class="secondary" onclick="openDrawer('inspect',this)">生效检查与依赖</button>
+        <button class="secondary" onclick="reloadSchema(this)">重新读取节点定义</button>
+        <span id="reviewSummary" class="help"></span>
+      </div>
+      <div id="reviewBoard" class="review-board"></div>
+      <div id="gallery" class="gallery legacy-gallery" hidden aria-hidden="true"></div>
+    </section>
+
+  </div>
+
+  <div class="sticky-actions">
+    <button id="backStep" class="secondary" onclick="changeStep(-1)">上一步</button>
+    <button id="nextStep" class="secondary" onclick="changeStep(1)">下一步</button>
+    <button class="secondary" onclick="goStep(3);preflightAction($('preflightButton'))">实际检查</button>
+    <button id="start" onclick="startBatch(this)">启动真实批次</button>
+  </div>
+  </div>
+
+</div>
+</main>
+
+<aside id="drawer" class="drawer" hidden>
+  <div class="drawer-head">
+    <h3 id="drawerTitle">问题详情</h3>
+    <button class="secondary" onclick="closeDrawer()">关闭</button>
+  </div>
+  <div id="drawerBody" class="drawer-body"></div>
+</aside>
+
+<dialog id="viewer" class="viewer">
+  <div class="viewer-head">
+    <span id="viewerCaption"></span>
+    <span id="viewerCounter" class="viewer-counter"></span>
+    <div class="viewer-actions">
+      <button class="secondary" id="viewerPrev" onclick="stepViewer(-1)">‹ 上一张</button>
+      <button class="secondary" id="viewerNext" onclick="stepViewer(1)">下一张 ›</button>
+      <button class="secondary" onclick="setViewerZoom(1)">100%</button>
+      <button class="secondary" onclick="setViewerZoom(0)">适应</button>
+      <button class="secondary" onclick="$('viewer').close()">关闭</button>
+    </div>
+  </div>
+  <div class="viewer-frame"><img id="viewerImage" alt="原图" onclick="toggleViewerFull()"></div>
+</dialog>
+
+<!-- 打回重做：重做方式用下拉选择，不再让用户手打英文枚举值 -->
+<dialog id="rejectDialog" class="reject-dialog">
+  <h2>打回重做</h2>
+  <p class="help" id="rejectSubject"></p>
+  <label>重做方式
+    <select id="rejectMode" onchange="updateRejectHint();updateRejectPromptVisibility()"></select>
+  </label>
+  <p class="help" id="rejectModeHint"></p>
+  <label id="rejectSeedWrap">指定种子（可选，留空=按重做方式取随机）
+    <input id="rejectSeed" type="number" min="0" max="9007199254740991" placeholder="例如 777">
+  </label>
+  <label id="rejectPromptWrap" hidden>修改后的正面提示词
+    <textarea id="rejectPrompt" rows="6" placeholder="在这里修改这一张的提示词；原提示词会自动映射进来"></textarea>
+    <button class="secondary prompt-reset" type="button" onclick="resetRejectPrompt()">恢复原提示词</button>
+  </label>
+  <label>打回原因（可留空）
+    <textarea id="rejectNote" rows="3" placeholder="例如：构图偏了 / 手部结构问题"></textarea>
+  </label>
+  <div class="review-actions">
+    <button class="secondary" onclick="$('rejectDialog').close()">取消</button>
+    <button id="rejectSubmit" onclick="submitReject(this)">确认重做</button>
+  </div>
+</dialog>
+
+<!-- 记录问题：只改状态与备注，不触发重做 -->
+<dialog id="noteDialog" class="reject-dialog">
+  <h2>记录问题</h2>
+  <p class="help" id="noteSubject"></p>
+  <label>问题记录
+    <textarea id="noteText" rows="3" placeholder="例如：背景多了一只手"></textarea>
+  </label>
+  <div class="review-actions">
+    <button class="secondary" onclick="$('noteDialog').close()">取消</button>
+    <button id="noteSubmit" onclick="submitNote(this)">保存</button>
+  </div>
+</dialog>
+
+<dialog id="mappingDialog" class="mapping-dialog">
+  <h2>Excel 字段映射</h2>
+  <div class="help">自动识别不准确时，在这里指定每种内容所在的列。重新应用只改变当前导入结果，不修改原 Excel。</div>
+  <div class="fields">
+    <label>任务标题列<select id="mappingTitle"></select></label>
+    <label>正面提示词列<select id="mappingPositive"></select></label>
+    <label>负面提示词列<select id="mappingNegative"></select></label>
+    <label>保留为元数据的列<input id="mappingMetadata" placeholder="用逗号分隔；留空表示保留其它全部列"></label>
+  </div>
+  <div class="actions">
+    <button onclick="applyMapping()">应用映射并重新提取</button>
+    <button class="secondary" onclick="$('mappingDialog').close()">取消</button>
+  </div>
+</dialog>
+
+<script src="/app.js"></script>
+</body>
+</html>

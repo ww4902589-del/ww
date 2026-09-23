@@ -1,0 +1,658 @@
+{
+  "_comment": "出厂预设库（只读模板）。用户数据不在这里，删除记录也不会被它覆盖。",
+  "style_lora_presets": {
+    "897fee5dfab6": {
+      "id": "897fee5dfab6",
+      "name": "手游+数字",
+      "styles": [
+        {
+          "catalog": "krea2_anime_动漫_styles",
+          "name": "Polished Mobile Gacha Style"
+        },
+        {
+          "catalog": "krea2_digital_painting_数字绘画_styles",
+          "name": "Digital Painting"
+        }
+      ],
+      "loras": [
+        {
+          "name": "BArtstyle-KREA2-V2-1024.safetensors",
+          "strength": 0.55,
+          "use_triggers": true
+        },
+        {
+          "name": "Krea2 & Anima] Yoneyama Mai米山舞 - Artist Style.safetensors",
+          "strength": 0.5,
+          "use_triggers": true
+        },
+        {
+          "name": "Detailer-KREA2.safetensors",
+          "strength": 0.65,
+          "use_triggers": true
+        },
+        {
+          "name": "krea2-masterpieces-v51.safetensors",
+          "strength": 0.75,
+          "use_triggers": false
+        },
+        {
+          "name": "houTuIllustrationLoLV1.0_Krea2RawV1.0.safetensors",
+          "strength": 0.35,
+          "use_triggers": true
+        }
+      ]
+    },
+    "c1d7df86e93d": {
+      "id": "c1d7df86e93d",
+      "name": "手游 黑色漫画",
+      "styles": [
+        {
+          "catalog": "krea2_anime_动漫_styles",
+          "name": "Polished Mobile Gacha Style"
+        },
+        {
+          "catalog": "krea2_Anime-Manga Linework_动漫-漫画线稿",
+          "name": "Cyber-Gothic Noir Manga"
+        }
+      ],
+      "loras": [
+        {
+          "name": "BArtstyle-KREA2-V2-1024.safetensors",
+          "strength": 0.4,
+          "use_triggers": true
+        },
+        {
+          "name": "Krea2 & Anima] Yoneyama Mai米山舞 - Artist Style.safetensors",
+          "strength": 0.3,
+          "use_triggers": true
+        },
+        {
+          "name": "krea2-masterpieces-v51.safetensors",
+          "strength": 0.5,
+          "use_triggers": false
+        },
+        {
+          "name": "Detailer-KREA2.safetensors",
+          "strength": 0.6,
+          "use_triggers": false
+        }
+      ]
+    },
+    "v43anime01": {
+      "id": "v43anime01",
+      "name": "V4.3-01 精致手游·电影墨线",
+      "styles": [
+        {
+          "catalog": "krea2_anime_动漫_styles",
+          "name": "Polished Mobile Gacha Style"
+        },
+        {
+          "catalog": "krea2_Anime-Manga Linework_动漫-漫画线稿",
+          "name": "Cinematic Monochrome Noir — Inked Lineart"
+        },
+        {
+          "catalog": "krea2_anime_动漫_styles",
+          "name": "Anime Illustration"
+        }
+      ],
+      "loras": [
+        {
+          "name": "BArtstyle-KREA2-V2-1024.safetensors",
+          "strength": 0.45,
+          "use_triggers": true
+        },
+        {
+          "name": "Krea2 & Anima] Yoneyama Mai米山舞 - Artist Style.safetensors",
+          "strength": 0.35,
+          "use_triggers": true
+        },
+        {
+          "name": "Detailer-KREA2.safetensors",
+          "strength": 0.6,
+          "use_triggers": true
+        },
+        {
+          "name": "krea2-masterpieces-v51.safetensors",
+          "strength": 0.55,
+          "use_triggers": true
+        }
+      ]
+    },
+    "v43anime02": {
+      "id": "v43anime02",
+      "name": "V4.3-02 现代动漫·漫画排线",
+      "styles": [
+        {
+          "catalog": "krea2_anime_动漫_styles",
+          "name": "Anime Style"
+        },
+        {
+          "catalog": "krea2_Anime-Manga Linework_动漫-漫画线稿",
+          "name": "Cinematic Monochrome Noir — Manga Ink Hatch"
+        }
+      ],
+      "loras": [
+        {
+          "name": "BArtstyle-KREA2-V2-1024.safetensors",
+          "strength": 0.4,
+          "use_triggers": true
+        },
+        {
+          "name": "Krea2 & Anima] Yoneyama Mai米山舞 - Artist Style.safetensors",
+          "strength": 0.3,
+          "use_triggers": true
+        },
+        {
+          "name": "houTuIllustrationLoLV1.0_Krea2RawV1.0.safetensors",
+          "strength": 0.55,
+          "use_triggers": true
+        }
+      ]
+    },
+    "v43anime03": {
+      "id": "v43anime03",
+      "name": "V4.3-03 精致手游·赛博墨线",
+      "styles": [
+        {
+          "catalog": "krea2_anime_动漫_styles",
+          "name": "Polished Mobile Gacha Style"
+        },
+        {
+          "catalog": "krea2_Anime-Manga Linework_动漫-漫画线稿",
+          "name": "Cyber-Gothic Noir Manga"
+        },
+        {
+          "catalog": "krea2_anime_动漫_styles",
+          "name": "Cel Shading"
+        }
+      ],
+      "loras": [
+        {
+          "name": "BArtstyle-KREA2-V2-1024.safetensors",
+          "strength": 0.5,
+          "use_triggers": true
+        },
+        {
+          "name": "Detailer-KREA2.safetensors",
+          "strength": 0.65,
+          "use_triggers": true
+        },
+        {
+          "name": "Krea2Mivt4tStyle_c1-st8000.safetensors",
+          "strength": 0.45,
+          "use_triggers": true
+        },
+        {
+          "name": "REDZ15_DetailDaemonZ_lora_v1.1.safetensors",
+          "strength": 0.5,
+          "use_triggers": true
+        }
+      ]
+    },
+    "v43anime04": {
+      "id": "v43anime04",
+      "name": "V4.3-04 现代动漫·图形叙事",
+      "styles": [
+        {
+          "catalog": "krea2_anime_动漫_styles",
+          "name": "Anime Style"
+        },
+        {
+          "catalog": "krea2_Anime-Manga Linework_动漫-漫画线稿",
+          "name": "Graphic Monochrome Narrative"
+        },
+        {
+          "catalog": "krea2_anime_动漫_styles",
+          "name": "Anime Key Visual"
+        }
+      ],
+      "loras": [
+        {
+          "name": "Krea2 & Anima] Yoneyama Mai米山舞 - Artist Style.safetensors",
+          "strength": 0.4,
+          "use_triggers": true
+        },
+        {
+          "name": "houTuIllustrationLoLV1.0_Krea2RawV1.0.safetensors",
+          "strength": 0.55,
+          "use_triggers": true
+        },
+        {
+          "name": "Detailer-KREA2.safetensors",
+          "strength": 0.6,
+          "use_triggers": true
+        }
+      ]
+    },
+    "v43anime05": {
+      "id": "v43anime05",
+      "name": "V4.3-05 精致手游·颗粒半调",
+      "styles": [
+        {
+          "catalog": "krea2_anime_动漫_styles",
+          "name": "Polished Mobile Gacha Style"
+        },
+        {
+          "catalog": "krea2_Anime-Manga Linework_动漫-漫画线稿",
+          "name": "Gritty Analog Halftone"
+        }
+      ],
+      "loras": [
+        {
+          "name": "BArtstyle-KREA2-V2-1024.safetensors",
+          "strength": 0.45,
+          "use_triggers": true
+        },
+        {
+          "name": "Krea2 & Anima] Yoneyama Mai米山舞 - Artist Style.safetensors",
+          "strength": 0.3,
+          "use_triggers": true
+        },
+        {
+          "name": "REDZ15_DetailDaemonZ_lora_v1.1.safetensors",
+          "strength": 0.55,
+          "use_triggers": true
+        },
+        {
+          "name": "krea2-masterpieces-v51.safetensors",
+          "strength": 0.5,
+          "use_triggers": true
+        }
+      ]
+    },
+    "v43anime06": {
+      "id": "v43anime06",
+      "name": "V4.3-06 现代动漫·动感交叉线",
+      "styles": [
+        {
+          "catalog": "krea2_anime_动漫_styles",
+          "name": "Anime Style"
+        },
+        {
+          "catalog": "krea2_Anime-Manga Linework_动漫-漫画线稿",
+          "name": "Gritty Chiaroscuro Noir — Kinetic Crosshatch Ink"
+        },
+        {
+          "catalog": "krea2_anime_动漫_styles",
+          "name": "Cinematic Anime"
+        }
+      ],
+      "loras": [
+        {
+          "name": "BArtstyle-KREA2-V2-1024.safetensors",
+          "strength": 0.35,
+          "use_triggers": true
+        },
+        {
+          "name": "Krea2 & Anima] Yoneyama Mai米山舞 - Artist Style.safetensors",
+          "strength": 0.45,
+          "use_triggers": true
+        },
+        {
+          "name": "Detailer-KREA2.safetensors",
+          "strength": 0.65,
+          "use_triggers": true
+        }
+      ]
+    },
+    "v43anime07": {
+      "id": "v43anime07",
+      "name": "V4.3-07 精致手游·暗黑图形线",
+      "styles": [
+        {
+          "catalog": "krea2_anime_动漫_styles",
+          "name": "Polished Mobile Gacha Style"
+        },
+        {
+          "catalog": "krea2_Anime-Manga Linework_动漫-漫画线稿",
+          "name": "Gritty Graphic Macabre"
+        },
+        {
+          "catalog": "krea2_anime_动漫_styles",
+          "name": "Manhwa Ultradetailed Art"
+        }
+      ],
+      "loras": [
+        {
+          "name": "BArtstyle-KREA2-V2-1024.safetensors",
+          "strength": 0.4,
+          "use_triggers": true
+        },
+        {
+          "name": "houTuIllustrationLoLV1.0_Krea2RawV1.0.safetensors",
+          "strength": 0.6,
+          "use_triggers": true
+        },
+        {
+          "name": "Krea2Mivt4tStyle_c1-st8000.safetensors",
+          "strength": 0.45,
+          "use_triggers": true
+        },
+        {
+          "name": "Detailer-KREA2.safetensors",
+          "strength": 0.55,
+          "use_triggers": true
+        }
+      ]
+    },
+    "v43anime08": {
+      "id": "v43anime08",
+      "name": "V4.3-08 现代动漫·复印朋克线",
+      "styles": [
+        {
+          "catalog": "krea2_anime_动漫_styles",
+          "name": "Anime Style"
+        },
+        {
+          "catalog": "krea2_Anime-Manga Linework_动漫-漫画线稿",
+          "name": "Gritty Xerox Punk"
+        }
+      ],
+      "loras": [
+        {
+          "name": "Krea2 & Anima] Yoneyama Mai米山舞 - Artist Style.safetensors",
+          "strength": 0.35,
+          "use_triggers": true
+        },
+        {
+          "name": "houTuIllustrationLoLV1.0_Krea2RawV1.0.safetensors",
+          "strength": 0.5,
+          "use_triggers": true
+        },
+        {
+          "name": "krea2-masterpieces-v51.safetensors",
+          "strength": 0.55,
+          "use_triggers": true
+        }
+      ]
+    },
+    "v43anime09": {
+      "id": "v43anime09",
+      "name": "V4.3-09 精致手游·高反差墨线",
+      "styles": [
+        {
+          "catalog": "krea2_anime_动漫_styles",
+          "name": "Polished Mobile Gacha Style"
+        },
+        {
+          "catalog": "krea2_Anime-Manga Linework_动漫-漫画线稿",
+          "name": "High-Contrast Ink Expressionism"
+        },
+        {
+          "catalog": "krea2_anime_动漫_styles",
+          "name": "Granblue Fantasy Pin-Up Style"
+        }
+      ],
+      "loras": [
+        {
+          "name": "BArtstyle-KREA2-V2-1024.safetensors",
+          "strength": 0.5,
+          "use_triggers": true
+        },
+        {
+          "name": "Krea2 & Anima] Yoneyama Mai米山舞 - Artist Style.safetensors",
+          "strength": 0.3,
+          "use_triggers": true
+        },
+        {
+          "name": "REDZ15_DetailDaemonZ_lora_v1.1.safetensors",
+          "strength": 0.55,
+          "use_triggers": true
+        },
+        {
+          "name": "krea2-masterpieces-v51.safetensors",
+          "strength": 0.5,
+          "use_triggers": true
+        }
+      ]
+    },
+    "v43anime10": {
+      "id": "v43anime10",
+      "name": "V4.3-10 现代动漫·单色漫画线",
+      "styles": [
+        {
+          "catalog": "krea2_anime_动漫_styles",
+          "name": "Anime Style"
+        },
+        {
+          "catalog": "krea2_Anime-Manga Linework_动漫-漫画线稿",
+          "name": "Monochrome Manga Noir"
+        },
+        {
+          "catalog": "krea2_anime_动漫_styles",
+          "name": "Anime Illustration"
+        }
+      ],
+      "loras": [
+        {
+          "name": "BArtstyle-KREA2-V2-1024.safetensors",
+          "strength": 0.4,
+          "use_triggers": true
+        },
+        {
+          "name": "Krea2 & Anima] Yoneyama Mai米山舞 - Artist Style.safetensors",
+          "strength": 0.4,
+          "use_triggers": true
+        },
+        {
+          "name": "Detailer-KREA2.safetensors",
+          "strength": 0.6,
+          "use_triggers": true
+        }
+      ]
+    },
+    "v43anime11": {
+      "id": "v43anime11",
+      "name": "V4.3-11 精致手游·强烈墨漫画",
+      "styles": [
+        {
+          "catalog": "krea2_anime_动漫_styles",
+          "name": "Polished Mobile Gacha Style"
+        },
+        {
+          "catalog": "krea2_Anime-Manga Linework_动漫-漫画线稿",
+          "name": "Visceral Ink Manga"
+        }
+      ],
+      "loras": [
+        {
+          "name": "BArtstyle-KREA2-V2-1024.safetensors",
+          "strength": 0.45,
+          "use_triggers": true
+        },
+        {
+          "name": "houTuIllustrationLoLV1.0_Krea2RawV1.0.safetensors",
+          "strength": 0.55,
+          "use_triggers": true
+        },
+        {
+          "name": "Krea2Mivt4tStyle_c1-st8000.safetensors",
+          "strength": 0.4,
+          "use_triggers": true
+        },
+        {
+          "name": "Detailer-KREA2.safetensors",
+          "strength": 0.6,
+          "use_triggers": true
+        }
+      ]
+    },
+    "v43anime12": {
+      "id": "v43anime12",
+      "name": "V4.3-12 现代动漫·电影墨线",
+      "styles": [
+        {
+          "catalog": "krea2_anime_动漫_styles",
+          "name": "Anime Style"
+        },
+        {
+          "catalog": "krea2_Anime-Manga Linework_动漫-漫画线稿",
+          "name": "Cinematic Monochrome Noir — Inked Lineart"
+        },
+        {
+          "catalog": "krea2_anime_动漫_styles",
+          "name": "Watercolor Anime Illustration"
+        }
+      ],
+      "loras": [
+        {
+          "name": "Krea2 & Anima] Yoneyama Mai米山舞 - Artist Style.safetensors",
+          "strength": 0.45,
+          "use_triggers": true
+        },
+        {
+          "name": "houTuIllustrationLoLV1.0_Krea2RawV1.0.safetensors",
+          "strength": 0.5,
+          "use_triggers": true
+        },
+        {
+          "name": "krea2-masterpieces-v51.safetensors",
+          "strength": 0.55,
+          "use_triggers": true
+        }
+      ]
+    },
+    "v43anime13": {
+      "id": "v43anime13",
+      "name": "V4.3-13 精致手游·漫画排线",
+      "styles": [
+        {
+          "catalog": "krea2_anime_动漫_styles",
+          "name": "Polished Mobile Gacha Style"
+        },
+        {
+          "catalog": "krea2_Anime-Manga Linework_动漫-漫画线稿",
+          "name": "Cinematic Monochrome Noir — Manga Ink Hatch"
+        },
+        {
+          "catalog": "krea2_anime_动漫_styles",
+          "name": "Anime Key Visual"
+        }
+      ],
+      "loras": [
+        {
+          "name": "BArtstyle-KREA2-V2-1024.safetensors",
+          "strength": 0.35,
+          "use_triggers": true
+        },
+        {
+          "name": "Krea2 & Anima] Yoneyama Mai米山舞 - Artist Style.safetensors",
+          "strength": 0.35,
+          "use_triggers": true
+        },
+        {
+          "name": "REDZ15_DetailDaemonZ_lora_v1.1.safetensors",
+          "strength": 0.5,
+          "use_triggers": true
+        },
+        {
+          "name": "Detailer-KREA2.safetensors",
+          "strength": 0.65,
+          "use_triggers": true
+        }
+      ]
+    },
+    "v43anime14": {
+      "id": "v43anime14",
+      "name": "V4.3-14 现代动漫·赛博墨线",
+      "styles": [
+        {
+          "catalog": "krea2_anime_动漫_styles",
+          "name": "Anime Style"
+        },
+        {
+          "catalog": "krea2_Anime-Manga Linework_动漫-漫画线稿",
+          "name": "Cyber-Gothic Noir Manga"
+        }
+      ],
+      "loras": [
+        {
+          "name": "BArtstyle-KREA2-V2-1024.safetensors",
+          "strength": 0.45,
+          "use_triggers": true
+        },
+        {
+          "name": "houTuIllustrationLoLV1.0_Krea2RawV1.0.safetensors",
+          "strength": 0.6,
+          "use_triggers": true
+        },
+        {
+          "name": "Krea2Mivt4tStyle_c1-st8000.safetensors",
+          "strength": 0.45,
+          "use_triggers": true
+        }
+      ]
+    },
+    "v43anime15": {
+      "id": "v43anime15",
+      "name": "V4.3-15 精致手游·图形叙事",
+      "styles": [
+        {
+          "catalog": "krea2_anime_动漫_styles",
+          "name": "Polished Mobile Gacha Style"
+        },
+        {
+          "catalog": "krea2_Anime-Manga Linework_动漫-漫画线稿",
+          "name": "Graphic Monochrome Narrative"
+        },
+        {
+          "catalog": "krea2_anime_动漫_styles",
+          "name": "Frieren Style"
+        }
+      ],
+      "loras": [
+        {
+          "name": "BArtstyle-KREA2-V2-1024.safetensors",
+          "strength": 0.5,
+          "use_triggers": true
+        },
+        {
+          "name": "Krea2 & Anima] Yoneyama Mai米山舞 - Artist Style.safetensors",
+          "strength": 0.25,
+          "use_triggers": true
+        },
+        {
+          "name": "krea2-masterpieces-v51.safetensors",
+          "strength": 0.6,
+          "use_triggers": true
+        },
+        {
+          "name": "Detailer-KREA2.safetensors",
+          "strength": 0.55,
+          "use_triggers": true
+        }
+      ]
+    },
+    "v43anime16": {
+      "id": "v43anime16",
+      "name": "3D",
+      "styles": [
+        {
+          "catalog": "krea2_3d_render_3D渲染_styles",
+          "name": "Cinematic Final Fantasy 3D Render"
+        },
+        {
+          "catalog": "krea2_photography_摄影_styles",
+          "name": "Cinematic Photography"
+        }
+      ],
+      "loras": [
+        {
+          "name": "REDZ15_DetailDaemonZ_lora_v1.1.safetensors",
+          "strength": 0.55,
+          "use_triggers": true
+        },
+        {
+          "name": "krea2-masterpieces-v51.safetensors",
+          "strength": 0.6,
+          "use_triggers": false
+        },
+        {
+          "name": "Detailer-KREA2.safetensors",
+          "strength": 0.6,
+          "use_triggers": false
+        }
+      ]
+    }
+  }
+}

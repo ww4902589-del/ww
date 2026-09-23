@@ -2118,8 +2118,8 @@ class ComfyClient:
     def system_stats(self) -> dict[str, Any]:
         return self.gateway.system_stats()
 
-    def object_info(self, *, refresh: bool = False) -> dict[str, Any]:
-        return self.gateway.object_info(refresh=refresh)
+    def object_info(self, *, refresh: bool = False, timeout: float | None = None) -> dict[str, Any]:
+        return self.gateway.object_info(refresh=refresh, timeout=timeout)
 
     def models(self, folder: str) -> list[str]:
         return self.gateway.models(folder)

@@ -115,6 +115,17 @@ class ImageInterrogatorTests(unittest.TestCase):
         self.assertEqual("done", gateway.poll("p", timeout=0.2)["state"])
         self.assertEqual([("/prompt", 0.4), ("/history/p", 0.2)], calls)
 
+    def test_gateway_uses_caller_deadline_for_object_info(self):
+        gateway = ProductionGateway()
+        calls = []
+        gateway.request = lambda path, method="GET", payload=None, timeout=30: calls.append(
+            (path, timeout)
+        ) or {}
+
+        gateway.object_info(refresh=True, timeout=0.25)
+
+        self.assertEqual([("/object_info", 0.25)], calls)
+
     def test_comfy_client_preserves_the_interrogation_deadline(self):
         gateway = ProductionGateway()
         calls = []

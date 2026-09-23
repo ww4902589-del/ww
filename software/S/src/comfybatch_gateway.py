@@ -30,7 +30,7 @@ from comfybatch_errors import ComfyError, ErrorTranslator, Problem
 class ComfyGateway(Protocol):
     """Everything the batch runner is allowed to know about ComfyUI."""
 
-    def object_info(self, *, refresh: bool = False) -> dict[str, Any]: ...
+    def object_info(self, *, refresh: bool = False, timeout: float | None = None) -> dict[str, Any]: ...
     def models(self, folder: str) -> list[str]: ...
     def submit(self, graph: dict[str, Any], client_id: str, *, timeout: float = 60) -> str: ...
     def poll(self, prompt_id: str, *, timeout: float = 30) -> dict[str, Any]: ...
@@ -77,9 +77,10 @@ class ProductionGateway:
     def system_stats(self) -> dict[str, Any]:
         return self.request("/system_stats", timeout=6)
 
-    def object_info(self, *, refresh: bool = False) -> dict[str, Any]:
+    def object_info(self, *, refresh: bool = False, timeout: float | None = None) -> dict[str, Any]:
         if self._object_info is None or refresh:
-            self._object_info = self.request("/object_info", timeout=60)
+            request_timeout = 60.0 if timeout is None else max(0.001, min(60.0, timeout))
+            self._object_info = self.request("/object_info", timeout=request_timeout)
         return self._object_info
 
     def models(self, folder: str) -> list[str]:
@@ -224,7 +225,7 @@ class FakeComfyGateway:
 
     # --------------------------------------------------------------- protocol
 
-    def object_info(self, *, refresh: bool = False) -> dict[str, Any]:
+    def object_info(self, *, refresh: bool = False, timeout: float | None = None) -> dict[str, Any]:
         return self._object_info
 
     def models(self, folder: str) -> list[str]:

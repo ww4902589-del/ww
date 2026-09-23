@@ -3,6 +3,7 @@ import io
 import pathlib
 import sys
 import tempfile
+import time
 import unittest
 from types import SimpleNamespace
 
@@ -120,17 +121,61 @@ class ApplicationPreflightTests(unittest.TestCase):
             bundle = app.import_images([{"filename": "first.png", "raw": raw}])
             source = bundle.items[0].metadata["source_image"]
             app.schema = SimpleNamespace(class_types={"LoadImage", "H3ShowText", "BLIPCaption"})
-            app.refresh_schema = lambda force=False: app.schema
+            app.refresh_schema = lambda force=False, timeout=None: app.schema
 
             class ReplacingInterrogator:
-                def run(self, *_args):
+                timeout = 1.0
+
+                def run(self, *_args, **_kwargs):
                     app.import_images([{"filename": "second.png", "raw": raw}])
                     return {"prompt": "stale", "backend": "BLIPCaption", "prompt_id": "p", "local_only": True}
 
             app.image_interrogator = ReplacingInterrogator()
             with self.assertRaisesRegex(ValueError, "任务合集已变化"):
-                app.interrogate_task(1, source)
+                app.interrogate_task(1, source, bundle.items[0].metadata["task_id"])
             self.assertNotEqual("stale", app.bundle.items[0].prompt)
+
+    def test_interrogation_requires_source_and_task_identity(self):
+        app = Application()
+        for source, task_id in (("", "task"), ("image.png", "")):
+            with self.subTest(source=source, task_id=task_id), self.assertRaisesRegex(
+                ValueError, "必须携带任务图片和任务身份"
+            ):
+                app.interrogate_task(1, source, task_id)
+
+    def test_schema_refresh_counts_toward_interrogation_total_timeout(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = pathlib.Path(temp)
+            comfy = root / "ComfyUI"
+            (comfy / "input").mkdir(parents=True)
+            image_buffer = io.BytesIO()
+            Image.new("RGB", (8, 8), "navy").save(image_buffer, format="PNG")
+            app = Application(settings_path=root / "settings.json")
+            app.comfy_root = comfy
+            bundle = app.import_images([{"filename": "safe.png", "raw": image_buffer.getvalue()}])
+            item = bundle.items[0]
+            observed: dict[str, float] = {}
+
+            def refresh_schema(*, force=True, timeout=None):
+                observed["refresh"] = timeout
+                time.sleep(0.02)
+                app.schema = SimpleNamespace(class_types={"LoadImage", "H3ShowText", "BLIPCaption"})
+                return app.schema
+
+            class CapturingInterrogator:
+                timeout = 0.2
+
+                def run(self, _source, _types, *, timeout=None):
+                    observed["run"] = timeout
+                    return {"prompt": "caption", "backend": "BLIPCaption", "prompt_id": "p", "local_only": True}
+
+            app.refresh_schema = refresh_schema
+            app.image_interrogator = CapturingInterrogator()
+            app.interrogate_task(1, item.metadata["source_image"], item.metadata["task_id"])
+
+            self.assertGreater(observed["refresh"], observed["run"])
+            self.assertLessEqual(observed["refresh"], 0.2)
+            self.assertGreater(observed["run"], 0)
 
     def test_resolves_selected_style_text_for_node_independent_compilation(self):
         with tempfile.TemporaryDirectory() as temp:

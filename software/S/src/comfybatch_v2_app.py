@@ -561,7 +561,9 @@ class Application:
         self.runner.adapter_registry = registry or None
         return registry
 
-    def refresh_schema(self, *, force: bool = True) -> NodeSchemaRegistry:
+    def refresh_schema(
+        self, *, force: bool = True, timeout: float | None = None
+    ) -> NodeSchemaRegistry:
         """Fetch ComfyUI's node definitions and cache them.
 
         Degrades to the on-disk cache so a cold start while ComfyUI is down still
@@ -571,7 +573,7 @@ class Application:
             return self.schema
         registry = NodeSchemaRegistry.empty()
         try:
-            payload = self.runner.client.object_info(refresh=force)
+            payload = self.runner.client.object_info(refresh=force, timeout=timeout)
         except Exception:  # noqa: BLE001 - ComfyUI may simply be offline
             payload = None
         if NodeSchemaRegistry.looks_valid(payload):
@@ -604,9 +606,12 @@ class Application:
         return capability_payload(self.schema.class_types)
 
     def interrogate_task(
-        self, index: int, expected_source: str = "", expected_task_id: str = ""
+        self, index: int, expected_source: str, expected_task_id: str
     ) -> dict[str, Any]:
         """Reverse one imported image into a prompt and apply it to that task."""
+        if not expected_source or not expected_task_id:
+            raise ValueError("提示词反推必须携带任务图片和任务身份，请刷新页面后重试")
+        deadline = time.monotonic() + float(getattr(self.image_interrogator, "timeout", 600.0))
         with self.lock:
             if self.bundle is None:
                 raise ValueError("请先导入图片")
@@ -616,9 +621,9 @@ class Application:
             item = bundle.items[index - 1]
             source_image = str(item.metadata.get("source_image") or "") if isinstance(item.metadata, dict) else ""
             task_id = str(item.metadata.get("task_id") or "") if isinstance(item.metadata, dict) else ""
-            if expected_source and source_image != expected_source:
+            if source_image != expected_source:
                 raise ValueError("任务图片已变化，请重新点击反推")
-            if expected_task_id and task_id != expected_task_id:
+            if task_id != expected_task_id:
                 raise ValueError("任务身份已变化，请重新点击反推")
         input_root = (self.comfy_root / "input").resolve()
         candidate = (input_root / source_image).resolve()
@@ -630,8 +635,16 @@ class Application:
 
         # Refresh at point of use so newly installed local nodes are found
         # without restarting S; the cache remains the offline fallback.
-        self.refresh_schema(force=True)
-        result = self.image_interrogator.run(source_image, self.schema.class_types)
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError("本机提示词反推总操作超时")
+        self.refresh_schema(force=True, timeout=remaining)
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError("本机提示词反推总操作超时")
+        result = self.image_interrogator.run(
+            source_image, self.schema.class_types, timeout=remaining
+        )
         with self.lock:
             if (self.bundle is not bundle or index > len(bundle.items)
                     or bundle.items[index - 1] is not item

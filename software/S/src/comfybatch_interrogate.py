@@ -77,7 +77,9 @@ class ImageInterrogator:
         self.poll_interval = poll_interval
         self._lock = threading.Lock()
 
-    def run(self, source_image: str, class_types: Collection[str]) -> dict[str, Any]:
+    def run(
+        self, source_image: str, class_types: Collection[str], *, timeout: float | None = None
+    ) -> dict[str, Any]:
         candidates = available_backends(class_types)
         if not candidates:
             missing = "、".join(capability_payload(class_types)["missing"])
@@ -86,7 +88,10 @@ class ImageInterrogator:
                 + "，重启 ComfyUI 后点击“重新扫描本地资源”。"
             )
         errors: list[str] = []
-        deadline = time.monotonic() + self.timeout
+        operation_timeout = self.timeout if timeout is None else min(self.timeout, timeout)
+        if operation_timeout <= 0:
+            raise TimeoutError("本机提示词反推总操作超时")
+        deadline = time.monotonic() + operation_timeout
         if not self._lock.acquire(timeout=max(0.0, deadline - time.monotonic())):
             raise TimeoutError("等待本机提示词反推队列超时")
         try:

@@ -25,6 +25,7 @@ from PIL import Image
 
 from comfybatch_errors import SEVERITY_BLOCKING, ErrorTranslator
 from comfybatch_image_extract import ImageExtractor
+from comfybatch_interrogate import ImageInterrogator, capability_payload
 from comfybatch_nodeschema import NodeSchemaRegistry, active_registry, set_active_registry, structural_fingerprint
 from comfybatch_hub import EditLease, InstanceLock, SSE_HEARTBEAT_SECONDS, StateHub
 from comfybatch_params import PARAMS, registry_payload, resolve as resolve_params
@@ -86,7 +87,7 @@ TOMBSTONE_KEYS = frozenset(TOMBSTONE_MAPS.values())
 #: Bumped when the document shape changes, so an upgrade can migrate explicitly.
 SCHEMA_VERSION = 2
 #: The one place the product version is written down.
-APP_VERSION = "2.20"
+APP_VERSION = "2.21"
 #: Shipped preset library. Populated once the loader below is defined, so the
 #: module can be read top to bottom.
 DEFAULT_STYLE_LORA_PRESETS: list[dict] = []
@@ -109,6 +110,7 @@ INSTANCE_MUTEX_NAME = "ComfyBatch-S-desktop"
 #: notify open pages. Listed here once instead of being checked per branch.
 WRITE_ROUTES = frozenset({
     "/api/configure", "/api/import", "/api/import-images", "/api/extract-images", "/api/remap-import",
+    "/api/interrogate",
     "/api/update-bundle", "/api/save-lora-profile", "/api/delete-lora-profile", "/api/save-style-lora-preset",
     "/api/delete-style-lora-preset", "/api/assign-style-lora-preset",
     "/api/assign-image-preset", "/api/params/apply", "/api/params/clear",
@@ -460,6 +462,20 @@ def parse_prompt_indexes(expression: str, total: int) -> list[int]:
     return sorted(selected)
 
 
+def loopback_host(value: str) -> str:
+    """Return the canonical bind host, rejecting every non-local address."""
+    host = str(value or "").strip().lower()
+    if host in {"127.0.0.1", "localhost"}:
+        return "127.0.0.1"
+    raise ValueError("S 仅允许监听本机 127.0.0.1")
+
+
+def is_loopback_url(value: str) -> bool:
+    """Whether a ComfyUI URL is an explicit HTTP(S) loopback endpoint."""
+    parsed = urlparse(str(value or ""))
+    return parsed.scheme in {"http", "https"} and parsed.hostname in {"127.0.0.1", "localhost", "::1"}
+
+
 class Application:
     def __init__(self, settings_path: pathlib.Path | None = None, backup_settings_path: pathlib.Path | None = None) -> None:
         self.settings_path = pathlib.Path(settings_path) if settings_path else default_settings_path()
@@ -483,6 +499,7 @@ class Application:
         self.image_extractor = ImageExtractor()
         self._style_thumbnail_lookup: dict[tuple[str, str], str] = {}
         self.runner = BatchRunner(self.comfy_root, ComfyClient(self.comfy_url))
+        self.image_interrogator = ImageInterrogator(self.runner.client)
         self.lock = threading.RLock()
         #: Node schema from the last successful ``/object_info`` fetch. Installed
         #: process-wide so the compiler can validate parameters and detect
@@ -550,7 +567,7 @@ class Application:
             return self.schema
         registry = NodeSchemaRegistry.empty()
         try:
-            payload = self.runner.client.object_info()
+            payload = self.runner.client.object_info(refresh=force)
         except Exception:  # noqa: BLE001 - ComfyUI may simply be offline
             payload = None
         if NodeSchemaRegistry.looks_valid(payload):
@@ -577,6 +594,38 @@ class Application:
         if self.schema:
             return self.schema
         return self.refresh_schema()
+
+    def interrogation_capabilities(self) -> dict[str, Any]:
+        """Report local node readiness without probing any external service."""
+        return capability_payload(self.schema.class_types)
+
+    def interrogate_task(self, index: int) -> dict[str, Any]:
+        """Reverse one imported image into a prompt and apply it to that task."""
+        if self.bundle is None:
+            raise ValueError("请先导入图片")
+        if index < 1 or index > len(self.bundle.items):
+            raise ValueError(f"任务编号 {index} 超出范围")
+        item = self.bundle.items[index - 1]
+        source_image = str(item.metadata.get("source_image") or "") if isinstance(item.metadata, dict) else ""
+        input_root = (self.comfy_root / "input").resolve()
+        candidate = (input_root / source_image).resolve()
+        if not source_image or not candidate.is_relative_to(input_root) or not candidate.is_file():
+            raise ValueError("该任务没有可用于反推的本地图片")
+        if not is_loopback_url(self.comfy_url):
+            raise ValueError("提示词反推只允许连接本机 ComfyUI（127.0.0.1、localhost 或 ::1）")
+
+        # Refresh at point of use so newly installed local nodes are found
+        # without restarting S; the cache remains the offline fallback.
+        self.refresh_schema(force=True)
+        result = self.image_interrogator.run(source_image, self.schema.class_types)
+        item.prompt = result["prompt"]
+        metadata = dict(item.metadata)
+        metadata["interrogation"] = {
+            "backend": result["backend"], "prompt_id": result["prompt_id"],
+            "local_only": True, "updated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        item.metadata = metadata
+        return {**result, "index": index, "interrogation": metadata["interrogation"]}
 
     def _inventory(self) -> ResourceInventory:
         return ResourceInventory(self.comfy_root, self.workflow_roots, self.runner.client)
@@ -1197,6 +1246,7 @@ class Application:
             self.output_root = pathlib.Path(value.get("output_root") or self.output_root)
             if self.runner.status()["status"] not in {"running", "paused", "starting"}:
                 self.runner = BatchRunner(self.comfy_root, ComfyClient(self.comfy_url))
+                self.image_interrogator = ImageInterrogator(self.runner.client)
 
     def inventory(self) -> dict:
         result = self._inventory().snapshot()
@@ -1573,7 +1623,8 @@ class Handler(BaseHTTPRequestHandler):
                 query = parse_qs(parsed.query)
                 self._json({"ok": True, "params": APP.params_payload(query.get("workflow_path", [""])[0])})
             elif parsed.path == "/api/schema":
-                self._json({"ok": True, "schema": APP.schema_payload()})
+                self._json({"ok": True, "schema": APP.schema_payload(),
+                            "interrogation": APP.interrogation_capabilities()})
             elif parsed.path == "/api/image":
                 query = parse_qs(parsed.query)
                 requested = pathlib.Path(query.get("path", [""])[0]).resolve()
@@ -1680,6 +1731,9 @@ class Handler(BaseHTTPRequestHandler):
                     str(value.get("url") or ""), str(value.get("mode") or "ai_enhance")
                 )
                 self._json({"ok": True, "bundle": bundle.to_dict(), "extracted": extracted, "mapping": None})
+            elif self.path == "/api/interrogate":
+                result = APP.interrogate_task(int(value.get("index") or 0))
+                self._json({"ok": True, **result})
             elif self.path == "/api/remap-import":
                 bundle, mapping = APP.remap_import(dict(value.get("mapping") or {}))
                 self._json({"ok": True, "bundle": bundle.to_dict(), "mapping": mapping})
@@ -2094,6 +2148,10 @@ def main() -> None:
         help="即使检测到已有实例也强制启动一个新的（已有实例无响应时使用）。",
     )
     args = parser.parse_args()
+    try:
+        bind_host = loopback_host(args.host)
+    except ValueError as exc:
+        parser.error(str(exc))
 
     # Must be set before Application() is constructed below.
     if args.data_dir:
@@ -2105,6 +2163,7 @@ def main() -> None:
         if args.comfy_url:
             APP.comfy_url = args.comfy_url
             APP.runner = BatchRunner(APP.comfy_root, ComfyClient(args.comfy_url))
+            APP.image_interrogator = ImageInterrogator(APP.runner.client)
     if args.data_dir:
         print(f"数据目录：{APP.settings_path.parent}")
 
@@ -2136,15 +2195,15 @@ def main() -> None:
     APP.is_primary = True
     server = None
     try:
-        action, port = choose_launch_port(args.host, args.port)
-        url = f"http://{args.host}:{port}/"
+        action, port = choose_launch_port(bind_host, args.port)
+        url = f"http://{bind_host}:{port}/"
         if action == "reuse":
             # A server on our port answered but the mutex was free: a leftover
             # process from a crashed run. Adopt it rather than double-binding.
             if not args.no_browser:
                 webbrowser.open(url)
             return
-        server = ThreadingHTTPServer((args.host, port), Handler)
+        server = ThreadingHTTPServer((bind_host, port), Handler)
         write_instance_file(port=port, url=url, instance_id=APP.instance_id)
         print(f"ComfyBatch V{APP_VERSION} 已启动：{url}")
         if not args.no_browser:

@@ -66,6 +66,12 @@ class BodyReadIntegrityTests(unittest.TestCase):
         body = source.split("def do_POST", 1)[1]
         self.assertNotIn("_read_json", body.replace("value = self._read_json()", ""))
 
+    def test_cli_comfy_override_updates_interrogator_client(self):
+        source = (SOURCE_ROOT / "comfybatch_v2_app.py").read_text(encoding="utf-8")
+        override = source.split("if args.comfy_url:", 1)[1].split("if args.data_dir:", 1)[0]
+        self.assertIn("APP.runner = BatchRunner", override)
+        self.assertIn("APP.image_interrogator = ImageInterrogator(APP.runner.client)", override)
+
 
 class EveryRouteRespondsTests(unittest.TestCase):
     """Start the real handler and require a response from every route."""
@@ -617,6 +623,7 @@ class EveryRouteRespondsTests(unittest.TestCase):
             ("/api/assign-image-preset", {"preset_id": "square-m", "indexes": [1]}),
             ("/api/update-bundle", {"items": [{"title": "验收", "prompt": "一条提示词"}]}),
             ("/api/remap-import", {"mapping": {"title": "", "positive": "", "negative": "", "metadata": ""}}),
+            ("/api/interrogate", {"index": 0}),
         ):
             with self.subTest(path=path):
                 status, body = self.request(path, payload)

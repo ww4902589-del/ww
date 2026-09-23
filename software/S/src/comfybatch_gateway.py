@@ -30,7 +30,7 @@ from comfybatch_errors import ComfyError, ErrorTranslator, Problem
 class ComfyGateway(Protocol):
     """Everything the batch runner is allowed to know about ComfyUI."""
 
-    def object_info(self) -> dict[str, Any]: ...
+    def object_info(self, *, refresh: bool = False) -> dict[str, Any]: ...
     def models(self, folder: str) -> list[str]: ...
     def submit(self, graph: dict[str, Any], client_id: str) -> str: ...
     def poll(self, prompt_id: str) -> dict[str, Any]: ...
@@ -165,7 +165,9 @@ class ProductionGateway:
             }
         if images:
             return {"state": "done", "images": images, "problems": [], "entry": entry}
-        if status.get("completed") is False and status_str == "success":
+        # Text-only output nodes have no images. A successful history entry is
+        # still complete; otherwise image-to-prompt waits until its deadline.
+        if status_str == "success":
             return {"state": "done", "images": [], "problems": [], "entry": entry}
         return {"state": "pending", "images": [], "problems": [], "entry": entry}
 

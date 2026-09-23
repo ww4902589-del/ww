@@ -230,7 +230,7 @@ class SafeUrlFetcher:
             try:
                 connection.request("GET", target, headers={
                     "Accept": accept,
-                    "User-Agent": "ComfyBatch/2.20 image-extractor",
+                    "User-Agent": "ComfyBatch/2.21 image-extractor",
                     "Connection": "close",
                 })
                 response = connection.getresponse()

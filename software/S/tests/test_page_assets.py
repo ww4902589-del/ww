@@ -408,6 +408,15 @@ class ParameterWorkbenchUiTests(unittest.TestCase):
                          "提示词文件、图片文件与链接图片三条导入路径都应调用 precheckAfterImport")
         self.assertIn("/api/extract-images", html)
 
+    def test_image_tasks_offer_local_prompt_interrogation(self):
+        html = page_source()
+        for marker in ("interrogateTask", "/api/interrogate", "本机反推提示词",
+                       'data-agent-action="interrogate-image"'):
+            self.assertIn(marker, html)
+        handler = html.split("async function interrogateTask", 1)[1].split("async function syncBundle", 1)[0]
+        self.assertNotIn("bundle=v.bundle", handler,
+                         "反推响应不得用服务端旧副本覆盖页面上尚未同步的编辑")
+
     def test_truth_rail_carries_the_capability_facts(self):
         """B1：采样链路与输入输出常驻真相栏，任何阶段可见。"""
         html = page_source()

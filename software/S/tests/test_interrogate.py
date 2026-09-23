@@ -9,6 +9,7 @@ import unittest
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
 
 from comfybatch_gateway import ProductionGateway  # noqa: E402
+from comfybatch_v2_core import ComfyClient  # noqa: E402
 from comfybatch_interrogate import (  # noqa: E402
     BLIP_NODE,
     EASY_NODE,
@@ -30,11 +31,11 @@ class ScriptedClient:
         self.fail_easy = fail_easy
         self.graphs: list[dict] = []
 
-    def submit(self, graph, client_id):
+    def submit(self, graph, client_id, *, timeout=None):
         self.graphs.append(graph)
         return f"prompt-{len(self.graphs)}"
 
-    def poll(self, prompt_id):
+    def poll(self, prompt_id, *, timeout=None):
         backend = self.graphs[int(prompt_id.rsplit("-", 1)[1]) - 1]["2"]["class_type"]
         if backend == EASY_NODE and self.fail_easy:
             return {"state": "error", "problems": ["easy model unavailable"], "entry": {}}
@@ -99,6 +100,38 @@ class ImageInterrogatorTests(unittest.TestCase):
         self.assertEqual("done", result["state"])
         self.assertEqual("local caption", result["entry"]["outputs"]["3"]["text"][0])
 
+    def test_gateway_uses_caller_deadline_for_submit_and_poll(self):
+        gateway = ProductionGateway()
+        calls = []
+
+        def request(path, method="GET", payload=None, timeout=30):
+            calls.append((path, timeout))
+            if path == "/prompt":
+                return {"prompt_id": "p"}
+            return {"p": {"status": {"status_str": "success"}, "outputs": {"3": {"text": ["ok"]}}}}
+
+        gateway.request = request
+        self.assertEqual("p", gateway.submit({}, "client", timeout=0.4))
+        self.assertEqual("done", gateway.poll("p", timeout=0.2)["state"])
+        self.assertEqual([("/prompt", 0.4), ("/history/p", 0.2)], calls)
+
+    def test_comfy_client_preserves_the_interrogation_deadline(self):
+        gateway = ProductionGateway()
+        calls = []
+
+        def request(path, method="GET", payload=None, timeout=30):
+            calls.append((path, timeout))
+            if path == "/prompt":
+                return {"prompt_id": "p"}
+            return {"p": {"status": {"status_str": "success"}, "outputs": {"3": {"text": ["ok"]}}}}
+
+        gateway.request = request
+        result = ImageInterrogator(
+            ComfyClient(gateway=gateway), timeout=0.2, poll_interval=0
+        ).run("image.png", schema("LoadImage", "H3ShowText", BLIP_NODE))
+        self.assertEqual("ok", result["prompt"])
+        self.assertGreater(calls[0][1], calls[1][1])
+
     def test_queue_wait_counts_toward_single_operation_timeout(self):
         interrogator = ImageInterrogator(ScriptedClient(), timeout=0.02, poll_interval=0)
         entered = threading.Event()
@@ -116,6 +149,36 @@ class ImageInterrogatorTests(unittest.TestCase):
             interrogator.run("image.png", schema("LoadImage", "H3ShowText", BLIP_NODE))
         self.assertLess(time.monotonic() - started, 0.07)
         worker.join()
+
+    def test_submit_and_poll_receive_only_the_remaining_total_timeout(self):
+        class DeadlineClient:
+            def __init__(self):
+                self.timeouts = []
+
+            def submit(self, _graph, _client_id, *, timeout=None):
+                self.timeouts.append(("submit", timeout))
+                time.sleep(0.01)
+                return "prompt-1"
+
+            def poll(self, _prompt_id, *, timeout=None):
+                self.timeouts.append(("poll", timeout))
+                return {
+                    "state": "done", "problems": [],
+                    "entry": {"outputs": {"3": {"text": ["bounded"]}}},
+                }
+
+        client = DeadlineClient()
+        result = ImageInterrogator(client, timeout=0.2, poll_interval=0).run(
+            "image.png", schema("LoadImage", "H3ShowText", BLIP_NODE)
+        )
+
+        self.assertEqual("bounded", result["prompt"])
+        submit_timeout = client.timeouts[0][1]
+        poll_timeout = client.timeouts[1][1]
+        self.assertGreater(submit_timeout, 0)
+        self.assertLessEqual(submit_timeout, 0.2)
+        self.assertGreater(poll_timeout, 0)
+        self.assertLess(poll_timeout, submit_timeout)
 
 
 if __name__ == "__main__":

@@ -2127,11 +2127,15 @@ class ComfyClient:
     def all_models(self) -> dict[str, list[str]]:
         return self.gateway.all_models()
 
-    def submit(self, graph: dict[str, Any], client_id: str) -> str:
-        return self.gateway.submit(graph, client_id)
+    def submit(self, graph: dict[str, Any], client_id: str, *, timeout: float | None = None) -> str:
+        if timeout is None:
+            return self.gateway.submit(graph, client_id)
+        return self.gateway.submit(graph, client_id, timeout=timeout)
 
-    def poll(self, prompt_id: str) -> dict[str, Any]:
-        return self.gateway.poll(prompt_id)
+    def poll(self, prompt_id: str, *, timeout: float | None = None) -> dict[str, Any]:
+        if timeout is None:
+            return self.gateway.poll(prompt_id)
+        return self.gateway.poll(prompt_id, timeout=timeout)
 
     def output(self, prompt_id: str) -> dict[str, Any] | None:
         """Legacy accessor: the first image, or ``None``."""

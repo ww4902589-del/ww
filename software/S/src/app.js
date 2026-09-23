@@ -618,8 +618,12 @@ function renderBundle(){
   updateSelectionStatus();
   renderImageSpecSummary();
   renderConfigFeedback()}
+function newTaskId(){
+  return globalThis.crypto?.randomUUID?.()||`task-${Date.now()}-${Math.random().toString(16).slice(2)}`}
 function duplicateTask(index){
-  bundle.items.splice(index+1,0,JSON.parse(JSON.stringify(bundle.items[index])));
+  const copy=JSON.parse(JSON.stringify(bundle.items[index]));
+  copy.metadata={...(copy.metadata||{}),task_id:newTaskId()};
+  bundle.items.splice(index+1,0,copy);
   selectedPromptIndexes.clear();
   renderBundle()}
 function deleteTask(index){
@@ -628,12 +632,13 @@ function deleteTask(index){
   renderBundle()}
 async function interrogateTask(index,button){
   const sourceImage=String(bundle.items[index-1]?.metadata?.source_image||'');
+  const taskId=String(bundle.items[index-1]?.metadata?.task_id||'');
   setBusy(button,true,'反推中');
   notify('正在使用本机 ComfyUI 分析图片，首次加载模型可能需要几分钟。','info');
   try{
-    const v=await api('/api/interrogate',{method:'POST',body:JSON.stringify({index,source_image:sourceImage})});
+    const v=await api('/api/interrogate',{method:'POST',body:JSON.stringify({index,source_image:sourceImage,task_id:taskId})});
     const item=bundle.items[index-1];
-    if(!item||String(item.metadata?.source_image||'')!==sourceImage)
+    if(!item||String(item.metadata?.source_image||'')!==sourceImage||String(item.metadata?.task_id||'')!==taskId)
       throw new Error('反推期间任务列表已变化，请对当前图片重试');
     item.prompt=v.prompt;
     item.metadata={...(item.metadata||{}),interrogation:v.interrogation};

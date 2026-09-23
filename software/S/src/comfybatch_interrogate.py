@@ -102,9 +102,18 @@ class ImageInterrogator:
         raise ValueError("本机提示词反推失败；已尝试可用节点。" + "；".join(errors))
 
     def _run_backend(self, source_image: str, backend: str, deadline: float) -> dict[str, Any]:
-        prompt_id = self.client.submit(build_graph(source_image, backend), "caption-" + uuid.uuid4().hex)
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError(f"等待 {backend} 返回结果超时")
+        prompt_id = self.client.submit(
+            build_graph(source_image, backend), "caption-" + uuid.uuid4().hex,
+            timeout=remaining,
+        )
         while time.monotonic() < deadline:
-            result = self.client.poll(prompt_id)
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            result = self.client.poll(prompt_id, timeout=remaining)
             state = str(result.get("state") or "pending")
             if state == "error":
                 problems = result.get("problems") or []

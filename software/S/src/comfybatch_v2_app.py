@@ -496,6 +496,7 @@ class Application:
         # Paths written by the current image import. Bundle metadata is editable
         # in the browser, so it cannot authorize access to arbitrary local files.
         self._trusted_source_images: set[str] = set()
+        self._trusted_task_sources: dict[str, str] = {}
         self.last_import: dict[str, Any] | None = None
         #: Owns public-web validation, cover discovery and image verification.
         #: Kept injectable for hermetic tests; callers only see imported tasks.
@@ -602,7 +603,9 @@ class Application:
         """Report local node readiness without probing any external service."""
         return capability_payload(self.schema.class_types)
 
-    def interrogate_task(self, index: int, expected_source: str = "") -> dict[str, Any]:
+    def interrogate_task(
+        self, index: int, expected_source: str = "", expected_task_id: str = ""
+    ) -> dict[str, Any]:
         """Reverse one imported image into a prompt and apply it to that task."""
         with self.lock:
             if self.bundle is None:
@@ -612,8 +615,11 @@ class Application:
             bundle = self.bundle
             item = bundle.items[index - 1]
             source_image = str(item.metadata.get("source_image") or "") if isinstance(item.metadata, dict) else ""
+            task_id = str(item.metadata.get("task_id") or "") if isinstance(item.metadata, dict) else ""
             if expected_source and source_image != expected_source:
                 raise ValueError("任务图片已变化，请重新点击反推")
+            if expected_task_id and task_id != expected_task_id:
+                raise ValueError("任务身份已变化，请重新点击反推")
         input_root = (self.comfy_root / "input").resolve()
         candidate = (input_root / source_image).resolve()
         if (not source_image or source_image not in self._trusted_source_images
@@ -629,7 +635,8 @@ class Application:
         with self.lock:
             if (self.bundle is not bundle or index > len(bundle.items)
                     or bundle.items[index - 1] is not item
-                    or str(item.metadata.get("source_image") or "") != source_image):
+                    or str(item.metadata.get("source_image") or "") != source_image
+                    or str(item.metadata.get("task_id") or "") != task_id):
                 raise ValueError("反推期间任务合集已变化，请对当前任务重试")
             item.prompt = result["prompt"]
             metadata = dict(item.metadata)
@@ -882,6 +889,7 @@ class Application:
     def import_bundle(self, filename: str, raw: bytes, mapping: dict[str, Any] | None = None) -> tuple[PromptBundle, dict[str, Any] | None]:
         self.bundle = PromptBundleParser.parse(filename, raw, mapping=mapping)
         self._trusted_source_images.clear()
+        self._trusted_task_sources.clear()
         self.last_import = {"filename": filename, "raw": raw}
         info = PromptBundleParser.xlsx_mapping_info(raw) if pathlib.Path(filename).suffix.lower() == ".xlsx" else None
         if info is not None and mapping:
@@ -931,6 +939,7 @@ class Application:
             target.write_bytes(raw)
             relative = target.relative_to(input_root).as_posix()
             metadata = {
+                "task_id": uuid.uuid4().hex,
                 "input_type": "image",
                 "processing_mode": mode,
                 "processing_mode_name": mode_name,
@@ -958,6 +967,10 @@ class Application:
             str(item.metadata["source_image"])
             for item in items
             if isinstance(item.metadata, dict) and item.metadata.get("source_image")
+        }
+        self._trusted_task_sources = {
+            str(item.metadata["task_id"]): str(item.metadata["source_image"])
+            for item in items
         }
         self.last_import = None
         return self.bundle
@@ -1326,7 +1339,7 @@ class Application:
         if self.bundle is None:
             raise ValueError("请先导入提示词合集")
         items: list[PromptItem] = []
-        previous_items = list(self.bundle.items)
+        next_task_sources: dict[str, str] = {}
         for index, value in enumerate(values, 1):
             title = str(value.get("title") or f"提示词 {index:03d}").strip()
             prompt = str(value.get("prompt") or "").strip()
@@ -1335,18 +1348,28 @@ class Application:
                 raise ValueError(f"第 {index} 条提示词为空")
             repeat = max(1, min(100, int(value.get("repeat") or 1)))
             metadata = dict(value.get("metadata") or {})
-            # The source path belongs to the server-side import at this
-            # position; never accept a replacement path from the browser.
-            if index <= len(previous_items):
-                previous = previous_items[index - 1].metadata
-                if isinstance(previous, dict) and previous.get("source_image") in self._trusted_source_images:
-                    metadata["source_image"] = previous["source_image"]
+            task_id = str(metadata.get("task_id") or "").strip() or uuid.uuid4().hex
+            source_image = str(metadata.get("source_image") or "")
+            known_source = self._trusted_task_sources.get(task_id)
+            if known_source:
+                source_image = known_source
+            elif source_image not in self._trusted_source_images:
+                source_image = ""
             for copy_index in range(repeat):
                 copy_title = title if repeat == 1 else f"{title}-{copy_index + 1:02d}"
-                items.append(PromptItem(copy_title, prompt, metadata, negative_prompt))
+                copy_metadata = dict(metadata)
+                copy_task_id = task_id if copy_index == 0 and task_id not in next_task_sources else uuid.uuid4().hex
+                copy_metadata["task_id"] = copy_task_id
+                if source_image:
+                    copy_metadata["source_image"] = source_image
+                    next_task_sources[copy_task_id] = source_image
+                else:
+                    copy_metadata.pop("source_image", None)
+                items.append(PromptItem(copy_title, prompt, copy_metadata, negative_prompt))
         if not items:
             raise ValueError("至少保留一条提示词")
         self.bundle = PromptBundle(self.bundle.name, items, self.bundle.source_format)
+        self._trusted_task_sources = next_task_sources
         return self.bundle
 
     def prepare_config(self, config: BatchConfig) -> BatchConfig:
@@ -1759,7 +1782,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"ok": True, "bundle": bundle.to_dict(), "extracted": extracted, "mapping": None})
             elif self.path == "/api/interrogate":
                 result = APP.interrogate_task(
-                    int(value.get("index") or 0), str(value.get("source_image") or "")
+                    int(value.get("index") or 0), str(value.get("source_image") or ""),
+                    str(value.get("task_id") or "")
                 )
                 self._json({"ok": True, **result})
             elif self.path == "/api/remap-import":

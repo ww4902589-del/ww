@@ -37,6 +37,9 @@ class ApplicationPreflightTests(unittest.TestCase):
             self.assertEqual([640, 360], bundle.items[0].metadata["source_dimensions"])
             self.assertTrue((comfy / "input" / bundle.items[0].metadata["source_image"]).is_file())
             self.assertNotIn(":", pathlib.Path(bundle.items[0].metadata["source_image"]).name)
+            task_ids = [item.metadata.get("task_id") for item in bundle.items]
+            self.assertTrue(all(task_ids), "每个图片任务导入时必须获得稳定身份")
+            self.assertEqual(len(task_ids), len(set(task_ids)), "同批图片任务 ID 必须唯一")
 
     def test_bundle_update_cannot_replace_server_owned_source_image(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -57,6 +60,52 @@ class ApplicationPreflightTests(unittest.TestCase):
             }])
 
             self.assertEqual(trusted, updated.items[0].metadata["source_image"])
+
+    def test_bundle_update_preserves_source_when_an_image_task_is_duplicated(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = pathlib.Path(temp)
+            comfy = root / "ComfyUI"
+            (comfy / "input").mkdir(parents=True)
+            first_buffer = io.BytesIO()
+            second_buffer = io.BytesIO()
+            Image.new("RGB", (8, 8), "navy").save(first_buffer, format="PNG")
+            Image.new("RGB", (8, 8), "gold").save(second_buffer, format="PNG")
+            app = Application(settings_path=root / "settings.json")
+            app.comfy_root = comfy
+            bundle = app.import_images([
+                {"filename": "first.png", "raw": first_buffer.getvalue()},
+                {"filename": "second.png", "raw": second_buffer.getvalue()},
+            ])
+            first = bundle.items[0].to_dict()
+            duplicate = bundle.items[0].to_dict()
+            duplicate["metadata"] = {**duplicate["metadata"], "task_id": "browser-copy"}
+            second = bundle.items[1].to_dict()
+
+            updated = app.update_bundle([first, duplicate, second])
+
+            self.assertEqual(
+                [first["metadata"]["source_image"], first["metadata"]["source_image"], second["metadata"]["source_image"]],
+                [item.metadata["source_image"] for item in updated.items],
+            )
+            self.assertEqual(
+                [first["metadata"]["task_id"], "browser-copy", second["metadata"]["task_id"]],
+                [item.metadata["task_id"] for item in updated.items],
+            )
+
+    def test_interrogation_rejects_a_stale_task_identity_before_submission(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = pathlib.Path(temp)
+            comfy = root / "ComfyUI"
+            (comfy / "input").mkdir(parents=True)
+            image_buffer = io.BytesIO()
+            Image.new("RGB", (8, 8), "navy").save(image_buffer, format="PNG")
+            app = Application(settings_path=root / "settings.json")
+            app.comfy_root = comfy
+            bundle = app.import_images([{"filename": "safe.png", "raw": image_buffer.getvalue()}])
+            source = bundle.items[0].metadata["source_image"]
+
+            with self.assertRaisesRegex(ValueError, "任务身份已变化"):
+                app.interrogate_task(1, source, "stale-task-id")
 
     def test_interrogation_rejects_result_if_bundle_changes_while_waiting(self):
         with tempfile.TemporaryDirectory() as temp:

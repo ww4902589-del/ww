@@ -1,0 +1,10 @@
+# Generated packages and local development evidence are not source releases.
+build/
+run/
+.pytest_cache/
+**/__pycache__/
+*.py[cod]
+
+# Local backups and transient test logs.
+*.bak
+run_after_fix_tests.txt

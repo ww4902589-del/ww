@@ -1,0 +1,46 @@
+{
+ "status": 400,
+ "raw": "{\"error\": {\"type\": \"prompt_outputs_failed_validation\", \"message\": \"Prompt outputs failed validation\", \"details\": \"\", \"extra_info\": {}}, \"node_errors\": {\"2\": {\"errors\": [{\"type\": \"required_input_missing\", \"message\": \"Required input is missing\", \"details\": \"width\", \"extra_info\": {\"input_name\": \"width\"}}, {\"type\": \"required_input_missing\", \"message\": \"Required input is missing\", \"details\": \"height\", \"extra_info\": {\"input_name\": \"height\"}}, {\"type\": \"required_input_missing\", \"message\": \"Required input is missing\", \"details\": \"crop\", \"extra_info\": {\"input_name\": \"crop\"}}], \"dependent_outputs\": [\"3\"], \"class_type\": \"ImageScale\"}}}",
+ "body": {
+  "error": {
+   "type": "prompt_outputs_failed_validation",
+   "message": "Prompt outputs failed validation",
+   "details": "",
+   "extra_info": {}
+  },
+  "node_errors": {
+   "2": {
+    "errors": [
+     {
+      "type": "required_input_missing",
+      "message": "Required input is missing",
+      "details": "width",
+      "extra_info": {
+       "input_name": "width"
+      }
+     },
+     {
+      "type": "required_input_missing",
+      "message": "Required input is missing",
+      "details": "height",
+      "extra_info": {
+       "input_name": "height"
+      }
+     },
+     {
+      "type": "required_input_missing",
+      "message": "Required input is missing",
+      "details": "crop",
+      "extra_info": {
+       "input_name": "crop"
+      }
+     }
+    ],
+    "dependent_outputs": [
+     "3"
+    ],
+    "class_type": "ImageScale"
+   }
+  }
+ }
+}

@@ -1,0 +1,4107 @@
+{
+ "id": "a6310660-9711-41c3-8671-136e22369fac",
+ "revision": 0,
+ "last_node_id": 138,
+ "last_link_id": 165,
+ "nodes": [
+  {
+   "id": 10,
+   "type": "GetImageSize+",
+   "pos": [
+    12265.73465072015,
+    1339.3912572814115
+   ],
+   "size": [
+    218.7657924874975,
+    66
+   ],
+   "flags": {
+    "collapsed": true
+   },
+   "order": 41,
+   "mode": 4,
+   "inputs": [
+    {
+     "label": "图像",
+     "localized_name": "图像",
+     "name": "image",
+     "type": "IMAGE",
+     "link": 19
+    }
+   ],
+   "outputs": [
+    {
+     "label": "宽度",
+     "localized_name": "宽度",
+     "name": "width",
+     "type": "INT",
+     "links": [
+      15
+     ]
+    },
+    {
+     "label": "高度",
+     "localized_name": "高度",
+     "name": "height",
+     "type": "INT",
+     "links": [
+      16
+     ]
+    },
+    {
+     "localized_name": "count",
+     "name": "count",
+     "type": "INT",
+     "links": null
+    }
+   ],
+   "properties": {
+    "aux_id": "cubiq/ComfyUI_essentials",
+    "ver": "9d9f4bedfc9f0321c19faf71855e228c93bd0dc9",
+    "Node name for S&R": "GetImageSize+",
+    "cnr_id": "comfyui_essentials",
+    "ue_properties": {
+     "widget_ue_connectable": {},
+     "input_ue_unconnectable": {},
+     "version": "7.5.2"
+    }
+   },
+   "color": "#233",
+   "bgcolor": "#355"
+  },
+  {
+   "id": 11,
+   "type": "UpscaleModelLoader",
+   "pos": [
+    12208.956393940092,
+    1204.3779620645078
+   ],
+   "size": [
+    253.9544632196662,
+    58
+   ],
+   "flags": {
+    "collapsed": false
+   },
+   "order": 0,
+   "mode": 4,
+   "inputs": [
+    {
+     "localized_name": "模型名称",
+     "name": "model_name",
+     "type": "COMBO",
+     "widget": {
+      "name": "model_name"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "放大模型",
+     "name": "UPSCALE_MODEL",
+     "type": "UPSCALE_MODEL",
+     "links": [
+      7
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.11.1",
+    "Node name for S&R": "UpscaleModelLoader",
+    "ue_properties": {
+     "widget_ue_connectable": {
+      "model_name": true
+     },
+     "version": "7.5.2",
+     "input_ue_unconnectable": {}
+    }
+   },
+   "widgets_values": [
+    "fixture-resource-001.safetensors"
+   ],
+   "widgets_values_named": {
+    "model_name": "fixture-resource-001.safetensors"
+   },
+   "color": "#323",
+   "bgcolor": "#535"
+  },
+  {
+   "id": 15,
+   "type": "ConditioningZeroOut",
+   "pos": [
+    10483.556201975247,
+    1456.0928679308736
+   ],
+   "size": [
+    140,
+    26
+   ],
+   "flags": {
+    "collapsed": false
+   },
+   "order": 28,
+   "mode": 0,
+   "inputs": [
+    {
+     "label": "条件",
+     "localized_name": "条件",
+     "name": "conditioning",
+     "type": "CONDITIONING",
+     "link": 28
+    }
+   ],
+   "outputs": [
+    {
+     "label": "条件",
+     "localized_name": "条件",
+     "name": "CONDITIONING",
+     "type": "CONDITIONING",
+     "links": [
+      5,
+      23,
+      35
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.9.2",
+    "Node name for S&R": "ConditioningZeroOut",
+    "ue_properties": {
+     "version": "7.5.2",
+     "widget_ue_connectable": {},
+     "input_ue_unconnectable": {}
+    }
+   },
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
+   "id": 16,
+   "type": "EmptyLatentImage",
+   "pos": [
+    10485.683190994587,
+    1557.2817207071212
+   ],
+   "size": [
+    245.7370104941574,
+    117.91229138942708
+   ],
+   "flags": {
+    "collapsed": true
+   },
+   "order": 27,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "宽度",
+     "name": "width",
+     "type": "INT",
+     "widget": {
+      "name": "width"
+     },
+     "link": 29
+    },
+    {
+     "localized_name": "高度",
+     "name": "height",
+     "type": "INT",
+     "widget": {
+      "name": "height"
+     },
+     "link": 30
+    },
+    {
+     "localized_name": "批量大小",
+     "name": "batch_size",
+     "type": "INT",
+     "widget": {
+      "name": "batch_size"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "Latent",
+     "name": "LATENT",
+     "type": "LATENT",
+     "links": [
+      36
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.3.75",
+    "Node name for S&R": "EmptyLatentImage",
+    "ue_properties": {
+     "widget_ue_connectable": {},
+     "version": "7.5.1",
+     "input_ue_unconnectable": {}
+    }
+   },
+   "widgets_values": [
+    1024,
+    1024,
+    1
+   ],
+   "widgets_values_named": {
+    "width": 1024,
+    "height": 1024,
+    "batch_size": 1
+   },
+   "color": "#233",
+   "bgcolor": "#355"
+  },
+  {
+   "id": 23,
+   "type": "CLIPTextEncode",
+   "pos": [
+    10288.661063474938,
+    1308.606371882824
+   ],
+   "size": [
+    249.75247375746176,
+    88
+   ],
+   "flags": {
+    "collapsed": true
+   },
+   "order": 24,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "clip",
+     "name": "clip",
+     "type": "CLIP",
+     "link": 39
+    },
+    {
+     "localized_name": "文本",
+     "name": "text",
+     "type": "STRING",
+     "widget": {
+      "name": "text"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "条件",
+     "name": "CONDITIONING",
+     "type": "CONDITIONING",
+     "links": []
+    }
+   ],
+   "title": "负面条件",
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.25.0",
+    "Node name for S&R": "CLIPTextEncode",
+    "ue_properties": {
+     "widget_ue_connectable": {},
+     "input_ue_unconnectable": {},
+     "version": "7.5.1"
+    }
+   },
+   "widgets_values": [
+    "马赛克, mosaic, censored, 模糊，低分辨率，低质量图像，扭曲的肢体，诡异的外观，丑陋，噪点，网格感，JPEG压缩条纹，异常的肢体，水印，乱码，意义不明的字符"
+   ],
+   "widgets_values_named": {
+    "text": "马赛克, mosaic, censored, 模糊，低分辨率，低质量图像，扭曲的肢体，诡异的外观，丑陋，噪点，网格感，JPEG压缩条纹，异常的肢体，水印，乱码，意义不明的字符"
+   },
+   "color": "#322",
+   "bgcolor": "#533"
+  },
+  {
+   "id": 24,
+   "type": "VAELoader",
+   "pos": [
+    10171.046732428222,
+    1194.2286823261034
+   ],
+   "size": [
+    229.6846921988198,
+    58
+   ],
+   "flags": {},
+   "order": 1,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "vae名称",
+     "name": "vae_name",
+     "type": "COMBO",
+     "widget": {
+      "name": "vae_name"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "VAE",
+     "name": "VAE",
+     "type": "VAE",
+     "links": [
+      6,
+      27,
+      32
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.25.0",
+    "Node name for S&R": "VAELoader",
+    "models": [
+     {
+      "name": "qwen_image_vae.safetensors",
+      "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/vae/qwen_image_vae.safetensors",
+      "directory": "vae"
+     }
+    ],
+    "ue_properties": {
+     "widget_ue_connectable": {},
+     "version": "7.8",
+     "input_ue_unconnectable": {}
+    }
+   },
+   "widgets_values": [
+    "qwen_image_vae.safetensors"
+   ],
+   "widgets_values_named": {
+    "vae_name": "qwen_image_vae.safetensors"
+   },
+   "color": "#323",
+   "bgcolor": "#535"
+  },
+  {
+   "id": 29,
+   "type": "CLIPLoader",
+   "pos": [
+    9857.549112394026,
+    1195.630636203878
+   ],
+   "size": [
+    292.1848126992991,
+    106
+   ],
+   "flags": {},
+   "order": 2,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "CLIP名称",
+     "name": "clip_name",
+     "type": "COMBO",
+     "widget": {
+      "name": "clip_name"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "类型",
+     "name": "type",
+     "type": "COMBO",
+     "widget": {
+      "name": "type"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "设备",
+     "name": "device",
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "device"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "CLIP",
+     "name": "CLIP",
+     "type": "CLIP",
+     "links": [
+      39,
+      40
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.25.0",
+    "Node name for S&R": "CLIPLoader",
+    "models": [
+     {
+      "name": "qwen3vl_4b_fp8_scaled.safetensors",
+      "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/text_encoders/qwen3vl_4b_fp8_scaled.safetensors",
+      "directory": "text_encoders"
+     }
+    ],
+    "ue_properties": {
+     "widget_ue_connectable": {},
+     "version": "7.8",
+     "input_ue_unconnectable": {}
+    }
+   },
+   "widgets_values": [
+    "qwen3vl_4b_fp8_scaled.safetensors",
+    "krea2",
+    "default"
+   ],
+   "widgets_values_named": {
+    "clip_name": "qwen3vl_4b_fp8_scaled.safetensors",
+    "type": "krea2",
+    "device": "default"
+   },
+   "color": "#323",
+   "bgcolor": "#535"
+  },
+  {
+   "id": 4,
+   "type": "PrimitiveFloat",
+   "pos": [
+    12214.997979310388,
+    1700.8534026674404
+   ],
+   "size": [
+    234.55627884456317,
+    58
+   ],
+   "flags": {},
+   "order": 3,
+   "mode": 4,
+   "inputs": [
+    {
+     "localized_name": "值",
+     "name": "value",
+     "type": "FLOAT",
+     "widget": {
+      "name": "value"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "浮点",
+     "name": "FLOAT",
+     "type": "FLOAT",
+     "links": [
+      18
+     ]
+    }
+   ],
+   "title": "边分块数",
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.18.1",
+    "Node name for S&R": "PrimitiveFloat",
+    "ue_properties": {
+     "widget_ue_connectable": {},
+     "input_ue_unconnectable": {},
+     "version": "7.7"
+    }
+   },
+   "widgets_values": [
+    2
+   ],
+   "widgets_values_named": {
+    "value": 2
+   },
+   "color": "#233",
+   "bgcolor": "#355"
+  },
+  {
+   "id": 9,
+   "type": "SimpleMathDual+",
+   "pos": [
+    12219.246003577538,
+    1393.4814884183695
+   ],
+   "size": [
+    210,
+    142
+   ],
+   "flags": {
+    "collapsed": false
+   },
+   "order": 43,
+   "mode": 4,
+   "inputs": [
+    {
+     "localized_name": "a",
+     "name": "a",
+     "shape": 7,
+     "type": "*",
+     "link": 15
+    },
+    {
+     "localized_name": "b",
+     "name": "b",
+     "shape": 7,
+     "type": "*",
+     "link": 16
+    },
+    {
+     "localized_name": "c",
+     "name": "c",
+     "shape": 7,
+     "type": "*",
+     "link": 17
+    },
+    {
+     "localized_name": "d",
+     "name": "d",
+     "shape": 7,
+     "type": "*",
+     "link": 18
+    },
+    {
+     "label": "值1",
+     "localized_name": "值1",
+     "name": "value_1",
+     "type": "STRING",
+     "widget": {
+      "name": "value_1"
+     },
+     "link": null
+    },
+    {
+     "label": "值2",
+     "localized_name": "值2",
+     "name": "value_2",
+     "type": "STRING",
+     "widget": {
+      "name": "value_2"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "label": "整数_1",
+     "localized_name": "整数_1",
+     "name": "int_1",
+     "type": "INT",
+     "links": [
+      10
+     ]
+    },
+    {
+     "label": "浮点_1",
+     "localized_name": "浮点_1",
+     "name": "float_1",
+     "type": "FLOAT",
+     "links": null
+    },
+    {
+     "label": "整数_2",
+     "localized_name": "整数_2",
+     "name": "int_2",
+     "type": "INT",
+     "links": [
+      11
+     ]
+    },
+    {
+     "label": "浮点_2",
+     "localized_name": "浮点_2",
+     "name": "float_2",
+     "type": "FLOAT",
+     "links": null
+    }
+   ],
+   "properties": {
+    "aux_id": "cubiq/ComfyUI_essentials",
+    "ver": "9d9f4bedfc9f0321c19faf71855e228c93bd0dc9",
+    "Node name for S&R": "SimpleMathDual+",
+    "cnr_id": "comfyui_essentials",
+    "ue_properties": {
+     "widget_ue_connectable": {},
+     "input_ue_unconnectable": {},
+     "version": "7.7"
+    }
+   },
+   "widgets_values": [
+    "a*c/d",
+    "b*c/d"
+   ],
+   "widgets_values_named": {
+    "value_1": "a*c/d",
+    "value_2": "b*c/d"
+   },
+   "color": "#233",
+   "bgcolor": "#355"
+  },
+  {
+   "id": 7,
+   "type": "PrimitiveFloat",
+   "pos": [
+    12209.99848199523,
+    1580.1235747344504
+   ],
+   "size": [
+    239.65291496198643,
+    58
+   ],
+   "flags": {},
+   "order": 4,
+   "mode": 4,
+   "inputs": [
+    {
+     "localized_name": "值",
+     "name": "value",
+     "type": "FLOAT",
+     "widget": {
+      "name": "value"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "浮点",
+     "name": "FLOAT",
+     "type": "FLOAT",
+     "links": [
+      8,
+      17
+     ]
+    }
+   ],
+   "title": "放大倍数",
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.18.1",
+    "Node name for S&R": "PrimitiveFloat",
+    "ue_properties": {
+     "widget_ue_connectable": {},
+     "input_ue_unconnectable": {},
+     "version": "7.7"
+    }
+   },
+   "widgets_values": [
+    1.5
+   ],
+   "widgets_values_named": {
+    "value": 1.5
+   },
+   "color": "#233",
+   "bgcolor": "#355"
+  },
+  {
+   "id": 18,
+   "type": "VAEDecode",
+   "pos": [
+    11057.89026914088,
+    1294.501972239922
+   ],
+   "size": [
+    140,
+    46
+   ],
+   "flags": {
+    "collapsed": false
+   },
+   "order": 38,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "Latent",
+     "name": "samples",
+     "type": "LATENT",
+     "link": 31
+    },
+    {
+     "localized_name": "vae",
+     "name": "vae",
+     "type": "VAE",
+     "link": 32
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "图像",
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": [
+      2,
+      14,
+      19
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.12.3",
+    "Node name for S&R": "VAEDecode",
+    "ue_properties": {
+     "widget_ue_connectable": {},
+     "version": "7.5.2",
+     "input_ue_unconnectable": {}
+    }
+   },
+   "color": "#332922",
+   "bgcolor": "#593930"
+  },
+  {
+   "id": 28,
+   "type": "Label (rgthree)",
+   "pos": [
+    12264.687170829278,
+    717.8415742110475
+   ],
+   "size": [
+    817.8125,
+    160
+   ],
+   "flags": {
+    "allow_interaction": true
+   },
+   "order": 5,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [],
+   "title": "▶USD放大",
+   "properties": {
+    "fontSize": 160,
+    "fontFamily": "Arial",
+    "fontColor": "#3CB371",
+    "textAlign": "left",
+    "backgroundColor": "transparent",
+    "padding": 0,
+    "borderRadius": 0,
+    "angle": 0,
+    "ue_properties": {
+     "widget_ue_connectable": {},
+     "input_ue_unconnectable": {},
+     "version": "7.8"
+    }
+   },
+   "color": "#fff0",
+   "bgcolor": "#fff0"
+  },
+  {
+   "id": 14,
+   "type": "VAEDecode",
+   "pos": [
+    10475.16117208772,
+    1343.9903757589434
+   ],
+   "size": [
+    140,
+    46
+   ],
+   "flags": {
+    "collapsed": false
+   },
+   "order": 32,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "Latent",
+     "name": "samples",
+     "type": "LATENT",
+     "link": 26
+    },
+    {
+     "localized_name": "vae",
+     "name": "vae",
+     "type": "VAE",
+     "link": 27
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "图像",
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": [
+      20
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.12.3",
+    "Node name for S&R": "VAEDecode",
+    "ue_properties": {
+     "widget_ue_connectable": {},
+     "version": "7.5.2",
+     "input_ue_unconnectable": {}
+    }
+   },
+   "color": "#332922",
+   "bgcolor": "#593930"
+  },
+  {
+   "id": 6,
+   "type": "SaveImage",
+   "pos": [
+    11626.879168535017,
+    1038.7276071022748
+   ],
+   "size": [
+    442.2699821479962,
+    790.9172295988187
+   ],
+   "flags": {},
+   "order": 40,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "图片",
+     "name": "images",
+     "type": "IMAGE",
+     "link": 14
+    },
+    {
+     "localized_name": "文件名前缀",
+     "name": "filename_prefix",
+     "type": "STRING",
+     "widget": {
+      "name": "filename_prefix"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "images",
+     "name": "images",
+     "type": "IMAGE",
+     "links": []
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.14.1",
+    "Node name for S&R": "SaveImage",
+    "ue_properties": {
+     "widget_ue_connectable": {},
+     "input_ue_unconnectable": {},
+     "version": "7.6.2"
+    }
+   },
+   "widgets_values": [
+    "Krea2-2ST-%date:yyyyMMddhhmmss%"
+   ],
+   "widgets_values_named": {
+    "filename_prefix": "Krea2-2ST-%date:yyyyMMddhhmmss%"
+   }
+  },
+  {
+   "id": 26,
+   "type": "UNETLoader",
+   "pos": [
+    9856.860584258078,
+    1042.2875865919025
+   ],
+   "size": [
+    543.1855146263773,
+    89.23846359534639
+   ],
+   "flags": {},
+   "order": 6,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "UNet名称",
+     "name": "unet_name",
+     "type": "COMBO",
+     "widget": {
+      "name": "unet_name"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "数据类型",
+     "name": "weight_dtype",
+     "type": "COMBO",
+     "widget": {
+      "name": "weight_dtype"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "模型",
+     "name": "MODEL",
+     "type": "MODEL",
+     "links": [
+      42,
+      43,
+      44
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.25.0",
+    "Node name for S&R": "UNETLoader",
+    "models": [
+     {
+      "name": "krea2_turbo_fp8_scaled.safetensors",
+      "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/diffusion_models/krea2_turbo_fp8_scaled.safetensors",
+      "directory": "diffusion_models"
+     }
+    ],
+    "ue_properties": {
+     "widget_ue_connectable": {},
+     "version": "7.8",
+     "input_ue_unconnectable": {}
+    }
+   },
+   "widgets_values": [
+    "krea2_turbo_fp8_scaled.safetensors",
+    "default"
+   ],
+   "widgets_values_named": {
+    "unet_name": "krea2_turbo_fp8_scaled.safetensors",
+    "weight_dtype": "default"
+   },
+   "color": "#323",
+   "bgcolor": "#535"
+  },
+  {
+   "id": 96,
+   "type": "KSampler",
+   "pos": [
+    14658.586413438697,
+    1596.1097695273997
+   ],
+   "size": [
+    240.37874301072793,
+    262
+   ],
+   "flags": {},
+   "order": 39,
+   "mode": 4,
+   "inputs": [
+    {
+     "localized_name": "模型",
+     "name": "model",
+     "type": "MODEL",
+     "link": 127
+    },
+    {
+     "localized_name": "正面条件",
+     "name": "positive",
+     "type": "CONDITIONING",
+     "link": 128
+    },
+    {
+     "localized_name": "负面条件",
+     "name": "negative",
+     "type": "CONDITIONING",
+     "link": 129
+    },
+    {
+     "localized_name": "Latent图像",
+     "name": "latent_image",
+     "type": "LATENT",
+     "link": 130
+    },
+    {
+     "localized_name": "种子",
+     "name": "seed",
+     "type": "INT",
+     "widget": {
+      "name": "seed"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "步数",
+     "name": "steps",
+     "type": "INT",
+     "widget": {
+      "name": "steps"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "cfg",
+     "name": "cfg",
+     "type": "FLOAT",
+     "widget": {
+      "name": "cfg"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "采样器名称",
+     "name": "sampler_name",
+     "type": "COMBO",
+     "widget": {
+      "name": "sampler_name"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "调度器",
+     "name": "scheduler",
+     "type": "COMBO",
+     "widget": {
+      "name": "scheduler"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "降噪",
+     "name": "denoise",
+     "type": "FLOAT",
+     "widget": {
+      "name": "denoise"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "Latent",
+     "name": "LATENT",
+     "type": "LATENT",
+     "links": [
+      133
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.27.0",
+    "Node name for S&R": "KSampler"
+   },
+   "widgets_values": [
+    959948902156062,
+    "fixed",
+    1,
+    1,
+    "euler",
+    "simple",
+    1
+   ],
+   "widgets_values_named": {
+    "seed": 959948902156062,
+    "control_after_generate": "fixed",
+    "steps": 1,
+    "cfg": 1,
+    "sampler_name": "euler",
+    "scheduler": "simple",
+    "denoise": 1
+   }
+  },
+  {
+   "id": 98,
+   "type": "VAEDecodeTiled",
+   "pos": [
+    14659.773385196107,
+    1259.3779074263548
+   ],
+   "size": [
+    242.83236209536187,
+    150
+   ],
+   "flags": {},
+   "order": 42,
+   "mode": 4,
+   "showAdvanced": true,
+   "inputs": [
+    {
+     "localized_name": "Latent",
+     "name": "samples",
+     "type": "LATENT",
+     "link": 133
+    },
+    {
+     "localized_name": "vae",
+     "name": "vae",
+     "type": "VAE",
+     "link": 134
+    },
+    {
+     "localized_name": "分块尺寸",
+     "name": "tile_size",
+     "type": "INT",
+     "widget": {
+      "name": "tile_size"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "重叠",
+     "name": "overlap",
+     "type": "INT",
+     "widget": {
+      "name": "overlap"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "时间尺寸",
+     "name": "temporal_size",
+     "type": "INT",
+     "widget": {
+      "name": "temporal_size"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "时间重叠",
+     "name": "temporal_overlap",
+     "type": "INT",
+     "widget": {
+      "name": "temporal_overlap"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "图像",
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": [
+      131
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.27.0",
+    "Node name for S&R": "VAEDecodeTiled"
+   },
+   "widgets_values": [
+    512,
+    128,
+    4096,
+    8
+   ],
+   "widgets_values_named": {
+    "tile_size": 512,
+    "overlap": 128,
+    "temporal_size": 4096,
+    "temporal_overlap": 8
+   }
+  },
+  {
+   "id": 99,
+   "type": "VAEEncodeTiled",
+   "pos": [
+    14393.864837215655,
+    1704.698774741767
+   ],
+   "size": [
+    233.1318750804603,
+    150
+   ],
+   "flags": {},
+   "order": 34,
+   "mode": 4,
+   "showAdvanced": true,
+   "inputs": [
+    {
+     "localized_name": "像素",
+     "name": "pixels",
+     "type": "IMAGE",
+     "link": 135
+    },
+    {
+     "localized_name": "vae",
+     "name": "vae",
+     "type": "VAE",
+     "link": 136
+    },
+    {
+     "localized_name": "分块尺寸",
+     "name": "tile_size",
+     "type": "INT",
+     "widget": {
+      "name": "tile_size"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "重叠",
+     "name": "overlap",
+     "type": "INT",
+     "widget": {
+      "name": "overlap"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "时间尺寸",
+     "name": "temporal_size",
+     "type": "INT",
+     "widget": {
+      "name": "temporal_size"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "时间重叠",
+     "name": "temporal_overlap",
+     "type": "INT",
+     "widget": {
+      "name": "temporal_overlap"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "Latent",
+     "name": "LATENT",
+     "type": "LATENT",
+     "links": [
+      130,
+      138
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.27.0",
+    "Node name for S&R": "VAEEncodeTiled"
+   },
+   "widgets_values": [
+    512,
+    128,
+    4096,
+    8
+   ],
+   "widgets_values_named": {
+    "tile_size": 512,
+    "overlap": 128,
+    "temporal_size": 4096,
+    "temporal_overlap": 8
+   }
+  },
+  {
+   "id": 100,
+   "type": "SeedVR2Conditioning",
+   "pos": [
+    14388.733928425794,
+    1600.1753048770674
+   ],
+   "size": [
+    241.59451820700394,
+    46
+   ],
+   "flags": {},
+   "order": 37,
+   "mode": 4,
+   "inputs": [
+    {
+     "localized_name": "model",
+     "name": "model",
+     "type": "MODEL",
+     "link": 137
+    },
+    {
+     "label": "latent",
+     "localized_name": "vae_conditioning",
+     "name": "vae_conditioning",
+     "type": "LATENT",
+     "link": 138
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "positive",
+     "name": "positive",
+     "type": "CONDITIONING",
+     "links": [
+      128
+     ]
+    },
+    {
+     "localized_name": "negative",
+     "name": "negative",
+     "type": "CONDITIONING",
+     "links": [
+      129
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.27.0",
+    "Node name for S&R": "SeedVR2Conditioning"
+   }
+  },
+  {
+   "id": 101,
+   "type": "SeedVR2Preprocess",
+   "pos": [
+    14387.067901309034,
+    1513.9106286155543
+   ],
+   "size": [
+    243.79155496412832,
+    26
+   ],
+   "flags": {},
+   "order": 31,
+   "mode": 4,
+   "inputs": [
+    {
+     "localized_name": "resized_images",
+     "name": "resized_images",
+     "type": "IMAGE",
+     "link": 139
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "images",
+     "name": "images",
+     "type": "IMAGE",
+     "links": [
+      135
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.27.0",
+    "Node name for S&R": "SeedVR2Preprocess"
+   }
+  },
+  {
+   "id": 102,
+   "type": "ResizeImageMaskNode",
+   "pos": [
+    14385.003446755682,
+    1353.5611562631998
+   ],
+   "size": [
+    246.1858449533736,
+    106
+   ],
+   "flags": {},
+   "order": 29,
+   "mode": 4,
+   "inputs": [
+    {
+     "localized_name": "输入",
+     "name": "input",
+     "type": "IMAGE,MASK",
+     "link": 140
+    },
+    {
+     "localized_name": "调整类型",
+     "name": "resize_type",
+     "type": "COMFY_DYNAMICCOMBO_V3",
+     "widget": {
+      "name": "resize_type"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "multiplier",
+     "name": "resize_type.multiplier",
+     "type": "FLOAT",
+     "widget": {
+      "name": "resize_type.multiplier"
+     },
+     "link": 141
+    },
+    {
+     "localized_name": "缩放方法",
+     "name": "scale_method",
+     "type": "COMBO",
+     "widget": {
+      "name": "scale_method"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "已调整大小",
+     "name": "resized",
+     "type": "IMAGE",
+     "links": [
+      132,
+      139
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.27.0",
+    "Node name for S&R": "ResizeImageMaskNode"
+   },
+   "widgets_values": [
+    "scale by multiplier",
+    8,
+    "lanczos"
+   ],
+   "widgets_values_named": {
+    "resize_type": "scale by multiplier",
+    "resize_type.multiplier": 8,
+    "scale_method": "lanczos"
+   }
+  },
+  {
+   "id": 104,
+   "type": "JoinImageWithAlpha",
+   "pos": [
+    14390.072022575996,
+    1259.8772892331222
+   ],
+   "size": [
+    240.59185733213485,
+    46
+   ],
+   "flags": {},
+   "order": 26,
+   "mode": 4,
+   "inputs": [
+    {
+     "localized_name": "图像",
+     "name": "image",
+     "type": "IMAGE",
+     "link": 142
+    },
+    {
+     "localized_name": "阿尔法",
+     "name": "alpha",
+     "type": "MASK",
+     "link": 143
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "图像",
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": [
+      140
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.27.0",
+    "Node name for S&R": "JoinImageWithAlpha"
+   }
+  },
+  {
+   "id": 106,
+   "type": "PrimitiveFloat",
+   "pos": [
+    14118.395305952734,
+    1801.8128722673725
+   ],
+   "size": [
+    210,
+    58
+   ],
+   "flags": {},
+   "order": 7,
+   "mode": 4,
+   "inputs": [
+    {
+     "localized_name": "值",
+     "name": "value",
+     "type": "FLOAT",
+     "widget": {
+      "name": "value"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "浮点",
+     "name": "FLOAT",
+     "type": "FLOAT",
+     "links": [
+      141
+     ]
+    }
+   ],
+   "title": "放大倍数",
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.18.1",
+    "Node name for S&R": "PrimitiveFloat",
+    "ue_properties": {
+     "widget_ue_connectable": {},
+     "input_ue_unconnectable": {},
+     "version": "7.7"
+    }
+   },
+   "widgets_values": [
+    1.5
+   ],
+   "widgets_values_named": {
+    "value": 1.5
+   },
+   "color": "#233",
+   "bgcolor": "#355"
+  },
+  {
+   "id": 97,
+   "type": "SeedVR2PostProcessing",
+   "pos": [
+    14659.029427994234,
+    1462.2536867687945
+   ],
+   "size": [
+    245.46324017444203,
+    78
+   ],
+   "flags": {},
+   "order": 44,
+   "mode": 4,
+   "inputs": [
+    {
+     "localized_name": "images",
+     "name": "images",
+     "type": "IMAGE",
+     "link": 131
+    },
+    {
+     "localized_name": "original_resized_images",
+     "name": "original_resized_images",
+     "type": "IMAGE",
+     "link": 132
+    },
+    {
+     "localized_name": "color_correction_method",
+     "name": "color_correction_method",
+     "type": "COMBO",
+     "widget": {
+      "name": "color_correction_method"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "images",
+     "name": "images",
+     "type": "IMAGE",
+     "links": [
+      155
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.27.0",
+    "Node name for S&R": "SeedVR2PostProcessing"
+   },
+   "widgets_values": [
+    "adain"
+   ],
+   "widgets_values_named": {
+    "color_correction_method": "adain"
+   }
+  },
+  {
+   "id": 103,
+   "type": "VAELoader",
+   "pos": [
+    14385.349576365858,
+    1152.4107597856157
+   ],
+   "size": [
+    516.7970143383191,
+    58
+   ],
+   "flags": {},
+   "order": 8,
+   "mode": 4,
+   "inputs": [
+    {
+     "localized_name": "vae名称",
+     "name": "vae_name",
+     "type": "COMBO",
+     "widget": {
+      "name": "vae_name"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "VAE",
+     "name": "VAE",
+     "type": "VAE",
+     "links": [
+      134,
+      136
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.27.0",
+    "Node name for S&R": "VAELoader",
+    "models": [
+     {
+      "name": "seedvr2_ema_vae_fp16.safetensors",
+      "url": "https://huggingface.co/Comfy-Org/SeedVR2/resolve/main/vae/seedvr2_ema_vae_fp16.safetensors",
+      "directory": "vae"
+     }
+    ]
+   },
+   "widgets_values": [
+    "seedvr2_ema_vae_fp16.safetensors"
+   ],
+   "widgets_values_named": {
+    "vae_name": "seedvr2_ema_vae_fp16.safetensors"
+   },
+   "color": "#323",
+   "bgcolor": "#535"
+  },
+  {
+   "id": 107,
+   "type": "UNETLoader",
+   "pos": [
+    14384.87506649368,
+    1027.5674706526768
+   ],
+   "size": [
+    513.6883751682428,
+    82
+   ],
+   "flags": {},
+   "order": 9,
+   "mode": 4,
+   "showAdvanced": false,
+   "inputs": [
+    {
+     "localized_name": "UNet名称",
+     "name": "unet_name",
+     "type": "COMBO",
+     "widget": {
+      "name": "unet_name"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "数据类型",
+     "name": "weight_dtype",
+     "type": "COMBO",
+     "widget": {
+      "name": "weight_dtype"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "模型",
+     "name": "MODEL",
+     "type": "MODEL",
+     "links": [
+      127,
+      137
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.27.0",
+    "Node name for S&R": "UNETLoader",
+    "models": [
+     {
+      "name": "seedvr2_7b_int8_convrot.safetensors",
+      "url": "https://huggingface.co/Comfy-Org/SeedVR2/resolve/main/diffusion_models/seedvr2_7b_int8_convrot.safetensors",
+      "directory": "diffusion_models"
+     }
+    ]
+   },
+   "widgets_values": [
+    "seedvr2_7b_int8_convrot.safetensors",
+    "default"
+   ],
+   "widgets_values_named": {
+    "unet_name": "seedvr2_7b_int8_convrot.safetensors",
+    "weight_dtype": "default"
+   },
+   "color": "#323",
+   "bgcolor": "#535"
+  },
+  {
+   "id": 95,
+   "type": "Image Comparer (rgthree)",
+   "pos": [
+    14954.011739068046,
+    1228.2281860184048
+   ],
+   "size": [
+    441.30497735982703,
+    620.1562090401542
+   ],
+   "flags": {},
+   "order": 51,
+   "mode": 4,
+   "inputs": [
+    {
+     "dir": 3,
+     "label": "图像_A",
+     "name": "image_a",
+     "type": "IMAGE",
+     "link": 125
+    },
+    {
+     "dir": 3,
+     "label": "图像_B",
+     "name": "image_b",
+     "type": "IMAGE",
+     "link": 126
+    }
+   ],
+   "outputs": [
+    {
+     "dir": 4,
+     "name": "images",
+     "shape": 3,
+     "type": "IMAGE",
+     "links": null
+    }
+   ],
+   "properties": {
+    "aux_id": "rgthree/rgthree-comfy",
+    "ver": "2c5342a8cb0eaecaabf61435a5f37dd594c510ba",
+    "comparer_mode": "Slide"
+   },
+   "widgets_values": [
+    [
+     {
+      "name": "A",
+      "selected": true,
+      "url": "/api/view?filename=fixture-preview.png&type=temp"
+     },
+     {
+      "name": "B",
+      "selected": true,
+      "url": "/api/view?filename=fixture-preview.png&type=temp"
+     }
+    ]
+   ],
+   "widgets_values_named": {
+    "rgthree_comparer": {
+     "images": [
+      {
+       "name": "A",
+       "selected": true,
+       "url": "/api/view?filename=fixture-preview.png&type=temp",
+       "img": {}
+      },
+      {
+       "name": "B",
+       "selected": true,
+       "url": "/api/view?filename=fixture-preview.png&type=temp",
+       "img": {}
+      }
+     ]
+    }
+   }
+  },
+  {
+   "id": 121,
+   "type": "JoinImageWithAlpha",
+   "pos": [
+    14967.232974320348,
+    1179.990919369865
+   ],
+   "size": [
+    164.62433168951975,
+    46
+   ],
+   "flags": {
+    "collapsed": true
+   },
+   "order": 49,
+   "mode": 4,
+   "inputs": [
+    {
+     "localized_name": "图像",
+     "name": "image",
+     "type": "IMAGE",
+     "link": 157
+    },
+    {
+     "localized_name": "阿尔法",
+     "name": "alpha",
+     "type": "MASK",
+     "link": 158
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "图像",
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": [
+      159
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.35.0",
+    "Node name for S&R": "JoinImageWithAlpha"
+   }
+  },
+  {
+   "id": 120,
+   "type": "SplitImageWithAlpha",
+   "pos": [
+    14963.151491759216,
+    1119.8995829659493
+   ],
+   "size": [
+    140,
+    46
+   ],
+   "flags": {
+    "collapsed": true
+   },
+   "order": 46,
+   "mode": 4,
+   "inputs": [
+    {
+     "localized_name": "图片",
+     "name": "image",
+     "type": "IMAGE",
+     "link": 155
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "图像",
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": [
+      156
+     ]
+    },
+    {
+     "localized_name": "遮罩",
+     "name": "MASK",
+     "type": "MASK",
+     "links": [
+      158
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.35.0",
+    "Node name for S&R": "SplitImageWithAlpha"
+   }
+  },
+  {
+   "id": 127,
+   "type": "Label (rgthree)",
+   "pos": [
+    14946.817999444402,
+    1024.3918567442709
+   ],
+   "size": [
+    190,
+    38
+   ],
+   "flags": {
+    "allow_interaction": true
+   },
+   "order": 10,
+   "mode": 4,
+   "inputs": [],
+   "outputs": [],
+   "title": "可选锐化▶",
+   "properties": {
+    "fontSize": 38,
+    "fontFamily": "Arial",
+    "fontColor": "#FF6347",
+    "textAlign": "left",
+    "backgroundColor": "transparent",
+    "padding": 0,
+    "borderRadius": 0,
+    "angle": 0,
+    "ue_properties": {
+     "widget_ue_connectable": {},
+     "input_ue_unconnectable": {},
+     "version": "7.8"
+    }
+   },
+   "color": "#fff0",
+   "bgcolor": "#fff0"
+  },
+  {
+   "id": 110,
+   "type": "ImageSmartSharpen+",
+   "pos": [
+    15171.163223465275,
+    1038.050005898823
+   ],
+   "size": [
+    219.66120256762406,
+    130
+   ],
+   "flags": {},
+   "order": 48,
+   "mode": 4,
+   "inputs": [
+    {
+     "label": "图像",
+     "localized_name": "图像",
+     "name": "image",
+     "type": "IMAGE",
+     "link": 156
+    },
+    {
+     "label": "噪波半径",
+     "localized_name": "噪波半径",
+     "name": "noise_radius",
+     "type": "INT",
+     "widget": {
+      "name": "noise_radius"
+     },
+     "link": null
+    },
+    {
+     "label": "避开边缘",
+     "localized_name": "避开边缘",
+     "name": "preserve_edges",
+     "type": "FLOAT",
+     "widget": {
+      "name": "preserve_edges"
+     },
+     "link": null
+    },
+    {
+     "label": "锐化",
+     "localized_name": "锐化",
+     "name": "sharpen",
+     "type": "FLOAT",
+     "widget": {
+      "name": "sharpen"
+     },
+     "link": null
+    },
+    {
+     "label": "比率",
+     "localized_name": "比率",
+     "name": "ratio",
+     "type": "FLOAT",
+     "widget": {
+      "name": "ratio"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "label": "图像",
+     "localized_name": "图像",
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": [
+      157
+     ]
+    }
+   ],
+   "title": "图像智能锐化",
+   "properties": {
+    "aux_id": "cubiq/ComfyUI_essentials",
+    "ver": "9d9f4bedfc9f0321c19faf71855e228c93bd0dc9",
+    "Node name for S&R": "ImageSmartSharpen+"
+   },
+   "widgets_values": [
+    7,
+    0.75,
+    5,
+    0.5
+   ],
+   "widgets_values_named": {
+    "noise_radius": 7,
+    "preserve_edges": 0.75,
+    "sharpen": 5,
+    "ratio": 0.5
+   },
+   "color": "#432",
+   "bgcolor": "#653"
+  },
+  {
+   "id": 105,
+   "type": "LoadImage",
+   "pos": [
+    13900.39718288152,
+    1035.5074071133947
+   ],
+   "size": [
+    433.44155197098166,
+    703.8401190244572
+   ],
+   "flags": {},
+   "order": 11,
+   "mode": 4,
+   "inputs": [
+    {
+     "localized_name": "图像",
+     "name": "image",
+     "type": "COMBO",
+     "widget": {
+      "name": "image"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "选择文件上传",
+     "name": "upload",
+     "type": "IMAGEUPLOAD",
+     "widget": {
+      "name": "upload"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "图像",
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": [
+      125,
+      142
+     ]
+    },
+    {
+     "localized_name": "遮罩",
+     "name": "MASK",
+     "type": "MASK",
+     "links": [
+      143
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.27.0",
+    "Node name for S&R": "LoadImage"
+   },
+   "widgets_values": [
+    "fixture-resource-002.png",
+    "image"
+   ],
+   "widgets_values_named": {
+    "image": "fixture-resource-002.png",
+    "upload": "image"
+   }
+  },
+  {
+   "id": 94,
+   "type": "SaveImage",
+   "pos": [
+    15457.925142167976,
+    1031.5588968793
+   ],
+   "size": [
+    497.9614952258921,
+    814.4549357431894
+   ],
+   "flags": {},
+   "order": 50,
+   "mode": 4,
+   "inputs": [
+    {
+     "localized_name": "图片",
+     "name": "images",
+     "type": "IMAGE",
+     "link": 159
+    },
+    {
+     "localized_name": "文件名前缀",
+     "name": "filename_prefix",
+     "type": "STRING",
+     "widget": {
+      "name": "filename_prefix"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "images",
+     "name": "images",
+     "type": "IMAGE",
+     "links": [
+      126
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.27.0",
+    "Node name for S&R": "SaveImage"
+   },
+   "widgets_values": [
+    "seedvr2_after-%date:yyyyMMddhhmmss%"
+   ],
+   "widgets_values_named": {
+    "filename_prefix": "seedvr2_after-%date:yyyyMMddhhmmss%"
+   }
+  },
+  {
+   "id": 21,
+   "type": "KSamplerAdvanced",
+   "pos": [
+    10704.65695404058,
+    1035.0130407642146
+   ],
+   "size": [
+    265.6669410379436,
+    785.1426450822232
+   ],
+   "flags": {},
+   "order": 30,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "模型",
+     "name": "model",
+     "type": "MODEL",
+     "link": 44
+    },
+    {
+     "localized_name": "正面条件",
+     "name": "positive",
+     "type": "CONDITIONING",
+     "link": 34
+    },
+    {
+     "localized_name": "负面条件",
+     "name": "negative",
+     "type": "CONDITIONING",
+     "link": 35
+    },
+    {
+     "localized_name": "Latent图像",
+     "name": "latent_image",
+     "type": "LATENT",
+     "link": 36
+    },
+    {
+     "localized_name": "添加噪波",
+     "name": "add_noise",
+     "type": "COMBO",
+     "widget": {
+      "name": "add_noise"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "随机种",
+     "name": "noise_seed",
+     "type": "INT",
+     "widget": {
+      "name": "noise_seed"
+     },
+     "link": 37
+    },
+    {
+     "localized_name": "步数",
+     "name": "steps",
+     "type": "INT",
+     "widget": {
+      "name": "steps"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "cfg",
+     "name": "cfg",
+     "type": "FLOAT",
+     "widget": {
+      "name": "cfg"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "采样器名称",
+     "name": "sampler_name",
+     "type": "COMBO",
+     "widget": {
+      "name": "sampler_name"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "调度器",
+     "name": "scheduler",
+     "type": "COMBO",
+     "widget": {
+      "name": "scheduler"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "开始步数",
+     "name": "start_at_step",
+     "type": "INT",
+     "widget": {
+      "name": "start_at_step"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "结束步数",
+     "name": "end_at_step",
+     "type": "INT",
+     "widget": {
+      "name": "end_at_step"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "返回剩余噪波",
+     "name": "return_with_leftover_noise",
+     "type": "COMBO",
+     "widget": {
+      "name": "return_with_leftover_noise"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "Latent",
+     "name": "LATENT",
+     "type": "LATENT",
+     "links": [
+      26,
+      38
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.12.3",
+    "Node name for S&R": "KSamplerAdvanced",
+    "ue_properties": {
+     "widget_ue_connectable": {
+      "noise_seed": true
+     },
+     "version": "7.5.2",
+     "input_ue_unconnectable": {}
+    }
+   },
+   "widgets_values": [
+    "enable",
+    466951792602971,
+    "randomize",
+    8,
+    1,
+    "euler",
+    "simple",
+    0,
+    8,
+    "disable"
+   ],
+   "widgets_values_named": {
+    "add_noise": "enable",
+    "noise_seed": 466951792602971,
+    "control_after_generate": "randomize",
+    "steps": 8,
+    "cfg": 1,
+    "sampler_name": "euler",
+    "scheduler": "simple",
+    "start_at_step": 0,
+    "end_at_step": 8,
+    "return_with_leftover_noise": "disable"
+   }
+  },
+  {
+   "id": 13,
+   "type": "KSampler",
+   "pos": [
+    11283.899981798431,
+    1038.4860268903083
+   ],
+   "size": [
+    308.63644049177447,
+    797.5221854425354
+   ],
+   "flags": {},
+   "order": 36,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "模型",
+     "name": "model",
+     "type": "MODEL",
+     "link": 43
+    },
+    {
+     "localized_name": "正面条件",
+     "name": "positive",
+     "type": "CONDITIONING",
+     "link": 22
+    },
+    {
+     "localized_name": "负面条件",
+     "name": "negative",
+     "type": "CONDITIONING",
+     "link": 23
+    },
+    {
+     "localized_name": "Latent图像",
+     "name": "latent_image",
+     "type": "LATENT",
+     "link": 24
+    },
+    {
+     "localized_name": "种子",
+     "name": "seed",
+     "type": "INT",
+     "widget": {
+      "name": "seed"
+     },
+     "link": 25
+    },
+    {
+     "localized_name": "步数",
+     "name": "steps",
+     "type": "INT",
+     "widget": {
+      "name": "steps"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "cfg",
+     "name": "cfg",
+     "type": "FLOAT",
+     "widget": {
+      "name": "cfg"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "采样器名称",
+     "name": "sampler_name",
+     "type": "COMBO",
+     "widget": {
+      "name": "sampler_name"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "调度器",
+     "name": "scheduler",
+     "type": "COMBO",
+     "widget": {
+      "name": "scheduler"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "降噪",
+     "name": "denoise",
+     "type": "FLOAT",
+     "widget": {
+      "name": "denoise"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "Latent",
+     "name": "LATENT",
+     "type": "LATENT",
+     "links": [
+      31
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.34.0",
+    "Node name for S&R": "KSampler"
+   },
+   "widgets_values": [
+    0,
+    "randomize",
+    4,
+    1,
+    "euler",
+    "simple",
+    0.54
+   ],
+   "widgets_values_named": {
+    "seed": 0,
+    "control_after_generate": "randomize",
+    "steps": 4,
+    "cfg": 1,
+    "sampler_name": "euler",
+    "scheduler": "simple",
+    "denoise": 0.54
+   }
+  },
+  {
+   "id": 22,
+   "type": "LatentUpscaleBy",
+   "pos": [
+    11023.7852040533,
+    1044.0992184530899
+   ],
+   "size": [
+    210,
+    82
+   ],
+   "flags": {},
+   "order": 33,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "Latent",
+     "name": "samples",
+     "type": "LATENT",
+     "link": 38
+    },
+    {
+     "localized_name": "缩放算法",
+     "name": "upscale_method",
+     "type": "COMBO",
+     "widget": {
+      "name": "upscale_method"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "缩放比例",
+     "name": "scale_by",
+     "type": "FLOAT",
+     "widget": {
+      "name": "scale_by"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "Latent",
+     "name": "LATENT",
+     "type": "LATENT",
+     "links": [
+      24
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.12.3",
+    "Node name for S&R": "LatentUpscaleBy",
+    "ue_properties": {
+     "widget_ue_connectable": {},
+     "input_ue_unconnectable": {},
+     "version": "7.5.2"
+    }
+   },
+   "widgets_values": [
+    "bicubic",
+    1.5
+   ],
+   "widgets_values_named": {
+    "upscale_method": "bicubic",
+    "scale_by": 1.5
+   },
+   "color": "#323",
+   "bgcolor": "#535"
+  },
+  {
+   "id": 20,
+   "type": "Seed (rgthree)",
+   "pos": [
+    10422.73957683349,
+    1037.0587744414422
+   ],
+   "size": [
+    254.66200387440722,
+    130
+   ],
+   "flags": {},
+   "order": 12,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "dir": 4,
+     "label": "随机种",
+     "name": "SEED",
+     "shape": 3,
+     "type": "INT",
+     "links": [
+      25,
+      37
+     ]
+    }
+   ],
+   "properties": {
+    "aux_id": "rgthree/rgthree-comfy",
+    "ver": "8ff50e4521881eca1fe26aec9615fc9362474931",
+    "randomMax": 1125899906842624,
+    "randomMin": 0,
+    "cnr_id": "rgthree-comfy",
+    "ue_properties": {
+     "widget_ue_connectable": {},
+     "version": "7.5.2",
+     "input_ue_unconnectable": {}
+    }
+   },
+   "widgets_values": [
+    -1,
+    "",
+    "",
+    ""
+   ],
+   "widgets_values_named": {
+    "seed": -1,
+    "🎲 Randomize Each Time": "",
+    "🎲 New Fixed Random": "",
+    "USE_LAST_SEED": ""
+   },
+   "color": "#432",
+   "bgcolor": "#653"
+  },
+  {
+   "id": 12,
+   "type": "PreviewImage",
+   "pos": [
+    10995.90202540058,
+    1434.0385689228742
+   ],
+   "size": [
+    261.84241746722637,
+    388.28726371030893
+   ],
+   "flags": {},
+   "order": 35,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "图像",
+     "name": "images",
+     "type": "IMAGE",
+     "link": 20
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "images",
+     "name": "images",
+     "type": "IMAGE",
+     "links": []
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.27.0",
+    "Node name for S&R": "PreviewImage",
+    "ue_properties": {
+     "widget_ue_connectable": {},
+     "input_ue_unconnectable": {},
+     "version": "7.8"
+    }
+   }
+  },
+  {
+   "id": 2,
+   "type": "Fast Groups Bypasser (rgthree)",
+   "pos": [
+    12179.213095614452,
+    1925.4487223076906
+   ],
+   "size": [
+    1071.1032008892969,
+    58
+   ],
+   "flags": {},
+   "order": 14,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "label": "可选连接",
+     "name": "OPT_CONNECTION",
+     "type": "*",
+     "links": null
+    }
+   ],
+   "properties": {
+    "matchColors": "",
+    "matchTitle": "②Krea2-高清重绘2",
+    "showNav": true,
+    "showAllGraphs": true,
+    "sort": "position",
+    "customSortAlphabet": "",
+    "toggleRestriction": "default",
+    "ue_properties": {
+     "widget_ue_connectable": {},
+     "input_ue_unconnectable": {},
+     "version": "7.6.2"
+    }
+   }
+  },
+  {
+   "id": 8,
+   "type": "Fast Groups Bypasser (rgthree)",
+   "pos": [
+    9833.007897529013,
+    1933.3486563289366
+   ],
+   "size": [
+    2263.859983729115,
+    58
+   ],
+   "flags": {},
+   "order": 15,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "label": "可选连接",
+     "name": "OPT_CONNECTION",
+     "type": "*",
+     "links": null
+    }
+   ],
+   "properties": {
+    "matchColors": "",
+    "matchTitle": "①Krea2-二采出图2",
+    "showNav": true,
+    "showAllGraphs": true,
+    "sort": "position",
+    "customSortAlphabet": "",
+    "toggleRestriction": "default",
+    "ue_properties": {
+     "widget_ue_connectable": {},
+     "input_ue_unconnectable": {},
+     "version": "7.6.2"
+    }
+   }
+  },
+  {
+   "id": 3,
+   "type": "UltimateSDUpscale",
+   "pos": [
+    12499.242582497507,
+    1014.1156011122685
+   ],
+   "size": [
+    210,
+    836.9129661565138
+   ],
+   "flags": {},
+   "order": 45,
+   "mode": 4,
+   "inputs": [
+    {
+     "label": "图像",
+     "localized_name": "图像",
+     "name": "image",
+     "type": "IMAGE",
+     "link": 2
+    },
+    {
+     "label": "模型",
+     "localized_name": "模型",
+     "name": "model",
+     "type": "MODEL",
+     "link": 42
+    },
+    {
+     "label": "正面条件",
+     "localized_name": "正面条件",
+     "name": "positive",
+     "type": "CONDITIONING",
+     "link": 4
+    },
+    {
+     "label": "负面条件",
+     "localized_name": "负面条件",
+     "name": "negative",
+     "type": "CONDITIONING",
+     "link": 5
+    },
+    {
+     "label": "VAE",
+     "localized_name": "VAE",
+     "name": "vae",
+     "type": "VAE",
+     "link": 6
+    },
+    {
+     "label": "放大模型",
+     "localized_name": "放大模型",
+     "name": "upscale_model",
+     "type": "UPSCALE_MODEL",
+     "link": 7
+    },
+    {
+     "label": "放大系数",
+     "localized_name": "放大系数",
+     "name": "upscale_by",
+     "type": "FLOAT",
+     "widget": {
+      "name": "upscale_by"
+     },
+     "link": 8
+    },
+    {
+     "label": "随机种",
+     "localized_name": "随机种",
+     "name": "seed",
+     "type": "INT",
+     "widget": {
+      "name": "seed"
+     },
+     "link": 9
+    },
+    {
+     "label": "步数",
+     "localized_name": "步数",
+     "name": "steps",
+     "type": "INT",
+     "widget": {
+      "name": "steps"
+     },
+     "link": null
+    },
+    {
+     "label": "CFG",
+     "localized_name": "CFG",
+     "name": "cfg",
+     "type": "FLOAT",
+     "widget": {
+      "name": "cfg"
+     },
+     "link": null
+    },
+    {
+     "label": "采样器",
+     "localized_name": "采样器",
+     "name": "sampler_name",
+     "type": "COMBO",
+     "widget": {
+      "name": "sampler_name"
+     },
+     "link": null
+    },
+    {
+     "label": "调度器",
+     "localized_name": "调度器",
+     "name": "scheduler",
+     "type": "COMBO",
+     "widget": {
+      "name": "scheduler"
+     },
+     "link": null
+    },
+    {
+     "label": "降噪",
+     "localized_name": "降噪",
+     "name": "denoise",
+     "type": "FLOAT",
+     "widget": {
+      "name": "denoise"
+     },
+     "link": null
+    },
+    {
+     "label": "模式类型",
+     "localized_name": "模式类型",
+     "name": "mode_type",
+     "type": "COMBO",
+     "widget": {
+      "name": "mode_type"
+     },
+     "link": null
+    },
+    {
+     "label": "分块宽度",
+     "localized_name": "分块宽度",
+     "name": "tile_width",
+     "type": "INT",
+     "widget": {
+      "name": "tile_width"
+     },
+     "link": 10
+    },
+    {
+     "label": "分块高度",
+     "localized_name": "分块高度",
+     "name": "tile_height",
+     "type": "INT",
+     "widget": {
+      "name": "tile_height"
+     },
+     "link": 11
+    },
+    {
+     "label": "模糊",
+     "localized_name": "模糊",
+     "name": "mask_blur",
+     "type": "INT",
+     "widget": {
+      "name": "mask_blur"
+     },
+     "link": null
+    },
+    {
+     "label": "分块分区",
+     "localized_name": "分块分区",
+     "name": "tile_padding",
+     "type": "INT",
+     "widget": {
+      "name": "tile_padding"
+     },
+     "link": null
+    },
+    {
+     "label": "接缝修复模式",
+     "localized_name": "接缝修复模式",
+     "name": "seam_fix_mode",
+     "type": "COMBO",
+     "widget": {
+      "name": "seam_fix_mode"
+     },
+     "link": null
+    },
+    {
+     "label": "接缝修复降噪",
+     "localized_name": "接缝修复降噪",
+     "name": "seam_fix_denoise",
+     "type": "FLOAT",
+     "widget": {
+      "name": "seam_fix_denoise"
+     },
+     "link": null
+    },
+    {
+     "label": "接缝修复宽度",
+     "localized_name": "接缝修复宽度",
+     "name": "seam_fix_width",
+     "type": "INT",
+     "widget": {
+      "name": "seam_fix_width"
+     },
+     "link": null
+    },
+    {
+     "label": "接缝修复模糊",
+     "localized_name": "接缝修复模糊",
+     "name": "seam_fix_mask_blur",
+     "type": "INT",
+     "widget": {
+      "name": "seam_fix_mask_blur"
+     },
+     "link": null
+    },
+    {
+     "label": "接缝修复分区",
+     "localized_name": "接缝修复分区",
+     "name": "seam_fix_padding",
+     "type": "INT",
+     "widget": {
+      "name": "seam_fix_padding"
+     },
+     "link": null
+    },
+    {
+     "label": "强制统一分块",
+     "localized_name": "强制统一分块",
+     "name": "force_uniform_tiles",
+     "type": "BOOLEAN",
+     "widget": {
+      "name": "force_uniform_tiles"
+     },
+     "link": null
+    },
+    {
+     "label": "分块解码",
+     "localized_name": "分块解码",
+     "name": "tiled_decode",
+     "type": "BOOLEAN",
+     "widget": {
+      "name": "tiled_decode"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "batch_size",
+     "name": "batch_size",
+     "type": "INT",
+     "widget": {
+      "name": "batch_size"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "label": "图像",
+     "localized_name": "图像",
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": [
+      100
+     ]
+    }
+   ],
+   "properties": {
+    "aux_id": "ssitu/ComfyUI_UltimateSDUpscale",
+    "ver": "177019948d900fcd97e5b4167ceae259dd9dd312",
+    "Node name for S&R": "UltimateSDUpscale",
+    "cnr_id": "comfyui_ultimatesdupscale",
+    "ue_properties": {
+     "widget_ue_connectable": {
+      "upscale_by": true,
+      "seed": true,
+      "steps": true,
+      "cfg": true,
+      "sampler_name": true,
+      "scheduler": true,
+      "denoise": true,
+      "mode_type": true,
+      "tile_width": true,
+      "tile_height": true,
+      "mask_blur": true,
+      "tile_padding": true,
+      "seam_fix_mode": true,
+      "seam_fix_denoise": true,
+      "seam_fix_width": true,
+      "seam_fix_mask_blur": true,
+      "seam_fix_padding": true,
+      "force_uniform_tiles": true,
+      "tiled_decode": true
+     },
+     "version": "7.5.2",
+     "input_ue_unconnectable": {}
+    }
+   },
+   "widgets_values": [
+    2,
+    999,
+    "fixed",
+    4,
+    1,
+    "euler",
+    "simple",
+    0.15,
+    "Linear",
+    1024,
+    1024,
+    16,
+    64,
+    "None",
+    1,
+    64,
+    8,
+    16,
+    true,
+    false,
+    1
+   ],
+   "widgets_values_named": {
+    "upscale_by": 2,
+    "seed": 999,
+    "control_after_generate": "fixed",
+    "steps": 4,
+    "cfg": 1,
+    "sampler_name": "euler",
+    "scheduler": "simple",
+    "denoise": 0.15,
+    "mode_type": "Linear",
+    "tile_width": 1024,
+    "tile_height": 1024,
+    "mask_blur": 16,
+    "tile_padding": 64,
+    "seam_fix_mode": "None",
+    "seam_fix_denoise": 1,
+    "seam_fix_width": 64,
+    "seam_fix_mask_blur": 8,
+    "seam_fix_padding": 16,
+    "force_uniform_tiles": true,
+    "tiled_decode": false,
+    "batch_size": 1
+   }
+  },
+  {
+   "id": 19,
+   "type": "Seed (rgthree)",
+   "pos": [
+    12206.37433986517,
+    1023.9194021368733
+   ],
+   "size": [
+    258.3191683723878,
+    133.72719258519305
+   ],
+   "flags": {},
+   "order": 16,
+   "mode": 4,
+   "inputs": [],
+   "outputs": [
+    {
+     "dir": 4,
+     "label": "随机种",
+     "name": "SEED",
+     "shape": 3,
+     "type": "INT",
+     "links": [
+      9
+     ]
+    }
+   ],
+   "properties": {
+    "aux_id": "rgthree/rgthree-comfy",
+    "ver": "8ff50e4521881eca1fe26aec9615fc9362474931",
+    "randomMax": 1125899906842624,
+    "randomMin": 0,
+    "cnr_id": "rgthree-comfy",
+    "ue_properties": {
+     "widget_ue_connectable": {},
+     "version": "7.5.2",
+     "input_ue_unconnectable": {}
+    }
+   },
+   "widgets_values": [
+    666,
+    "",
+    "",
+    ""
+   ],
+   "widgets_values_named": {
+    "seed": 666,
+    "🎲 Randomize Each Time": "",
+    "🎲 New Fixed Random": "",
+    "USE_LAST_SEED": ""
+   },
+   "color": "#432",
+   "bgcolor": "#653"
+  },
+  {
+   "id": 1,
+   "type": "SaveImage",
+   "pos": [
+    12747.845227915057,
+    1023.1183052545446
+   ],
+   "size": [
+    467.9419064232404,
+    822.0842567580421
+   ],
+   "flags": {},
+   "order": 47,
+   "mode": 4,
+   "inputs": [
+    {
+     "localized_name": "图片",
+     "name": "images",
+     "type": "IMAGE",
+     "link": 100
+    },
+    {
+     "localized_name": "文件名前缀",
+     "name": "filename_prefix",
+     "type": "STRING",
+     "widget": {
+      "name": "filename_prefix"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "images",
+     "name": "images",
+     "type": "IMAGE",
+     "links": null
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.14.1",
+    "Node name for S&R": "SaveImage",
+    "ue_properties": {
+     "widget_ue_connectable": {},
+     "input_ue_unconnectable": {},
+     "version": "7.6.2"
+    }
+   },
+   "widgets_values": [
+    "Krea2-USD-%date:yyyyMMddhhmmss%"
+   ],
+   "widgets_values_named": {
+    "filename_prefix": "Krea2-USD-%date:yyyyMMddhhmmss%"
+   }
+  },
+  {
+   "id": 93,
+   "type": "Fast Groups Bypasser (rgthree)",
+   "pos": [
+    13853.000667771425,
+    1927.9253898359746
+   ],
+   "size": [
+    2158.782892990389,
+    58
+   ],
+   "flags": {},
+   "order": 17,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "label": "可选连接",
+     "name": "OPT_CONNECTION",
+     "type": "*",
+     "links": null
+    }
+   ],
+   "properties": {
+    "matchColors": "",
+    "matchTitle": "SeedVR2-7/3b-int8图像放大",
+    "showNav": true,
+    "showAllGraphs": true,
+    "sort": "position",
+    "customSortAlphabet": "",
+    "toggleRestriction": "default",
+    "ue_properties": {
+     "widget_ue_connectable": {},
+     "input_ue_unconnectable": {},
+     "version": "7.6.2"
+    }
+   }
+  },
+  {
+   "id": 108,
+   "type": "Label (rgthree)",
+   "pos": [
+    13895.902978641981,
+    1816.923094006038
+   ],
+   "size": [
+    190,
+    38
+   ],
+   "flags": {
+    "allow_interaction": true
+   },
+   "order": 18,
+   "mode": 4,
+   "inputs": [],
+   "outputs": [],
+   "title": "放大倍数▶",
+   "properties": {
+    "fontSize": 38,
+    "fontFamily": "Arial",
+    "fontColor": "#FF6347",
+    "textAlign": "left",
+    "backgroundColor": "transparent",
+    "padding": 0,
+    "borderRadius": 0,
+    "angle": 0,
+    "ue_properties": {
+     "widget_ue_connectable": {},
+     "input_ue_unconnectable": {},
+     "version": "7.8"
+    }
+   },
+   "color": "#fff0",
+   "bgcolor": "#fff0"
+  },
+  {
+   "id": 137,
+   "type": "Label (rgthree)",
+   "pos": [
+    7926.459253036443,
+    715.0938452047241
+   ],
+   "size": [
+    960,
+    160
+   ],
+   "flags": {
+    "allow_interaction": true
+   },
+   "order": 19,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [],
+   "title": "▶提示词示例",
+   "properties": {
+    "fontSize": 160,
+    "fontFamily": "Arial",
+    "fontColor": "#FF6347",
+    "textAlign": "left",
+    "backgroundColor": "transparent",
+    "padding": 0,
+    "borderRadius": 0,
+    "angle": 0,
+    "ue_properties": {
+     "widget_ue_connectable": {},
+     "input_ue_unconnectable": {},
+     "version": "7.8"
+    }
+   },
+   "color": "#fff0",
+   "bgcolor": "#fff0"
+  },
+  {
+   "id": 136,
+   "type": "Note",
+   "pos": [
+    8687.786852493842,
+    971.866898038632
+   ],
+   "size": [
+    624.3696297304623,
+    1013.4999644877466
+   ],
+   "flags": {},
+   "order": 20,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [],
+   "properties": {},
+   "widgets_values": [
+    "Fixture note: private workflow guidance was removed before publication."
+   ],
+   "widgets_values_named": {
+    "text": "Krea2巨构提示词示例：\n\n骑士与沙兽\nA titanic sandworm rearing straight up out of an exploded dune, its body a spiraling column of armored segments rising beyond the top of the frame, the circular maw at the summit a concentric ring of inward‑curving teeth wide enough to swallow a watchtower, wet translucency at the throat fading to petrified grey‑green plates below. Barnacle‑like mineral growths and broken spears hang from the seams between segments while sheets of sand slide continuously down its flanks. At the bottom of the frame a solitary knight in a wind‑blown surcoat stands at the crater's edge with a raised sword, smaller than a single tooth, his riderless horse already a speck on the ridge behind him. Backlit by a sickly amber sun buried in dust, hard rim light tracing every segment edge, everything below the third ring swallowed by brown haze. Shot on a 16mm ultra‑wide from the crater floor looking straight up, extreme vertical composition, the body filling ninety percent of the frame. Dark fantasy illustration, desaturated ochre palette with a single cold cyan accent, heavy texture, dramatic rim lighting, intricate silhouette detail.\n\n巨兽与城\nAn immense petrified leviathan striding across an endless salt flat at dawn, its segmented carapace terraced into a settlement of mud-brick houses, prayer flags and rope ladders strung between armor plates the size of city blocks, tendrils like suspension cables anchoring into the ground with every slow step. Corals and barnacles crust the lower flanks, mats of dried algae hang from the jaw, and a shantytown of tin roofs, ladders and signal fires clings to the ridge of its spine. A caravan of robed travellers and six loaded camels crosses beneath the belly, each figure no taller than a fingernail against the creature, while birds swirl around its shoulders like gnats. Low sun blazes behind the beast, rim-lighting every plate edge and throwing long shadows across the cracked salt; the nearest flank stays razor sharp, the middle legs are veiled in dust, and the far legs dissolve into golden haze. Shot on a 35mm lens from a low dune at extreme distance, horizon placed low, the beast spanning nearly the entire frame, 16:9. Cinematic matte painting concept art for film, monumental scale, hyper-detailed surface texture, volumetric dust, warm ochre and bone palette against cool blue shadow, subtle film grain.\n\n悬崖悬空要塞与云海\nA tiered sky fortress clinging to a sheer cliff, an inverted ziggurat of weathered board-formed concrete and oxidized copper, each cantilevered terrace crowded with terraced rice fields, shrines, tiny timber houses and switchbacking staircases, waterfalls spilling from the uppermost deck into cloud. Rusted buttresses and hanging root systems grip the rock below; fishing boats are moored at the base where the cliff meets a misted river. Clouds drift at mid-height and swallow the lower third entirely, so only the undersides and the deep shadow between the terraces are visible. Late afternoon sun rakes across the terraces from the left, throwing long hard shadows and catching the mist in volumetric shafts; a line of tiny hooded figures climbs a stair on the fourth terrace, each one the size of a grain of rice. Shot on a 24mm wide-angle lens from an extremely low angle looking up across the valley, the structure filling the frame and its summit extending beyond the top edge, 16:9. Cinematic matte painting concept art, epic scale, atmospheric perspective, muted jade and amber palette, fine painterly detail, subtle film grain.\n\n天坑与层理峡谷\nA collapsed canyon of stratified rock bands, its walls banded sandstone in ochre, rust and pale grey, with columnar basalt joints and an undercut overhang where an entire cliff face leans out over the void. Mist layers between the strata, a river threads the floor a thousand meters below and is invisible except as a line of silver haze, and a waterfall drops from a side channel into its own permanent cloud. A small group of four figures in red ponchos stands at the very lip of the overhang on the right, tiny against the rock, one pointing across. Storm light breaks from behind, rim-lighting the overhang edge and throwing the near wall into deep shadow, while the far rim fades into rain haze. Shot on a 24mm lens from the opposite rim, horizon placed low, vast space, 16:9. Cinematic matte painting concept art, monumental geological scale, layered atmospheric perspective, desaturated ochre and slate with a single vermilion accent, volumetric mist.\n\n骨中要塞\nThe ribcage of a dead leviathan half-buried in an ash desert, converted into a fortress — immense arches of mossy bone rising two hundred meters, catwalks, rope bridges and timber keeps lashed between the ribs, signal fires burning in the hollow chest where a village of dozens of houses shelters between two ribs. Petrified hide still clings in tatters to the upper spine, bleached by sun, cracked and wind-carved. Columns of fine ash drift between the bones; the far ribs dissolve into grey haze while the nearest one is razor sharp, its surface pitted with nesting holes and carved glyphs. Cold dawn light from behind rims every bone edge in pale silver, and warm firelight glows from inside the chest as the only warm accent. A line of eight pack animals crossing the sand below is the size of a fingernail. Shot on a 35mm lens at eye level from a distant dune, the ribcage spanning nearly the whole frame. Dark fantasy illustration, desaturated ash-grey palette with a single amber accent, dramatic rim lighting, intricate silhouette detail, heavy texture.\n\n《天坑》\nA sinkhole of geological scale, a vertical shaft cut down through banded sandstone strata, its rim over two kilometres across, the walls stepped into concentric terraces where mist pools between the layers and stunted trees cling to every ledge. A river falls from the rim and loses itself in haze long before reaching the bottom, its spray forming its own weather system. The far wall is veiled in blue-grey atmosphere while the near rim is razor sharp, individual bushes readable. A single orange survey tent on the rim is a speck. Late afternoon sun throws one hard shaft of volumetric light onto the opposite wall, leaving the rest in deep cool shadow. Shot on a 24mm wide-angle from the rim looking down and across, vertical composition, the shaft occupying the lower two thirds. Cinematic matte painting concept art, atmospheric perspective, deep green and ochre palette, painterly realism.\n\n《行星发动机》\nA planetary engine standing on a frozen plain, its plasma beam a column of pale blue light punching through the cloud deck and out of the top of the frame, the tower itself a greeble-dense stack of pitted steel plates, radiator fins and modular service spines, over eleven kilometres tall. Around the base, a city of low grey blocks, roads and rail lines no bigger than a printed circuit board; the nearest service walkway is crowded with workers the size of ants. Cryogenic frost feathers off the lower tanks and steam vents in slow white columns, heat shimmer distorting the air above the exhaust rings. The foreground steel is razor sharp, the mid-section is veiled in ice fog, and the upper tower dissolves into the cloud layer. Cold pre-dawn light from the left, the blue beam the only strong source, warm sodium floodlights pooling at the base. Shot on a 14mm ultra-wide from the frozen ground looking straight up. Hard science-fiction concept art, gritty industrial realism, desaturated steel blue with sodium orange accents, extreme scale, subtle film grain.\n\n"
+   },
+   "color": "#432",
+   "bgcolor": "#653"
+  },
+  {
+   "id": 135,
+   "type": "Note",
+   "pos": [
+    7629.395523367253,
+    968.1542198215764
+   ],
+   "size": [
+    1024.972433971412,
+    1024.1727258785552
+   ],
+   "flags": {},
+   "order": 21,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [],
+   "properties": {},
+   "widgets_values": [
+    "Fixture note: private workflow guidance was removed before publication."
+   ],
+   "widgets_values_named": {
+    "text": "提示词示例\n\n\n鎏金烈焰舞姬（炽金绯红色调 · 沙漠神殿）\n主体： 画面核心是一位赤发炽烈的女性舞姬，她身披由鎏金流苏与绯红轻纱构成的华美舞衣，肌肤如蜜色琥珀般泛着暖光，瞳孔如熔金落日般燃烧着灼灼光焰，头戴缀满金叶与红玉的额饰，额饰中央镶嵌的太阳纹红宝石如炭火般跳动着微光，长发在升腾的热浪光流中飞扬如焰舌，整体姿态舒展而奔放，仿佛是从神殿祭火中走出的沙漠之焰，散发着“热情与神性交融”的史诗级氛围。\n要点： 赤发与金瞳的视觉统一性、流苏与红玉的奢华细节、热浪光流与飞扬纱幔的动态张力，共同构成核心视觉符号，传递出“炽热、神圣与自由”的主题，营造出如熔金落日般的神殿祭舞氛围。\n前景： 画面左下角是一级半掩在流沙中的古老石阶，石阶上雕刻着太阳图腾的浮雕，缝隙间透出橙金色的地热微光，几串金色铃铛与红纱缠绕在断裂的石柱上，随热风轻轻摆动，与角色舞衣的飘带走向自然衔接，构成视觉基底，强化画面的古文明仪式感。\n中景： 画面中央区域是角色的半身特写，她舒展双臂如展翼，右手高举间指间金铃轻颤，手臂缠绕的金色臂钏与腕链清晰可见，锁骨间垂坠的红玉项链与腰间层叠的金片腰封在动作中流转生辉，轻纱衣料在热光下呈现出半透的绯红渐变与鎏金滚边，营造“神性庄严与灼热生命力”交织的视觉层次。\n背景： 背景是一片燃烧般的黄昏沙漠神殿，巨大的落日悬于地平线，将整片天空染成绯红与鎏金的渐变，风蚀的砂岩立柱与神殿拱门在逆光中形成庄严的剪影，空气中升腾着金色的热浪光纹与细小飞舞的尘埃微粒，光纹呈弧形向画面右上方的落日汇聚，与角色舞衣的金红配色完美呼应，营造“古国日暮祭典”的史诗级空间感。\n构图： 采用竖版 9:16 偏右重心 + 低角度仰视构图，角色位于画面中上部，高举双臂的姿态形成向上的视觉焦点；背景热浪与霞光自右上方落日处向下倾泻至角色身后，营造神圣笼罩般的视觉引导；前景石阶与流沙占据画面底部 1/4，形成视觉稳定基座，整体构图饱满炽烈、极具祭典仪式的戏剧张力。\n视觉引导： 通过角色迎光起舞的姿态、飞扬纱幔与热浪光流的同向延伸、铃铛与金片的动态点缀，将观者视线牢牢锁定于“沙漠舞姬”的核心形象；背景落日金红与角色衣饰的色调高度统一，形成视觉连贯性，强化“烈日神殿祭舞”的叙事氛围。\n色调： 整体为炽烈暖调黄昏色调，主色调为鎏金与绯红，辅以蜜色肌肤、砂岩赭褐与落日橙红，色彩浓郁饱满如熔金流动，通过逆光剪影与热浪扭曲的光影对比营造出“神殿落日祭典”氛围，符合“炽热神圣”的主题表达。\n风格： 异域史诗写实风格，带有古文明神殿美学与热带生命力的交融，画面细节极度精致，金片的层叠、轻纱的透光、铃铛的反光、热浪的扭曲均真实可触，光影层次炽烈，偏向“沙漠古国 + 落日祭舞”的叙事表达，传递出热烈、神圣与自由奔放交织的氛围。\n光影氛围： 采用逆光剪影与暖调轮廓光的双重打光，主光源来自画面右上方低垂的落日，在角色纱衣与发丝边缘形成炽热的金色轮廓光，在金饰与红玉处形成跳动的炙热反光，背景热浪中加入扭曲的空气折射与飞舞的金色尘埃粒子，整体氛围炽烈、庄严、充满祭典的仪式感，仿佛置身于“千年神殿的落日祭舞”之中。\n\n\n暗绯蔷薇魔爵（黑红酒红暗色调 · 黑蔷薇古堡）\n主体： 画面核心是一位黑紫长发的气场女王，她身披由暗黑蕾丝与酒红天鹅绒构成的哥特长裙，外罩一侧滑落的墨色斗篷，肌肤如月下大理石般冷白，瞳孔如燃烧的赤红宝石般凝视前方，头戴缀满黑蔷薇与暗银荆棘的冠冕，冠冕中央镶嵌的血红尖晶如凝固的火焰，长发在卷动的黑雾与暗红光流中如墨焰般翻飞，整体姿态端坐于王座之上、单手支颐，仿佛是从黑蔷薇古堡深处苏醒的暗夜魔爵，散发着“威压与魅惑交融”的史诗级氛围。\n要点： 黑紫长发与赤红瞳的视觉统一性、黑蔷薇与暗银荆棘的奢靡细节、黑雾卷动与长发翻飞的动态张力，共同构成核心视觉符号，传递出“危险、高贵与妖冶”的主题，营造出如永夜盛宴般的古堡暗夜氛围。\n前景： 画面左下角是王座台基的一角与蔓延生长的黑蔷薇藤蔓，藤蔓缠绕着断裂的古典栏杆，花朵间缠绕着细长的暗银链条与坠落的血红花瓣，几根熄灭的黑色蜡烛立在铜烛台上，烛芯余烟袅袅，藤蔓与坠落的花瓣朝角色裙摆方向自然延伸，构成视觉基底，强化画面的暗夜宫廷颓靡感。\n中景： 画面中央区域是角色的半身特写，她单手支颐、微微偏头，指尖蓄着赤黑色的长甲，另一只手随意搭在扶手上，指间夹着一朵半开的黑蔷薇，颈间佩戴的锁骨链与酒红天鹅绒束腰处的暗银扣饰清晰可见，蕾丝半透的领口与层层叠叠的裙褶在烛光下呈现出丝绒与织蕾的交错质感，营造“颓靡奢华与危险魅力”交织的视觉层次。\n背景： 背景是一片幽暗的黑蔷薇古堡大厅，巨大的落地拱窗透入暗红的暮光，窗外隐约可见剪影般的枯树与血月，大厅内浮动着缕缕暗紫色的雾霭，无数黑蔷薇藤蔓沿石柱向上攀爬缠绕，雾霭与暮光呈螺旋状向画面右上方的血月处汇聚，与角色发色与裙袍的配色完美呼应，营造“永夜古堡”的史诗级空间感。\n构图： 采用竖版 9:16 偏左重心 + 低角度仰视构图，角色位于画面中上部，支颐俯视的姿态形成居高临下的视觉焦点；背景暮光与雾霭自右上角血月处向下倾泻至角色身后，营造暗夜洪流般的视觉引导；前景蔷薇藤蔓与王座台基占据画面底部 1/4，形成视觉稳定基座，整体构图压迫感强烈，极具暗黑宫廷的戏剧张力。\n视觉引导： 通过角色居高临下凝视镜头的赤红眼神、翻飞长发与雾霭的同向延伸、蔷薇藤蔓蔓延的动态走向，将观者视线牢牢锁定于“暗绯魔爵”的核心形象；背景血月暮光与角色裙袍的酒红黑色调高度统一，形成视觉连贯性，强化“血月蔷薇古堡”的叙事氛围。\n色调： 整体为暗黑浓艳的暗色调，主色调为墨黑与酒红，辅以暗银冷光、血红尖晶与暗紫雾霭，色彩浓郁沉郁而不浑浊，通过烛火与血月的点状亮色与大面积的深黑形成强烈对比，营造出“永夜古堡的血蔷薇盛宴”氛围，符合“高贵危险”的主题表达。\n风格： 暗黑哥特奇幻写实风格，带有古典宫廷与吸血鬼传说美学的交融气质，画面细节极度精致，天鹅绒的绒面、蕾丝的镂空、蔷薇花瓣的丝绒感、黑雾的翻涌质感均真实可触，光影层次浓重，偏向“暗夜古堡 + 蔷薇魔爵”的叙事表达，传递出危险、高贵与妖冶交织的氛围。\n光影氛围： 采用烛火冷光与血月暮光的双重打光，主光源来自画面右侧落地拱窗外的暗红血月，在角色侧脸与肩颈形成冷艳的轮廓光，在黑蔷薇与血红尖晶处形成幽微的反光亮点，背景雾霭中加入缓缓升腾的暗色粒子与血月的弥散光晕，整体氛围危险、靡丽、充满永夜宫廷的仪式感，仿佛置身于“血月之下的黑蔷薇盛宴”之中。\n\n\n青冥沧海人鱼（幽青碧绿色调 · 深海遗迹）\n主体： 画面核心是一位青发空灵的人鱼少女，她身覆由半透碧纱与螺钿鳞纹构成的流动鱼尾与华丽高领衣裙，肌肤如浸水的月光珍珠般泛着湿润的冷辉，瞳孔如深海琉璃般荡漾着青碧波光，头戴缀满珊瑚珠与贝壳的金枝发冠，发冠中央镶嵌的天然海水蓝宝石如深海之眼般幽幽发光，长发在涌动的洋流中舒展如海藻，整体姿态轻盈而静谧，仿佛是从沉没古国游出的沧海之灵，散发着“空灵与哀婉交融”的史诗级氛围。\n要点： 青发与碧瞳的视觉统一性、鳞纹螺钿与珊瑚珠的精致细节、洋流与舒展长发的动态张力，共同构成核心视觉符号，传递出“空灵、静谧与忧伤”的主题，营造出如深海梦境般的沉没古国氛围。\n前景： 画面左下角是一株半埋在海床中的白色珊瑚丛，珊瑚枝桠间生长着散发幽幽青光的深海发光植物，几串气泡自珊瑚缝隙中缓缓升起，一截刻满波浪纹路的大理石残柱斜倚在旁，柱身上缠绕着柔软的海藻与银色贝链，与角色鱼尾的摆动方向自然衔接，构成视觉基底，强化画面的沉没遗迹感。\n中景： 画面中央区域是角色的半身特写，她侧身悬浮，双手轻捧一枚散发微光的珍珠，指尖与腕间环绕着细小的发光鱼群，肩颈与手臂线条柔美如水波，胸前螺钿鳞纹与锁骨间垂坠的珊瑚珠链清晰可见，轻纱衣料在水中呈现出半透的青碧渐变与珍珠母贝的虹彩光泽，营造“深海静谧与空灵神性”交织的视觉层次。\n背景： 背景是一片幽蓝碧绿的深海遗迹，远处沉没的大理石神殿立柱与拱门轮廓在幽暗中若隐若现，顶部海面透下的光柱如圣光般斜斜刺入深蓝，成群的发光水母如星屑般悬浮漂游，一道青碧色的洋流光带呈螺旋状向画面右上方的光柱处延伸，与角色发冠与鱼尾的配色完美呼应，营造“沉没海底古国”的史诗级空间感。\n构图： 采用竖版 9:16 偏左重心 + 微仰上浮视角构图，角色位于画面中上部，上浮舒展的姿态形成向上的视觉焦点；背景光柱与洋流光带自右上角海面处向下贯穿至角色周身，营造圣光垂落的视觉引导；前景珊瑚与残柱占据画面底部 1/4，形成视觉稳定基座，整体构图静谧空灵、纵向流动感极强，极具深海梦境的艺术张力。\n视觉引导： 通过角色仰望光柱的空灵眼神、长发与洋流的同向上浮延伸、气泡与发光鱼群的动态点缀，将观者视线牢牢锁定于“沧海人鱼”的核心形象；背景深海青碧与角色鳞纱衣饰的色调高度统一，形成视觉连贯性，强化“沉没古国遗梦”的叙事氛围。\n色调： 整体为幽蓝青碧深海色调，主色调为青绿与深蓝，辅以珍珠母贝虹彩、珊瑚粉橘的微妙点缀与大理石冷白，色彩清透明澈而层次丰富，通过水下光的散射与悬浮微粒的景深晕染营造出“深海圣殿”氛围，符合“空灵静谧”的主题表达。\n风格： 奇幻写实风格，带有深海生物美学与古希腊沉没文明的交融，画面细节极度精致，鳞片的虹彩、轻纱在水中的透光、气泡的折射、水母的荧光均真实可触，光影层次湿润通透，偏向“深海遗迹 + 人鱼遗梦”的叙事表达，传递出空灵、静谧与淡淡哀愁交织的氛围。\n光影氛围： 采用水下漫射光与顶部光柱的双重打光，主光源来自画面右上方海面透下的圣光光柱，在角色发丝与鳞片表面形成流动的粼粼波光，在珍珠与蓝宝石处形成温润的内部发光，背景洋流中加入悬浮的发光浮游生物微粒与缓缓上升的气泡群，整体氛围静谧、空灵、充满深海仪式感，仿佛置身于“沉没古国的千年一梦”之中。\n\n\n雪国白狼游侠（冷蓝灰白 · 雪原狼群）\n主体： 画面核心是一位雪白短发的女性游侠，她身披由兽皮与灰蓝呢绒叠成的御寒斗篷，肩部覆着白狼皮，肌肤冷白中透着被风霜侵蚀的健康绯红，瞳孔如浅灰蓝的冰湖般锐利沉静，耳畔垂着一枚兽牙坠饰，发丝被风雪吹得凌乱而不失野性，她侧身持弓、箭已在弦，正回眸凝视镜头，身侧立着一头龇牙低伏的白狼护卫，仿佛是从极寒雪原猎杀归来的狼之女王，散发着“坚韧与野性交融”的氛围。\n要点： 雪白狼皮与灰蓝眼眸的呼应、弓弦与箭羽的利落线条、飘雪与呼出白气的动态张力，共同构成核心视觉符号，传递出“荒野、凛冽与忠诚”的主题，营造出如暴雪将至般的极地狩猎氛围。\n前景： 画面左下角是半埋雪中的猎户箭袋与几支断箭，箭杆上缠着红绳结，一段被踩实的雪地上印着狼爪与靴印，几缕被风卷起的碎雪贴着地面流动，与角色斗篷的垂坠下摆自然衔接，构成画面右下角的视觉重量。\n中景： 画面中央区域是角色的腰部回眸特写，她侧身拉开弓、手臂肌肉线条分明，指节因用力而微微泛白，喉间与锁骨处翻出的狼皮绒毛清晰可辨，腰间斜挎的皮质箭袋与磨亮的短匕轮廓利落，兽皮斗篷在风雪中紧贴身形，衣料与皮毛的褶皱自然粗粝，营造“凌厉战意与荒野羁绊”交织的视觉层次。\n背景： 背景是一片开阔的雪原与拔地而起的灰蓝岩壁，暴雪从画面左上方向右下斜压而下，远处一头孤狼立于雪丘上仰头长嚎，冷硬的冰川裂隙在阴云下泛着幽蓝微光，整幅背景沿着画面主对角线向雪原纵深延伸，与角色灰蓝斗篷的色调呼应，营造“极寒猎场”的空间感。\n构图： 采用竖版 9:16 对角线分割构图，主对角线自左上（暴雪与阴云）向右下（角色与前景箭袋）贯穿全图，角色被置于对角线中段的黄金切点上，暴雪的运动方向与对角线的斜度完全一致，前景箭袋在右下角压住画面重心，营造出强烈的动势与向雪原深处冲锋的视觉延伸感。\n视觉引导： 通过角色回眸凝视的锐利眼神与拉满弓弦的箭头指向、暴雪沿对角线的斜压轨迹、身侧白狼回头的朝向，将观者视线牢牢锁于对角线的核心交点上；前景箭袋的红色绳结成为画面中唯一的暖色跳点，把视线从右下导回角色面部，形成对角回路。\n色调： 整体为凛冽的冷灰蓝白调，主色调为灰蓝与雪白，辅以兽皮赭褐、箭杆红绳与冰川幽蓝的点缀，色彩清冷寡淡而富有力度，通过暴雪遮蔽天光与雪面反光的明暗层次营造出“暴雪将至的猎场”氛围，符合“凛冽野性”的主题。\n风格： 北欧奇幻写实风格，带有猎户美学与极地生存气息，画面细节粗犷而真实，狼皮的绒层、弓弦的绷紧、呼出白气的雾气、雪粒的颗粒感均触手可及，光影硬朗低垂，偏向“暴雪猎场 + 白狼羁绊”的叙事表达。\n光影氛围： 采用阴云漫射的冷调天光与雪面反光的双重打光，主光源来自画面左上阴云缝隙透下的冷白天光，在角色侧脸与弓臂上形成硬朗的轮廓光，在兽牙坠饰与狼瞳处形成点状高光，背景暴雪中加入斜压的雪线粒子与寒气弥漫的雾层，整体氛围凛冽、沉静、充满极地猎手的决绝气息，仿佛置身于“雪原暴雪将至的最后一箭”之中。\n\n\n琥珀机械师（暖铜琥珀 · 钟表工坊）\n主体： 画面核心是一位栗色微卷发的少年机械师，他身穿沾着机油渍的皮围裙与铜扣衬衫，额前架着一副单筒护目镜，肌肤是常年在暖光下劳作而晒出的健康麦色，瞳孔如琥珀色齿轮般专注而热切，腰间别满扳手、镊子与发条钥匙，头顶一枚黄铜齿轮制成的机械头饰微微转动，指尖正捏着一枚细小的齿轮凑近眼前端详，仿佛是从蒸汽钟塔内探出身来的钟表之子，散发着“专注与匠心交融”的氛围。\n要点： 琥珀瞳与黄铜机械的呼应、齿轮链条的精密细节、仪表蒸汽与飘动刘海的动态张力，共同构成核心视觉符号，传递出“巧思、热忱与工艺”的主题，营造出如蒸汽弥漫的钟表工坊氛围。\n前景： 画面四周被一圈层层叠叠的机芯零件环绕——铜齿轮、弹簧、嵌着珐琅表盘碎片、细链与鹅毛笔，零件群以圆心为轴向外铺开，边缘逐渐虚化成暖褐的景深光斑，几缕从仪表盘泄出的白色蒸汽自零件缝隙间袅袅升腾，形成天然的圆形包围结构。\n中景： 画面中央偏下区域是角色的头部到上胸特写，他单眼眯起、隔镜片端详齿轮，另一只眼被护目镜挡住的剪影半隐在阴影里，衬衫领口半敞露出锁骨，围裙上一道道暗红的机油擦痕与别着的闪亮工具清晰可辨，黄铜护目镜的反光里倒映出齿轮的残影，营造“孩童般好奇与匠人般专注”交织的视觉层次。\n背景： 背景被圆形零件群完全包裹，透过缝隙可窥见暖黄壁灯下巨大的钟塔机芯、缓缓摆动的铜质摆锤与转动的木质齿轮，蒸汽在光中化为金色的光雾，光雾沿画面上缘向中心收拢，与角色发饰与铜扣的色调呼应，营造“机芯内部秘密心脏”的密闭空间感。\n构图： 采用竖版 9:16 圆形景深环绕构图，角色被置于画面圆心偏下的焦点上，四周的机芯零件与暖褐光斑呈同心圆状向内收束，形成天然的暗角与视线牢笼，把观者目光强制锁定在角色被放大镜放大的那只眼上，纵深感与窥视感极强，适合强调“专注观察某一细节”的瞬间。\n视觉引导： 通过角色隔着镜片凝视齿轮的方向、四周零件圆环向内收拢的向心力、蒸汽自下而上的升腾轨迹，将观者视线牢牢钉在圆心焦点上；黄铜高光与机油暗红成为画面中的细微跳点，让目光在圆心与前景工具间来回游移，营造反复打量机械的沉浸感。\n色调： 整体为温暖厚重的琥珀调，主色调为黄铜暖橙与皮革深褐，辅以珐琅白、机油暗红与蒸汽暖金，色彩浓郁饱和而暗部沉稳，通过顶灯暖光与四周暗角的明暗包裹营造出“暖光工坊中的精密世界”氛围，符合“匠心热忱”的主题。\n风格： 蒸汽朋克奇幻写实风格，带有维多利亚机械美学与工坊纪实气息，画面细节精密繁复，齿轮的齿牙、弹簧的盘绕、蒸汽的流动、皮革的褶皱均真实可辨，光影暖厚层次分明，偏向“钟塔工坊 + 巧手匠心”的叙事表达。\n光影氛围： 采用顶灯暖光与四周暗角的双重打光，主光源来自画面上方一盏暖黄壁灯，在角色侧脸与金属工具上形成锐利的高光，在黄铜与珐琅表面形成细密的反光，背景光雾中加入缓缓翻涌的蒸汽粒子与齿轮转动造成的动态光斑，整体氛围暖煦、专注、充满手作匠心的仪式感，仿佛置身于“午夜钟塔内仍在打磨齿轮的工作台”前。"
+   },
+   "color": "#432",
+   "bgcolor": "#653"
+  },
+  {
+   "id": 25,
+   "type": "CLIPTextEncode",
+   "pos": [
+    9853.210976999871,
+    1365.2272077829089
+   ],
+   "size": [
+    554.5384432543781,
+    468.5864985321034
+   ],
+   "flags": {},
+   "order": 25,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "clip",
+     "name": "clip",
+     "type": "CLIP",
+     "link": 40
+    },
+    {
+     "localized_name": "文本",
+     "name": "text",
+     "type": "STRING",
+     "widget": {
+      "name": "text"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "条件",
+     "name": "CONDITIONING",
+     "type": "CONDITIONING",
+     "links": [
+      4,
+      22,
+      28,
+      34
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.3.75",
+    "Node name for S&R": "CLIPTextEncode",
+    "ue_properties": {
+     "widget_ue_connectable": {
+      "text": true
+     },
+     "version": "7.5.1",
+     "input_ue_unconnectable": {}
+    }
+   },
+   "widgets_values": [
+    "暗绯蔷薇魔爵（黑红酒红暗色调 · 黑蔷薇古堡）\n主体： 画面核心是一位黑紫长发的气场女王，她身披由暗黑蕾丝与酒红天鹅绒构成的哥特长裙，外罩一侧滑落的墨色斗篷，肌肤如月下大理石般冷白，瞳孔如燃烧的赤红宝石般凝视前方，头戴缀满黑蔷薇与暗银荆棘的冠冕，冠冕中央镶嵌的血红尖晶如凝固的火焰，长发在卷动的黑雾与暗红光流中如墨焰般翻飞，整体姿态端坐于王座之上、单手支颐，仿佛是从黑蔷薇古堡深处苏醒的暗夜魔爵，散发着“威压与魅惑交融”的史诗级氛围。\n要点： 黑紫长发与赤红瞳的视觉统一性、黑蔷薇与暗银荆棘的奢靡细节、黑雾卷动与长发翻飞的动态张力，共同构成核心视觉符号，传递出“危险、高贵与妖冶”的主题，营造出如永夜盛宴般的古堡暗夜氛围。\n前景： 画面左下角是王座台基的一角与蔓延生长的黑蔷薇藤蔓，藤蔓缠绕着断裂的古典栏杆，花朵间缠绕着细长的暗银链条与坠落的血红花瓣，几根熄灭的黑色蜡烛立在铜烛台上，烛芯余烟袅袅，藤蔓与坠落的花瓣朝角色裙摆方向自然延伸，构成视觉基底，强化画面的暗夜宫廷颓靡感。\n中景： 画面中央区域是角色的半身特写，她单手支颐、微微偏头，指尖蓄着赤黑色的长甲，另一只手随意搭在扶手上，指间夹着一朵半开的黑蔷薇，颈间佩戴的锁骨链与酒红天鹅绒束腰处的暗银扣饰清晰可见，蕾丝半透的领口与层层叠叠的裙褶在烛光下呈现出丝绒与织蕾的交错质感，营造“颓靡奢华与危险魅力”交织的视觉层次。\n背景： 背景是一片幽暗的黑蔷薇古堡大厅，巨大的落地拱窗透入暗红的暮光，窗外隐约可见剪影般的枯树与血月，大厅内浮动着缕缕暗紫色的雾霭，无数黑蔷薇藤蔓沿石柱向上攀爬缠绕，雾霭与暮光呈螺旋状向画面右上方的血月处汇聚，与角色发色与裙袍的配色完美呼应，营造“永夜古堡”的史诗级空间感。\n构图： 采用竖版 9:16 偏左重心 + 低角度仰视构图，角色位于画面中上部，支颐俯视的姿态形成居高临下的视觉焦点；背景暮光与雾霭自右上角血月处向下倾泻至角色身后，营造暗夜洪流般的视觉引导；前景蔷薇藤蔓与王座台基占据画面底部 1/4，形成视觉稳定基座，整体构图压迫感强烈，极具暗黑宫廷的戏剧张力。\n视觉引导： 通过角色居高临下凝视镜头的赤红眼神、翻飞长发与雾霭的同向延伸、蔷薇藤蔓蔓延的动态走向，将观者视线牢牢锁定于“暗绯魔爵”的核心形象；背景血月暮光与角色裙袍的酒红黑色调高度统一，形成视觉连贯性，强化“血月蔷薇古堡”的叙事氛围。\n色调： 整体为暗黑浓艳的暗色调，主色调为墨黑与酒红，辅以暗银冷光、血红尖晶与暗紫雾霭，色彩浓郁沉郁而不浑浊，通过烛火与血月的点状亮色与大面积的深黑形成强烈对比，营造出“永夜古堡的血蔷薇盛宴”氛围，符合“高贵危险”的主题表达。\n风格： 暗黑哥特奇幻写实风格，带有古典宫廷与吸血鬼传说美学的交融气质，画面细节极度精致，天鹅绒的绒面、蕾丝的镂空、蔷薇花瓣的丝绒感、黑雾的翻涌质感均真实可触，光影层次浓重，偏向“暗夜古堡 + 蔷薇魔爵”的叙事表达，传递出危险、高贵与妖冶交织的氛围。\n光影氛围： 采用烛火冷光与血月暮光的双重打光，主光源来自画面右侧落地拱窗外的暗红血月，在角色侧脸与肩颈形成冷艳的轮廓光，在黑蔷薇与血红尖晶处形成幽微的反光亮点，背景雾霭中加入缓缓升腾的暗色粒子与血月的弥散光晕，整体氛围危险、靡丽、充满永夜宫廷的仪式感，仿佛置身于“血月之下的黑蔷薇盛宴”之中。"
+   ],
+   "widgets_values_named": {
+    "text": "暗绯蔷薇魔爵（黑红酒红暗色调 · 黑蔷薇古堡）\n主体： 画面核心是一位黑紫长发的气场女王，她身披由暗黑蕾丝与酒红天鹅绒构成的哥特长裙，外罩一侧滑落的墨色斗篷，肌肤如月下大理石般冷白，瞳孔如燃烧的赤红宝石般凝视前方，头戴缀满黑蔷薇与暗银荆棘的冠冕，冠冕中央镶嵌的血红尖晶如凝固的火焰，长发在卷动的黑雾与暗红光流中如墨焰般翻飞，整体姿态端坐于王座之上、单手支颐，仿佛是从黑蔷薇古堡深处苏醒的暗夜魔爵，散发着“威压与魅惑交融”的史诗级氛围。\n要点： 黑紫长发与赤红瞳的视觉统一性、黑蔷薇与暗银荆棘的奢靡细节、黑雾卷动与长发翻飞的动态张力，共同构成核心视觉符号，传递出“危险、高贵与妖冶”的主题，营造出如永夜盛宴般的古堡暗夜氛围。\n前景： 画面左下角是王座台基的一角与蔓延生长的黑蔷薇藤蔓，藤蔓缠绕着断裂的古典栏杆，花朵间缠绕着细长的暗银链条与坠落的血红花瓣，几根熄灭的黑色蜡烛立在铜烛台上，烛芯余烟袅袅，藤蔓与坠落的花瓣朝角色裙摆方向自然延伸，构成视觉基底，强化画面的暗夜宫廷颓靡感。\n中景： 画面中央区域是角色的半身特写，她单手支颐、微微偏头，指尖蓄着赤黑色的长甲，另一只手随意搭在扶手上，指间夹着一朵半开的黑蔷薇，颈间佩戴的锁骨链与酒红天鹅绒束腰处的暗银扣饰清晰可见，蕾丝半透的领口与层层叠叠的裙褶在烛光下呈现出丝绒与织蕾的交错质感，营造“颓靡奢华与危险魅力”交织的视觉层次。\n背景： 背景是一片幽暗的黑蔷薇古堡大厅，巨大的落地拱窗透入暗红的暮光，窗外隐约可见剪影般的枯树与血月，大厅内浮动着缕缕暗紫色的雾霭，无数黑蔷薇藤蔓沿石柱向上攀爬缠绕，雾霭与暮光呈螺旋状向画面右上方的血月处汇聚，与角色发色与裙袍的配色完美呼应，营造“永夜古堡”的史诗级空间感。\n构图： 采用竖版 9:16 偏左重心 + 低角度仰视构图，角色位于画面中上部，支颐俯视的姿态形成居高临下的视觉焦点；背景暮光与雾霭自右上角血月处向下倾泻至角色身后，营造暗夜洪流般的视觉引导；前景蔷薇藤蔓与王座台基占据画面底部 1/4，形成视觉稳定基座，整体构图压迫感强烈，极具暗黑宫廷的戏剧张力。\n视觉引导： 通过角色居高临下凝视镜头的赤红眼神、翻飞长发与雾霭的同向延伸、蔷薇藤蔓蔓延的动态走向，将观者视线牢牢锁定于“暗绯魔爵”的核心形象；背景血月暮光与角色裙袍的酒红黑色调高度统一，形成视觉连贯性，强化“血月蔷薇古堡”的叙事氛围。\n色调： 整体为暗黑浓艳的暗色调，主色调为墨黑与酒红，辅以暗银冷光、血红尖晶与暗紫雾霭，色彩浓郁沉郁而不浑浊，通过烛火与血月的点状亮色与大面积的深黑形成强烈对比，营造出“永夜古堡的血蔷薇盛宴”氛围，符合“高贵危险”的主题表达。\n风格： 暗黑哥特奇幻写实风格，带有古典宫廷与吸血鬼传说美学的交融气质，画面细节极度精致，天鹅绒的绒面、蕾丝的镂空、蔷薇花瓣的丝绒感、黑雾的翻涌质感均真实可触，光影层次浓重，偏向“暗夜古堡 + 蔷薇魔爵”的叙事表达，传递出危险、高贵与妖冶交织的氛围。\n光影氛围： 采用烛火冷光与血月暮光的双重打光，主光源来自画面右侧落地拱窗外的暗红血月，在角色侧脸与肩颈形成冷艳的轮廓光，在黑蔷薇与血红尖晶处形成幽微的反光亮点，背景雾霭中加入缓缓升腾的暗色粒子与血月的弥散光晕，整体氛围危险、靡丽、充满永夜宫廷的仪式感，仿佛置身于“血月之下的黑蔷薇盛宴”之中。"
+   },
+   "color": "#232",
+   "bgcolor": "#353"
+  },
+  {
+   "id": 109,
+   "type": "Label (rgthree)",
+   "pos": [
+    13845.43228034413,
+    723.027205258113
+   ],
+   "size": [
+    2160.859375,
+    160
+   ],
+   "flags": {
+    "allow_interaction": true
+   },
+   "order": 22,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [],
+   "title": "▶SeedVR2-7/3b-int8图像放大",
+   "properties": {
+    "fontSize": 160,
+    "fontFamily": "Arial",
+    "fontColor": "#3CB371",
+    "textAlign": "left",
+    "backgroundColor": "transparent",
+    "padding": 0,
+    "borderRadius": 0,
+    "angle": 0,
+    "ue_properties": {
+     "widget_ue_connectable": {},
+     "input_ue_unconnectable": {},
+     "version": "7.8"
+    }
+   },
+   "color": "#fff0",
+   "bgcolor": "#fff0"
+  },
+  {
+   "id": 17,
+   "type": "ResolutionSelector",
+   "pos": [
+    10435.019660582026,
+    1673.0327228456256
+   ],
+   "size": [
+    234.63441767302356,
+    150
+   ],
+   "flags": {},
+   "order": 13,
+   "mode": 0,
+   "showAdvanced": false,
+   "inputs": [
+    {
+     "localized_name": "宽高比",
+     "name": "aspect_ratio",
+     "type": "COMBO",
+     "widget": {
+      "name": "aspect_ratio"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "百万像素",
+     "name": "megapixels",
+     "type": "FLOAT",
+     "widget": {
+      "name": "megapixels"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "倍数",
+     "name": "multiple",
+     "type": "INT",
+     "widget": {
+      "name": "multiple"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "preview",
+     "name": "preview",
+     "shape": 7,
+     "type": "RESOLUTION_PREVIEW",
+     "widget": {
+      "name": "preview"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "宽度",
+     "name": "width",
+     "type": "INT",
+     "links": [
+      29
+     ]
+    },
+    {
+     "localized_name": "高度",
+     "name": "height",
+     "type": "INT",
+     "links": [
+      30
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "ver": "0.31.0",
+    "Node name for S&R": "ResolutionSelector"
+   },
+   "widgets_values": [
+    "9:16 (Portrait Widescreen)",
+    1,
+    8
+   ],
+   "widgets_values_named": {
+    "aspect_ratio": "9:16 (Portrait Widescreen)",
+    "megapixels": 1,
+    "multiple": 8
+   },
+   "color": "#233",
+   "bgcolor": "#355"
+  },
+  {
+   "id": 27,
+   "type": "Label (rgthree)",
+   "pos": [
+    10066.865086217686,
+    691.9840187147727
+   ],
+   "size": [
+    1760.234375,
+    160
+   ],
+   "flags": {
+    "allow_interaction": true
+   },
+   "order": 23,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [],
+   "title": "▶Krea2-二采极清生图流",
+   "properties": {
+    "fontSize": 160,
+    "fontFamily": "Arial",
+    "fontColor": "#3CB371",
+    "textAlign": "left",
+    "backgroundColor": "transparent",
+    "padding": 0,
+    "borderRadius": 0,
+    "angle": 0,
+    "ue_properties": {
+     "widget_ue_connectable": {},
+     "input_ue_unconnectable": {},
+     "version": "7.8"
+    }
+   },
+   "color": "#fff0",
+   "bgcolor": "#fff0"
+  }
+ ],
+ "links": [
+  [
+   2,
+   18,
+   0,
+   3,
+   0,
+   "IMAGE"
+  ],
+  [
+   4,
+   25,
+   0,
+   3,
+   2,
+   "CONDITIONING"
+  ],
+  [
+   5,
+   15,
+   0,
+   3,
+   3,
+   "CONDITIONING"
+  ],
+  [
+   6,
+   24,
+   0,
+   3,
+   4,
+   "VAE"
+  ],
+  [
+   7,
+   11,
+   0,
+   3,
+   5,
+   "UPSCALE_MODEL"
+  ],
+  [
+   8,
+   7,
+   0,
+   3,
+   6,
+   "FLOAT"
+  ],
+  [
+   9,
+   19,
+   0,
+   3,
+   7,
+   "INT"
+  ],
+  [
+   10,
+   9,
+   0,
+   3,
+   14,
+   "INT"
+  ],
+  [
+   11,
+   9,
+   2,
+   3,
+   15,
+   "INT"
+  ],
+  [
+   14,
+   18,
+   0,
+   6,
+   0,
+   "IMAGE"
+  ],
+  [
+   15,
+   10,
+   0,
+   9,
+   0,
+   "INT"
+  ],
+  [
+   16,
+   10,
+   1,
+   9,
+   1,
+   "INT"
+  ],
+  [
+   17,
+   7,
+   0,
+   9,
+   2,
+   "FLOAT"
+  ],
+  [
+   18,
+   4,
+   0,
+   9,
+   3,
+   "FLOAT"
+  ],
+  [
+   19,
+   18,
+   0,
+   10,
+   0,
+   "IMAGE"
+  ],
+  [
+   20,
+   14,
+   0,
+   12,
+   0,
+   "IMAGE"
+  ],
+  [
+   22,
+   25,
+   0,
+   13,
+   1,
+   "CONDITIONING"
+  ],
+  [
+   23,
+   15,
+   0,
+   13,
+   2,
+   "CONDITIONING"
+  ],
+  [
+   24,
+   22,
+   0,
+   13,
+   3,
+   "LATENT"
+  ],
+  [
+   25,
+   20,
+   0,
+   13,
+   4,
+   "INT"
+  ],
+  [
+   26,
+   21,
+   0,
+   14,
+   0,
+   "LATENT"
+  ],
+  [
+   27,
+   24,
+   0,
+   14,
+   1,
+   "VAE"
+  ],
+  [
+   28,
+   25,
+   0,
+   15,
+   0,
+   "CONDITIONING"
+  ],
+  [
+   29,
+   17,
+   0,
+   16,
+   0,
+   "INT"
+  ],
+  [
+   30,
+   17,
+   1,
+   16,
+   1,
+   "INT"
+  ],
+  [
+   31,
+   13,
+   0,
+   18,
+   0,
+   "LATENT"
+  ],
+  [
+   32,
+   24,
+   0,
+   18,
+   1,
+   "VAE"
+  ],
+  [
+   34,
+   25,
+   0,
+   21,
+   1,
+   "CONDITIONING"
+  ],
+  [
+   35,
+   15,
+   0,
+   21,
+   2,
+   "CONDITIONING"
+  ],
+  [
+   36,
+   16,
+   0,
+   21,
+   3,
+   "LATENT"
+  ],
+  [
+   37,
+   20,
+   0,
+   21,
+   5,
+   "INT"
+  ],
+  [
+   38,
+   21,
+   0,
+   22,
+   0,
+   "LATENT"
+  ],
+  [
+   39,
+   29,
+   0,
+   23,
+   0,
+   "CLIP"
+  ],
+  [
+   40,
+   29,
+   0,
+   25,
+   0,
+   "CLIP"
+  ],
+  [
+   42,
+   26,
+   0,
+   3,
+   1,
+   "MODEL"
+  ],
+  [
+   43,
+   26,
+   0,
+   13,
+   0,
+   "MODEL"
+  ],
+  [
+   44,
+   26,
+   0,
+   21,
+   0,
+   "MODEL"
+  ],
+  [
+   100,
+   3,
+   0,
+   1,
+   0,
+   "IMAGE"
+  ],
+  [
+   125,
+   105,
+   0,
+   95,
+   0,
+   "IMAGE"
+  ],
+  [
+   126,
+   94,
+   0,
+   95,
+   1,
+   "IMAGE"
+  ],
+  [
+   127,
+   107,
+   0,
+   96,
+   0,
+   "MODEL"
+  ],
+  [
+   128,
+   100,
+   0,
+   96,
+   1,
+   "CONDITIONING"
+  ],
+  [
+   129,
+   100,
+   1,
+   96,
+   2,
+   "CONDITIONING"
+  ],
+  [
+   130,
+   99,
+   0,
+   96,
+   3,
+   "LATENT"
+  ],
+  [
+   131,
+   98,
+   0,
+   97,
+   0,
+   "IMAGE"
+  ],
+  [
+   132,
+   102,
+   0,
+   97,
+   1,
+   "IMAGE"
+  ],
+  [
+   133,
+   96,
+   0,
+   98,
+   0,
+   "LATENT"
+  ],
+  [
+   134,
+   103,
+   0,
+   98,
+   1,
+   "VAE"
+  ],
+  [
+   135,
+   101,
+   0,
+   99,
+   0,
+   "IMAGE"
+  ],
+  [
+   136,
+   103,
+   0,
+   99,
+   1,
+   "VAE"
+  ],
+  [
+   137,
+   107,
+   0,
+   100,
+   0,
+   "MODEL"
+  ],
+  [
+   138,
+   99,
+   0,
+   100,
+   1,
+   "LATENT"
+  ],
+  [
+   139,
+   102,
+   0,
+   101,
+   0,
+   "IMAGE"
+  ],
+  [
+   140,
+   104,
+   0,
+   102,
+   0,
+   "IMAGE"
+  ],
+  [
+   141,
+   106,
+   0,
+   102,
+   2,
+   "FLOAT"
+  ],
+  [
+   142,
+   105,
+   0,
+   104,
+   0,
+   "IMAGE"
+  ],
+  [
+   143,
+   105,
+   1,
+   104,
+   1,
+   "MASK"
+  ],
+  [
+   155,
+   97,
+   0,
+   120,
+   0,
+   "IMAGE"
+  ],
+  [
+   156,
+   120,
+   0,
+   110,
+   0,
+   "IMAGE"
+  ],
+  [
+   157,
+   110,
+   0,
+   121,
+   0,
+   "IMAGE"
+  ],
+  [
+   158,
+   120,
+   1,
+   121,
+   1,
+   "MASK"
+  ],
+  [
+   159,
+   121,
+   0,
+   94,
+   0,
+   "IMAGE"
+  ]
+ ],
+ "groups": [
+  {
+   "id": 1,
+   "title": "②Krea2-高清重绘2",
+   "bounding": [
+    12180.89342053323,
+    934.364940342632,
+    1065.5561584869774,
+    935.8393589426344
+   ],
+   "color": "#3f789e",
+   "flags": {}
+  },
+  {
+   "id": 2,
+   "title": "①Krea2-二采出图2",
+   "bounding": [
+    9833.435127464669,
+    934.7022751797592,
+    2260.791531896799,
+    930.4451599500006
+   ],
+   "color": "#3f789e",
+   "flags": {}
+  },
+  {
+   "id": 3,
+   "title": "SeedVR2-7/3b-int8图像放大",
+   "bounding": [
+    13855.882866620414,
+    945.1523736687201,
+    2149.3896312954676,
+    923.8145139166317
+   ],
+   "color": "#3f789e",
+   "flags": {}
+  }
+ ],
+ "config": {},
+ "extra": {
+  "ds": {
+   "scale": 0.32349184307607326,
+   "offset": [
+    -6821.8208092375135,
+    1197.011345785419
+   ]
+  },
+  "frontendVersion": "1.51.10",
+  "VHS_latentpreview": true,
+  "VHS_latentpreviewrate": 0,
+  "VHS_MetadataImage": true,
+  "VHS_KeepIntermediate": true
+ },
+ "version": 0.4
+}

@@ -627,11 +627,14 @@ function deleteTask(index){
   selectedPromptIndexes.clear();
   renderBundle()}
 async function interrogateTask(index,button){
+  const sourceImage=String(bundle.items[index-1]?.metadata?.source_image||'');
   setBusy(button,true,'反推中');
   notify('正在使用本机 ComfyUI 分析图片，首次加载模型可能需要几分钟。','info');
   try{
-    const v=await api('/api/interrogate',{method:'POST',body:JSON.stringify({index})});
+    const v=await api('/api/interrogate',{method:'POST',body:JSON.stringify({index,source_image:sourceImage})});
     const item=bundle.items[index-1];
+    if(!item||String(item.metadata?.source_image||'')!==sourceImage)
+      throw new Error('反推期间任务列表已变化，请对当前图片重试');
     item.prompt=v.prompt;
     item.metadata={...(item.metadata||{}),interrogation:v.interrogation};
     renderBundle();

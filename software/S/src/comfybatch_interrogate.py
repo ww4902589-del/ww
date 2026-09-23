@@ -86,17 +86,23 @@ class ImageInterrogator:
                 + "，重启 ComfyUI 后点击“重新扫描本地资源”。"
             )
         errors: list[str] = []
-        with self._lock:
+        deadline = time.monotonic() + self.timeout
+        if not self._lock.acquire(timeout=max(0.0, deadline - time.monotonic())):
+            raise TimeoutError("等待本机提示词反推队列超时")
+        try:
             for backend in candidates:
                 try:
-                    return self._run_backend(source_image, backend)
+                    return self._run_backend(source_image, backend, deadline)
                 except Exception as exc:  # noqa: BLE001 - fallback is required
                     errors.append(f"{backend}: {exc}")
+                if time.monotonic() >= deadline:
+                    break
+        finally:
+            self._lock.release()
         raise ValueError("本机提示词反推失败；已尝试可用节点。" + "；".join(errors))
 
-    def _run_backend(self, source_image: str, backend: str) -> dict[str, Any]:
+    def _run_backend(self, source_image: str, backend: str, deadline: float) -> dict[str, Any]:
         prompt_id = self.client.submit(build_graph(source_image, backend), "caption-" + uuid.uuid4().hex)
-        deadline = time.monotonic() + self.timeout
         while time.monotonic() < deadline:
             result = self.client.poll(prompt_id)
             state = str(result.get("state") or "pending")

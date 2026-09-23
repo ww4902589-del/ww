@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import pathlib
 import sys
+import threading
+import time
 import unittest
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
@@ -96,6 +98,24 @@ class ImageInterrogatorTests(unittest.TestCase):
         result = gateway.poll("p")
         self.assertEqual("done", result["state"])
         self.assertEqual("local caption", result["entry"]["outputs"]["3"]["text"][0])
+
+    def test_queue_wait_counts_toward_single_operation_timeout(self):
+        interrogator = ImageInterrogator(ScriptedClient(), timeout=0.02, poll_interval=0)
+        entered = threading.Event()
+
+        def hold_lock():
+            with interrogator._lock:
+                entered.set()
+                time.sleep(0.08)
+
+        worker = threading.Thread(target=hold_lock)
+        worker.start()
+        entered.wait(1)
+        started = time.monotonic()
+        with self.assertRaisesRegex(TimeoutError, "队列超时"):
+            interrogator.run("image.png", schema("LoadImage", "H3ShowText", BLIP_NODE))
+        self.assertLess(time.monotonic() - started, 0.07)
+        worker.join()
 
 
 if __name__ == "__main__":

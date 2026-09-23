@@ -4,6 +4,7 @@ import pathlib
 import sys
 import tempfile
 import unittest
+from types import SimpleNamespace
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
@@ -36,6 +37,51 @@ class ApplicationPreflightTests(unittest.TestCase):
             self.assertEqual([640, 360], bundle.items[0].metadata["source_dimensions"])
             self.assertTrue((comfy / "input" / bundle.items[0].metadata["source_image"]).is_file())
             self.assertNotIn(":", pathlib.Path(bundle.items[0].metadata["source_image"]).name)
+
+    def test_bundle_update_cannot_replace_server_owned_source_image(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = pathlib.Path(temp)
+            comfy = root / "ComfyUI"
+            (comfy / "input").mkdir(parents=True)
+            image_buffer = io.BytesIO()
+            Image.new("RGB", (8, 8), "navy").save(image_buffer, format="PNG")
+            app = Application(settings_path=root / "settings.json")
+            app.comfy_root = comfy
+            bundle = app.import_images([{"filename": "safe.png", "raw": image_buffer.getvalue()}])
+            trusted = bundle.items[0].metadata["source_image"]
+            (comfy / "input" / "other.png").write_bytes(image_buffer.getvalue())
+
+            updated = app.update_bundle([{
+                "title": "edited", "prompt": "keep", "negative_prompt": "",
+                "metadata": {**bundle.items[0].metadata, "source_image": "other.png"},
+            }])
+
+            self.assertEqual(trusted, updated.items[0].metadata["source_image"])
+
+    def test_interrogation_rejects_result_if_bundle_changes_while_waiting(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = pathlib.Path(temp)
+            comfy = root / "ComfyUI"
+            (comfy / "input").mkdir(parents=True)
+            image_buffer = io.BytesIO()
+            Image.new("RGB", (8, 8), "navy").save(image_buffer, format="PNG")
+            raw = image_buffer.getvalue()
+            app = Application(settings_path=root / "settings.json")
+            app.comfy_root = comfy
+            bundle = app.import_images([{"filename": "first.png", "raw": raw}])
+            source = bundle.items[0].metadata["source_image"]
+            app.schema = SimpleNamespace(class_types={"LoadImage", "H3ShowText", "BLIPCaption"})
+            app.refresh_schema = lambda force=False: app.schema
+
+            class ReplacingInterrogator:
+                def run(self, *_args):
+                    app.import_images([{"filename": "second.png", "raw": raw}])
+                    return {"prompt": "stale", "backend": "BLIPCaption", "prompt_id": "p", "local_only": True}
+
+            app.image_interrogator = ReplacingInterrogator()
+            with self.assertRaisesRegex(ValueError, "任务合集已变化"):
+                app.interrogate_task(1, source)
+            self.assertNotEqual("stale", app.bundle.items[0].prompt)
 
     def test_resolves_selected_style_text_for_node_independent_compilation(self):
         with tempfile.TemporaryDirectory() as temp:

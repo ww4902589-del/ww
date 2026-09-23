@@ -17,13 +17,15 @@
 
 - Python 编译：通过。
 - 前端词法检查：通过，属性值内危险换行为 0。
-- V2.21 全量测试：442 项；441 通过，1 项因未提供外部 XLSX 夹具而跳过。
+- V2.21 全量测试：445 项；444 通过，1 项因未提供外部 XLSX 夹具而跳过。
 - V2.21 隔离候选 `/api/ping`：版本 `2.21`。
 - V2.21 页面及 `app.js`：HTTP 200，标题与资源版本一致，反推接口已打包。
 - 本机节点缓存识别：首选 `easy imageInterrogator`，回退 `BLIPCaption`，依赖无缺失。
 - ComfyUI 离线时：两种后端均被依次尝试，并在约 7 秒内返回明确的本机连接错误。
-- 真实本机 ComfyUI：`easy imageInterrogator` 的 `fast` 模式约 42 秒成功，
+- 真实本机 ComfyUI：最终候选通过 `easy imageInterrogator` 的 `fast` 模式成功，
   `H3ShowText` 历史文本由候选包读取并回填，响应标记 `local_only: true`。
+- 安全与并发：图片路径只接受服务器本次导入时登记的白名单；浏览器不能改写；
+  反推期间若任务或合集变化，前后端均拒绝把旧结果写入新任务；排队等待计入 10 分钟总超时。
 - 非本机监听：以 `--host 0.0.0.0` 启动会立即拒绝并以退出码 2 结束。
 - 图片直链：成功提取 1 张。
 - 普通网页：GitHub CPython 页面和 Pillow 文档页均成功提取 Open Graph / 页面图片。
@@ -33,9 +35,9 @@
 ## 构建物
 
 - 构建配置：`src/S.spec`
-- 候选文件：`build/dist-v221-release/S.exe`（不提交到公开仓库）
-- 大小：17,091,100 字节
-- SHA-256：`B49F42CB4FE2C24E4509146ACDF324CAE537702EB4566B9E35EDACC849F0852B`
+- 候选文件：`build/dist-v221-final/S.exe`（不提交到公开仓库）
+- 大小：17,091,216 字节
+- SHA-256：`63FD47B1198ABB2B25664655E8CC0A2D6C3A594E25C26C2F6B6ACCA188DF8B96`
 - Authenticode：未签名。当前没有可信代码签名证书，不生成伪签名。
 
 ## 后续

@@ -493,6 +493,9 @@ class Application:
         self.comfy_url = "http://127.0.0.1:8188"
         self.output_root = DEFAULT_OUTPUT_ROOT
         self.bundle = None
+        # Paths written by the current image import. Bundle metadata is editable
+        # in the browser, so it cannot authorize access to arbitrary local files.
+        self._trusted_source_images: set[str] = set()
         self.last_import: dict[str, Any] | None = None
         #: Owns public-web validation, cover discovery and image verification.
         #: Kept injectable for hermetic tests; callers only see imported tasks.
@@ -599,17 +602,22 @@ class Application:
         """Report local node readiness without probing any external service."""
         return capability_payload(self.schema.class_types)
 
-    def interrogate_task(self, index: int) -> dict[str, Any]:
+    def interrogate_task(self, index: int, expected_source: str = "") -> dict[str, Any]:
         """Reverse one imported image into a prompt and apply it to that task."""
-        if self.bundle is None:
-            raise ValueError("请先导入图片")
-        if index < 1 or index > len(self.bundle.items):
-            raise ValueError(f"任务编号 {index} 超出范围")
-        item = self.bundle.items[index - 1]
-        source_image = str(item.metadata.get("source_image") or "") if isinstance(item.metadata, dict) else ""
+        with self.lock:
+            if self.bundle is None:
+                raise ValueError("请先导入图片")
+            if index < 1 or index > len(self.bundle.items):
+                raise ValueError(f"任务编号 {index} 超出范围")
+            bundle = self.bundle
+            item = bundle.items[index - 1]
+            source_image = str(item.metadata.get("source_image") or "") if isinstance(item.metadata, dict) else ""
+            if expected_source and source_image != expected_source:
+                raise ValueError("任务图片已变化，请重新点击反推")
         input_root = (self.comfy_root / "input").resolve()
         candidate = (input_root / source_image).resolve()
-        if not source_image or not candidate.is_relative_to(input_root) or not candidate.is_file():
+        if (not source_image or source_image not in self._trusted_source_images
+                or not candidate.is_relative_to(input_root) or not candidate.is_file()):
             raise ValueError("该任务没有可用于反推的本地图片")
         if not is_loopback_url(self.comfy_url):
             raise ValueError("提示词反推只允许连接本机 ComfyUI（127.0.0.1、localhost 或 ::1）")
@@ -618,13 +626,18 @@ class Application:
         # without restarting S; the cache remains the offline fallback.
         self.refresh_schema(force=True)
         result = self.image_interrogator.run(source_image, self.schema.class_types)
-        item.prompt = result["prompt"]
-        metadata = dict(item.metadata)
-        metadata["interrogation"] = {
-            "backend": result["backend"], "prompt_id": result["prompt_id"],
-            "local_only": True, "updated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-        }
-        item.metadata = metadata
+        with self.lock:
+            if (self.bundle is not bundle or index > len(bundle.items)
+                    or bundle.items[index - 1] is not item
+                    or str(item.metadata.get("source_image") or "") != source_image):
+                raise ValueError("反推期间任务合集已变化，请对当前任务重试")
+            item.prompt = result["prompt"]
+            metadata = dict(item.metadata)
+            metadata["interrogation"] = {
+                "backend": result["backend"], "prompt_id": result["prompt_id"],
+                "local_only": True, "updated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+            }
+            item.metadata = metadata
         return {**result, "index": index, "interrogation": metadata["interrogation"]}
 
     def _inventory(self) -> ResourceInventory:
@@ -868,6 +881,7 @@ class Application:
 
     def import_bundle(self, filename: str, raw: bytes, mapping: dict[str, Any] | None = None) -> tuple[PromptBundle, dict[str, Any] | None]:
         self.bundle = PromptBundleParser.parse(filename, raw, mapping=mapping)
+        self._trusted_source_images.clear()
         self.last_import = {"filename": filename, "raw": raw}
         info = PromptBundleParser.xlsx_mapping_info(raw) if pathlib.Path(filename).suffix.lower() == ".xlsx" else None
         if info is not None and mapping:
@@ -940,6 +954,11 @@ class Application:
                 metadata=metadata,
             ))
         self.bundle = PromptBundle(f"图片合集-{session_id}", items, "images")
+        self._trusted_source_images = {
+            str(item.metadata["source_image"])
+            for item in items
+            if isinstance(item.metadata, dict) and item.metadata.get("source_image")
+        }
         self.last_import = None
         return self.bundle
 
@@ -1307,6 +1326,7 @@ class Application:
         if self.bundle is None:
             raise ValueError("请先导入提示词合集")
         items: list[PromptItem] = []
+        previous_items = list(self.bundle.items)
         for index, value in enumerate(values, 1):
             title = str(value.get("title") or f"提示词 {index:03d}").strip()
             prompt = str(value.get("prompt") or "").strip()
@@ -1315,6 +1335,12 @@ class Application:
                 raise ValueError(f"第 {index} 条提示词为空")
             repeat = max(1, min(100, int(value.get("repeat") or 1)))
             metadata = dict(value.get("metadata") or {})
+            # The source path belongs to the server-side import at this
+            # position; never accept a replacement path from the browser.
+            if index <= len(previous_items):
+                previous = previous_items[index - 1].metadata
+                if isinstance(previous, dict) and previous.get("source_image") in self._trusted_source_images:
+                    metadata["source_image"] = previous["source_image"]
             for copy_index in range(repeat):
                 copy_title = title if repeat == 1 else f"{title}-{copy_index + 1:02d}"
                 items.append(PromptItem(copy_title, prompt, metadata, negative_prompt))
@@ -1732,7 +1758,9 @@ class Handler(BaseHTTPRequestHandler):
                 )
                 self._json({"ok": True, "bundle": bundle.to_dict(), "extracted": extracted, "mapping": None})
             elif self.path == "/api/interrogate":
-                result = APP.interrogate_task(int(value.get("index") or 0))
+                result = APP.interrogate_task(
+                    int(value.get("index") or 0), str(value.get("source_image") or "")
+                )
                 self._json({"ok": True, **result})
             elif self.path == "/api/remap-import":
                 bundle, mapping = APP.remap_import(dict(value.get("mapping") or {}))

@@ -416,6 +416,9 @@ class ParameterWorkbenchUiTests(unittest.TestCase):
         handler = html.split("async function interrogateTask", 1)[1].split("async function syncBundle", 1)[0]
         self.assertNotIn("bundle=v.bundle", handler,
                          "反推响应不得用服务端旧副本覆盖页面上尚未同步的编辑")
+        self.assertIn("source_image:sourceImage", handler)
+        self.assertIn("!==sourceImage", handler,
+                      "等待期间任务索引漂移时不得把结果写入另一张图片")
 
     def test_truth_rail_carries_the_capability_facts(self):
         """B1：采样链路与输入输出常驻真相栏，任何阶段可见。"""

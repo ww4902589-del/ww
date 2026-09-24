@@ -128,23 +128,23 @@ ecf4a46e-ec7d-4160-a83c-5459375e2915:0001  待确认  1336×752  971767 B  seed=
 
 ## 当前阻塞（下一位接手者先看这里）
 
-**分支推不上去，PR 还没建。** 本机到 GitHub 的连接是间歇性的：
+**无阻塞。** 分支已于 2026-09-24 10:20 推送成功：`handoff/local-s-library` → `origin`。
 
-- 走环境代理（`HTTPS_PROXY=127.0.0.1:64947`）→ `CONNECT tunnel failed, response 502`；
-- 绕过代理直连 → `Failed to connect to github.com:443 after 21038 ms`；
-- 同一时间 `git ls-remote` 偶尔能通一次，`git push` 从未成功（4 次重试，最长 90 秒超时）。
+推送曾经是阻塞（走代理 `CONNECT 502`、直连 21 秒超时，累计 10 次失败），
+最终改走 SSH 解决：`ssh-keygen` 生成 `~/.ssh/id_ed25519`，公钥由用户添加到
+GitHub 后，远程已切换为 `git@github.com:ww4902589-del/ww.git`（SSH 22 端口
+不经环境代理，稳定可达）。后续任务若也遇到 HTTPS 推不上，直接换 SSH。
 
-凭据本身没问题（`credential.helper = git-credential-manager`，`user.name = ww4902589-del`），
-所以这是网络可达性问题，不是配置问题。两个提交都在本地：
+两个提交都在远端：
 
 | 提交 | 内容 |
 |---|---|
 | `5693838` | 功能提交（作品库本体、测试、文档） |
-| 本分支第二个提交 | 独立审查修复（读图边界、排序标签、output_dir、不可用降级、损坏判定收紧） |
+| `114fa21` | 独立审查修复（读图边界、排序标签、output_dir、不可用降级、损坏判定收紧） |
 
-网络可用时按顺序做：`git push -u origin handoff/local-s-library` → 建 Draft PR →
-独立复审 → 合并后重建候选、记录 SHA-256、备份桌面并部署 → Edge 验收 →
-同步 `docs/00` 与 GitHub Issue #2 的状态。
+剩余待办（需 GitHub 网页或已登录的 `gh`，本机 `gh` 未登录、凭据管理器无 token）：
+建 Draft PR（`main` ← `handoff/local-s-library`）→ 独立复审 → 合并后重建候选、
+记录 SHA-256、备份桌面并部署 → Edge 验收 → 同步 `docs/00` 与 GitHub Issue #2 的状态。
 
 ## 构建物
 

@@ -5,10 +5,12 @@
 而程序版本 `APP_VERSION` 已更新到 **V2.20**（页面标题与 `/api/ping` 都由它驱动，
 测试 `test_server_and_page_versions_agree` 盯着两者一致）。
 V2.20 候选包保留在 `build\dist-v220-release\S.exe`。**桌面运行的 `S.exe` 已更新为含
-本地作品库的候选**（第 17 条，2026-09-24 部署；`APP_VERSION` 按 V2.21 文档的决定
-保持 2.20 不动）：源码取自 PR #8 合并提交 `9c309ef`，SHA-256
-`4515FF0EFB992CE30D5E64D32B090537E17590FF310C720D9845AC14EA8C85D2`；
-被替换的 V2.20 版备份为桌面 `S.exe.v220-backup-20260924`。
+本地作品库（第 17 条）与紧凑审图／信息浮层（第 18 条）的候选**（2026-09-24 部署；
+`APP_VERSION` 按 V2.21 文档的决定保持 2.20 不动）：源码取自 PR #9 合并提交
+`f1fd5de`，SHA-256
+`45678ECF2EADE99E58EE2A001EBACDDDA67EC04D3F4E332B3320F1E5973C9F60`。
+历史回退件：桌面 `S.exe.v221r1-backup-20260924`（含作品库版，PR #8 的 `9c309ef`，
+SHA-256 `4515FF0E…`）、`S.exe.v220-backup-20260924`（V2.20）。
 旧版回退件保留在 `run\backups\`（09-14 胖版与 09-15 版各一份）。
 
 ## 本轮做了什么

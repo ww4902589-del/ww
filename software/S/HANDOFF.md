@@ -72,4 +72,5 @@
 - 后端仅为资源清单增加 `has_saved_profile` 标记；原有墓碑删除机制保持。详细行为见 `docs/23-设置删除与按钮一致性_V2.21.md`。
 - 验证：新增 4 项；全量 **512 项：511 通过、0 失败、1 跳过**。Python 编译、Node 语法和 `tools/js_lexer.py app.js` 属性值内危险换行 0 处均通过；`git -c core.whitespace=cr-at-eol diff --check` 通过。公开内容新增行未发现本机路径或凭据。
 - 本任务不需要真实生图。若集成后做生图验收，使用桌面 `01.docx`。
-- 待完成：独立审查、远端 Draft PR、合并后的正式候选与 SHA-256、桌面备份部署、Edge 验收、Issue #2 和桌面看板同步。完成全部闸门之前保持 🟡。
+- GitHub 交付：Draft PR #10 已创建（https://github.com/ww4902589-del/ww/pull/10），Issue #2 已同步；GitHub 当前报告分支可合并。
+- 待完成：独立审查、PR 合并、合并后的正式候选与 SHA-256、桌面备份部署、Edge 验收。完成全部闸门之前保持 🟡。

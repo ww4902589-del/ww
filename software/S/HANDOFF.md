@@ -148,13 +148,19 @@ GitHub 后，远程已切换为 `git@github.com:ww4902589-del/ww.git`（SSH 22 �
 
 ## 构建物
 
-- 本轮**未构建候选、未部署桌面**：按项目规则，候选必须来自已合并并复审过的源码，
-  前置 PR 未合并时不提前构建。合并后以合并提交重建，并记录 SHA-256。
+- 候选已于合并后重建（2026-09-24）：源码取自合并提交 `9c309ef`（PR #8 → `main`），
+  `git archive` 导出干净树，PyInstaller 6.22.3 + Python 3.13.12 + `src/S.spec` 构建。
+- 产物：`S.exe`，16,954,451 字节，SHA-256 `4515FF0EFB992CE30D5E64D32B090537E17590FF310C720D9845AC14EA8C85D2`。
+- 闸门：合并后源码全量测试 502 项（通过 501、失败 0、跳过 1）；冻结包隔离端口冒烟
+  通过（ping／`/api/library` 中文排序标签与 available／首页与 app.js 200）。
+- 部署：旧桌面 `S.exe`（V2.20，17,084,217 字节）已备份为桌面 `S.exe.v220-backup-20260924`
+  （哈希核验一致）后替换；部署版在 8790 复验 ping、作品库端点、首页与 app.js 全部正常。
+  作品库在用户默认数据目录为首启状态（total 0），首批成图顺序读结果页后自动入库。
 
 ## 后续
 
-- 前置 PR 合并顺序仍为 PR #4 → #5 → #6 → #7；本分支与 #3／#6／#8 同文件重叠
-  （`comfybatch_v2_app.py`、`index.html`、`app.js`、`app.css`、`tests/test_app_routes.py`、
-  `tests/test_page_assets.py`），集成时按冲突隔离标准处理；
-  `core.py` **零改动**是本任务刻意压低重叠的结果。
+- ~~前置 PR 合并顺序仍为 PR #4 → #5 → #6 → #7~~ **本任务 PR #8 已于 2026-09-24 合并**
+  （合并提交 `9c309ef`），与 #3／#5／#6／#7 的同文件重叠（`comfybatch_v2_app.py`、`index.html`、
+  `app.js`、`app.css`、`tests/test_app_routes.py`、`tests/test_page_assets.py`）由后续任务
+  rebase 时按冲突隔离标准处理；`core.py` **零改动**是本任务刻意压低重叠的结果。
 - 待办：作品库导出（CSV/JSON）与"按标签批量选集重跑"；成图被移动后的路径重定位。

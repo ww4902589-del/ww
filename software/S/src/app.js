@@ -47,6 +47,18 @@ let reviewState={
 let lastInspect={
 }
 ;
+/* 作品库状态。与 reviewState 同理，必须在 goStep 的启动调用之前完成初始化，
+否则进入第 5 阶段会撞上暂时性死区。 */
+let libraryState={
+  loaded:false,items:[],total:0,limit:24,offset:0,sort:'newest',
+  stats:{
+  }
+  ,facets:{
+  }
+  ,statuses:[],sorts:{
+  }
+  ,sync_error:'',page_size:24}
+;
 let railStatus=null;
 let activeIndex=-1;
 let batchOverrides={
@@ -55,9 +67,9 @@ let batchOverrides={
 let currentStep=Number(localStorage.getItem('comfybatch-step')||1),
 pollTimer=null,
 lastRunStatus='';
-// 四个阶段：1 文件与任务 / 2 生成配置（工作流、模型、风格、LoRA、图像规格、参数） /
-// 3 检查与运行 / 4 成图与确认。进入第 2 阶段时惰性读取参数清单。
-const LAST_STEP=4;
+// 五个阶段：1 文件与任务 / 2 生成配置（工作流、模型、风格、LoRA、图像规格、参数） /
+// 3 检查与运行 / 4 成图与确认 / 5 作品库（跨批次检索，惰性读取）。
+const LAST_STEP=5;
 function goStep(step){
   currentStep=Math.max(1,Math.min(LAST_STEP,Number(step)||1));
   localStorage.setItem('comfybatch-step',String(currentStep));
@@ -69,6 +81,7 @@ function goStep(step){
     top:0,behavior:'smooth'}
   );
   if(currentStep===2&&!workbench)loadWorkbench();
+  if(currentStep===5&&!libraryState.loaded)loadLibrary(true);
   renderRail()}
 function changeStep(delta){
   goStep(currentStep+delta)}
@@ -2312,6 +2325,298 @@ function renderRail() {
   setText('railRun', st.status
   ? `${st.status}${st.current ? ' · ' + st.current : ''}${st.total ? ` · ${done}/${st.total}` : ''}`
   : '空闲');
+}
+
+/* ---- 作品库：跨批次检索、标签与收藏 --------------------------------
+索引由服务端从复核记录派生，这一层只做两件事：把筛选条件送过去、把结果画出来。
+不拼磁盘路径——预览与原图都只送 work_id，路径由服务端从记录里取，客户端指定
+不了任何一个文件。 */
+function librarySizeText(value) {
+  const bytes = Number(value) || 0;
+  if (bytes <= 0) return '—';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function libraryQueryParams() {
+  const params = new URLSearchParams();
+  const text = $('libQuery') ? $('libQuery').value.trim() : '';
+  if (text) params.set('q', text);
+  const status = $('libStatus') ? $('libStatus').value : '';
+  if (status) params.set('review_status', status);
+  const run = $('libRun') ? $('libRun').value : '';
+  if (run) params.set('run_id', run);
+  const sort = $('libSort') ? $('libSort').value : '';
+  params.set('sort', sort || 'newest');
+  if ($('libFavorite') && $('libFavorite').checked) params.set('favorite', '1');
+  if ($('libDeleted') && $('libDeleted').checked) params.set('include_deleted', '1');
+  params.set('limit', String(libraryState.page_size || 24));
+  params.set('offset', String(libraryState.offset || 0));
+  return params;
+}
+
+async function loadLibrary(reset, button) {
+  if (reset) libraryState.offset = 0;
+  if (button) setBusy(button, true);
+  try {
+    const v = await api('/api/library?' + libraryQueryParams().toString());
+    libraryState = Object.assign(libraryState, v.library || {}, {
+      loaded: true
+    });
+    renderLibraryFilters();
+    renderLibrary();
+  } catch (e) {
+    notify('作品库读取失败：' + e.message, 'error');
+  } finally {
+    if (button) setBusy(button, false);
+  }
+}
+
+function renderLibraryFilters() {
+  const statusSelect = $('libStatus');
+  if (statusSelect && !statusSelect.options.length) {
+    statusSelect.innerHTML = '<option value="">全部状态</option>' +
+      (libraryState.statuses || []).map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
+  }
+  const sortSelect = $('libSort');
+  if (sortSelect && !sortSelect.options.length) {
+    const sorts = libraryState.sorts || {
+    };
+    sortSelect.innerHTML = Object.keys(sorts).map(k => `<option value="${esc(k)}">${esc(sorts[k])}</option>`).join('');
+    sortSelect.value = libraryState.sort || 'newest';
+  }
+  const runSelect = $('libRun');
+  if (runSelect) {
+    const runs = (libraryState.facets || {
+    }).runs || [];
+    const chosen = runSelect.value;
+    runSelect.innerHTML = '<option value="">全部批次</option>' + runs.map(r =>
+      `<option value="${esc(r.run_id)}">${esc(String(r.run_id).slice(0, 8))} · ${Number(r.total) || 0} 条</option>`).join('');
+    // 正在看的批次要留在选中态，否则每次刷新都会把筛选悄悄换成「全部批次」。
+    runSelect.value = runs.some(r => r.run_id === chosen) ? chosen : '';
+  }
+  const strip = $('libTagStrip');
+  if (strip) {
+    const tags = (libraryState.facets || {
+    }).tags || [];
+    strip.innerHTML = tags.length
+      ? '常用标签：' + tags.map(t => `<button class="lib-tag" data-tag="${esc(t.tag)}" onclick="libraryFilterByTag(this)">${esc(t.tag)} (${Number(t.count) || 0})</button>`).join('')
+      : '';
+  }
+}
+
+// 标签是关键词检索的一部分，所以点标签＝把标签填进关键词框再查一次，
+// 不新增一个只有标签才懂的筛选参数。
+function libraryFilterByTag(button) {
+  const box = $('libQuery');
+  if (!box) return;
+  box.value = button.dataset.tag || '';
+  loadLibrary(true);
+}
+
+// 选中态以本页的 libraryState 为准：服务端返回的 items 是新的，但「正在看第几页」
+// 属于页面状态，不能被响应体里的默认值顶掉。
+function renderLibrary() {
+  const board = $('libBoard');
+  if (!board) return;
+  const items = libraryState.items || [];
+  board.innerHTML = items.length ? items.map(libraryCardHtml).join('')
+    : '<div class="help lib-empty">没有符合条件的作品。可以清空筛选条件，或点「从复核记录重建索引」把已有批次读进来。</div>';
+  const stats = libraryState.stats || {
+  };
+  const by = stats.by_status || {
+  };
+  const total = Number(libraryState.total) || 0;
+  const first = total ? Number(libraryState.offset) + 1 : 0;
+  const last = Math.min(total, Number(libraryState.offset) + items.length);
+  $('libSummary').textContent =
+    `共 ${Number(stats.works) || 0} 条记录（收藏 ${Number(stats.favorite) || 0} · 已移除 ${Number(stats.deleted) || 0}）` +
+    ` · 待确认 ${by['待确认'] || 0} · 已通过 ${by['已通过'] || 0} · 需重做 ${by['需重做'] || 0} · 已替换 ${by['已替换'] || 0}` +
+    (libraryState.sync_error ? ` · 索引提示：${libraryState.sync_error}` : '');
+  $('libPageInfo').textContent = total ? `显示第 ${first}–${last} 条／共 ${total} 条` : '没有结果';
+  $('libPrev').disabled = Number(libraryState.offset) <= 0;
+  $('libNext').disabled = first === 0 || last >= total;
+}
+
+function libraryCardHtml(item) {
+  const status = item.review_status || '待确认';
+  const tags = (item.tags || []).join(', ');
+  const id = esc(item.work_id);
+  const thumb = item.available
+    ? `<a class="lib-thumb-link" href="/api/library/image?work_id=${encodeURIComponent(item.work_id)}"`
+      + ' target="_blank" rel="noopener" title="在新标签页打开原图">'
+      + `<img src="/api/library/preview?work_id=${encodeURIComponent(item.work_id)}&size=240" alt="作品预览" loading="lazy"></a>`
+    : '<span class="lib-missing">成图不在原位置</span>';
+  const maintenance = item.deleted
+    ? `<button class="secondary" data-act="restore" onclick="libraryAction(this)">恢复到作品库</button>`
+    : `<button class="danger" data-act="remove" onclick="libraryAction(this)">从作品库移除</button>`;
+  return `<article class="lib-card${item.deleted ? ' lib-removed' : ''}" data-work-id="${id}">
+  <div class="lib-thumb">${thumb}</div>
+  <div class="lib-body">
+    <div class="lib-head">
+      <b>${esc(String(item.run_id).slice(0, 8))} · ${String(Number(item.index) || 0).padStart(3, '0')}</b>
+      <span class="badge ${BADGE_CLASS[status] || ''}">${esc(status)}</span>
+    </div>
+    <div class="lib-title" title="${esc(item.title)}">${esc(item.title || '（无标题）')}</div>
+    <div class="help lib-meta">${esc(item.model ? basename(item.model) : '未记录模型')} · 种子 ${esc(item.seed || '—')} · ${item.width ? `${item.width}×${item.height}` : '尺寸未知'} · ${librarySizeText(item.size_bytes)} · 尝试 ${Number(item.attempt_count) || 0} 次</div>
+    <div class="help lib-prompt" title="${esc(item.prompt)}">${esc(item.prompt || '')}</div>
+    <label class="lib-tagline">标签<input value="${esc(tags)}" placeholder="逗号分隔，例如：服装, 冬装" onchange="libraryTagEdit(this)"></label>
+    <div class="lib-actions">
+      <button class="secondary" data-act="favorite" data-value="${item.favorite ? '0' : '1'}" onclick="libraryAction(this)">${item.favorite ? '★ 已收藏' : '☆ 收藏'}</button>
+      ${maintenance}
+    </div>
+  </div>
+</article>`;
+}
+
+function libraryCardOf(element) {
+  return element && element.closest ? element.closest('.lib-card') : null;
+}
+
+function libraryAction(button) {
+  const card = libraryCardOf(button);
+  const workId = card ? card.dataset.workId : '';
+  const action = button.dataset.act;
+  if (action === 'favorite') return toggleLibraryFavorite(workId, button.dataset.value === '1', button);
+  if (action === 'remove') return removeLibraryItem(workId, button);
+  if (action === 'restore') return restoreLibraryItem(workId, button);
+}
+
+function libraryTagEdit(input) {
+  const card = libraryCardOf(input);
+  return setLibraryTags(card ? card.dataset.workId : '', input.value, input);
+}
+
+// 标签整体替换：输入框里的逗号列表就是这条记录的全部标签，语义只有一个。
+async function setLibraryTags(workId, value, input) {
+  if (!workId) return;
+  const tags = String(value || '').split(',').map(x => x.trim()).filter(Boolean);
+  if (input) input.disabled = true;
+  try {
+    await api('/api/library/tags', {
+      method: 'POST', body: JSON.stringify({
+        work_id: workId, tags: tags
+      })
+    });
+    notify(tags.length ? `已保存 ${tags.length} 个标签` : '已清空标签');
+    await loadLibrary(false);
+  } catch (e) {
+    notify('标签保存失败：' + e.message, 'error');
+  } finally {
+    if (input) input.disabled = false;
+  }
+}
+
+async function toggleLibraryFavorite(workId, favorite, button) {
+  if (!workId) return;
+  if (button) setBusy(button, true);
+  try {
+    await api('/api/library/favorite', {
+      method: 'POST', body: JSON.stringify({
+        work_id: workId, favorite: favorite
+      })
+    });
+    notify(favorite ? '已加入收藏' : '已取消收藏');
+    await loadLibrary(false);
+  } catch (e) {
+    notify('收藏失败：' + e.message, 'error');
+  } finally {
+    if (button) setBusy(button, false);
+  }
+}
+
+async function removeLibraryItem(workId, button) {
+  if (!workId) return;
+  if (!confirm('从作品库移除这条记录？磁盘上的图片不会被删除，之后还能从「显示已移除」里恢复。')) return;
+  if (button) setBusy(button, true);
+  try {
+    await api('/api/library/delete', {
+      method: 'POST', body: JSON.stringify({
+        work_id: workId
+      })
+    });
+    notify('已从作品库移除（图片仍在原处）');
+    await loadLibrary(false);
+  } catch (e) {
+    notify('移除失败：' + e.message, 'error');
+  } finally {
+    if (button) setBusy(button, false);
+  }
+}
+
+async function restoreLibraryItem(workId, button) {
+  if (!workId) return;
+  if (button) setBusy(button, true);
+  try {
+    await api('/api/library/restore', {
+      method: 'POST', body: JSON.stringify({
+        work_id: workId
+      })
+    });
+    notify('已恢复到作品库');
+    await loadLibrary(false);
+  } catch (e) {
+    notify('恢复失败：' + e.message, 'error');
+  } finally {
+    if (button) setBusy(button, false);
+  }
+}
+
+function libraryPage(delta) {
+  const total = Number(libraryState.total) || 0;
+  const size = Number(libraryState.page_size) || 24;
+  const next = Number(libraryState.offset) + delta * size;
+  if (next < 0 || next >= total) return;
+  libraryState.offset = next;
+  loadLibrary(false);
+}
+
+function resetLibraryFilters() {
+  if ($('libQuery')) $('libQuery').value = '';
+  if ($('libStatus')) $('libStatus').value = '';
+  if ($('libRun')) $('libRun').value = '';
+  if ($('libFavorite')) $('libFavorite').checked = false;
+  if ($('libDeleted')) $('libDeleted').checked = false;
+  loadLibrary(true);
+}
+
+function libraryQueryKey(event) {
+  if (event.key !== 'Enter') return;
+  event.preventDefault();
+  // 回车即检索：状态、批次与排序沿用当前选择，只把关键词换成新的一段。
+  loadLibrary(true);
+}
+
+async function reindexLibrary(button) {
+  if (button) setBusy(button, true, '正在重建');
+  try {
+    const v = await api('/api/library/reindex', {
+      method: 'POST', body: '{}'
+    });
+    const totals = v.reindex || {
+    };
+    notify(`索引完成：读取 ${totals.runs || 0} 个批次，新增 ${totals.inserted || 0} 条、更新 ${totals.updated || 0} 条`);
+    await loadLibrary(true);
+  } catch (e) {
+    notify('重建索引失败：' + e.message, 'error');
+  } finally {
+    if (button) setBusy(button, false);
+  }
+}
+
+async function libraryMaintain(action) {
+  try {
+    await api('/api/library/maintain', {
+      method: 'POST', body: JSON.stringify({
+        action: action
+      })
+    });
+    notify('数据库文件已整理');
+    await loadLibrary(false);
+  } catch (e) {
+    notify('整理失败：' + e.message, 'error');
+  }
 }
 
 connectEvents();

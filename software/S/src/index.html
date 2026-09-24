@@ -25,6 +25,7 @@
     <button class="step-tab" data-step-target="2" onclick="goStep(2)"><span>2</span>生成配置</button>
     <button class="step-tab" data-step-target="3" onclick="goStep(3)"><span>3</span>检查与运行</button>
     <button class="step-tab" data-step-target="4" onclick="goStep(4)"><span>4</span>成图与确认</button>
+    <button class="step-tab" data-step-target="5" onclick="goStep(5)"><span>5</span>作品库</button>
 
     <section class="truth-rail" id="truthRail">
       <h3>生效摘要</h3>
@@ -337,6 +338,38 @@
       </div>
       <div id="reviewBoard" class="review-board"></div>
       <div id="gallery" class="gallery legacy-gallery" hidden aria-hidden="true"></div>
+    </section>
+
+    <!-- ============ 阶段 5：作品库 ============ -->
+    <!-- 作品库是跨批次的检索面：索引由复核记录派生，收藏/标签/移除只存在这里。
+         它不改动磁盘上的成图，所以「移除记录」与「删掉图」是两件事。 -->
+    <section class="card wide step-panel" data-step="5">
+      <div class="section-lead">
+        <div><h2>作品库</h2><p>跨批次检索所有成图：按提示词、种子、标签、确认状态或批次筛选，标记收藏。</p></div>
+        <button class="secondary" onclick="reindexLibrary(this)">从复核记录重建索引</button>
+      </div>
+
+      <div class="library-toolbar">
+        <label class="lib-query">关键词<input id="libQuery" placeholder="提示词 / 标题 / 标签 / 种子" onkeydown="libraryQueryKey(event)"></label>
+        <label>确认状态<select id="libStatus" onchange="loadLibrary(true)"></select></label>
+        <label>批次<select id="libRun" onchange="loadLibrary(true)"></select></label>
+        <label>排序<select id="libSort" onchange="loadLibrary(true)"></select></label>
+        <label class="switch"><input id="libFavorite" type="checkbox" onchange="loadLibrary(true)">只看收藏</label>
+        <label class="switch"><input id="libDeleted" type="checkbox" onchange="loadLibrary(true)">显示已移除</label>
+        <button class="secondary" onclick="loadLibrary(true)">检索</button>
+        <button class="secondary" onclick="resetLibraryFilters()">清空条件</button>
+      </div>
+
+      <div id="libTagStrip" class="lib-tags"></div>
+      <div id="libSummary" class="help">尚未读取作品库</div>
+      <div id="libBoard" class="lib-board"></div>
+      <div class="library-footer">
+        <button class="secondary" id="libPrev" onclick="libraryPage(-1)">上一页</button>
+        <span id="libPageInfo" class="help"></span>
+        <button class="secondary" id="libNext" onclick="libraryPage(1)">下一页</button>
+        <button class="secondary" onclick="libraryMaintain('vacuum')">整理数据库文件</button>
+      </div>
+      <div class="help">作品库只是一份可重建的索引：收藏、标签与「已移除」标记只保存在库里，重新索引不会把它们改回原样；移除记录不会删除磁盘上的图片。</div>
     </section>
 
   </div>

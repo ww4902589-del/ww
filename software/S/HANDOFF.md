@@ -83,5 +83,5 @@
 - 验证：新增 2 项（含调用真实页面函数的 Node 行为测试）；全量 **510 项：509 通过、0 失败、1 跳过**。Python 编译与 Node 语法通过；`tools/js_lexer.py app.js` 属性值内危险换行 0 处；`git -c core.whitespace=cr-at-eol diff --check` 通过。
 - 本任务无需真实生图。若集成后验收需要生图，使用桌面 `01.docx`。
 - GitHub 交付：Draft PR #11 已创建并附到本任务，公开 Issue #2 已同步；改动新增行公开内容扫描 0 命中。
-- 独立审查：Standards 轨无 HIGH/MEDIUM；Spec 轨发现定期重绘丢失卡片焦点的 MEDIUM。已在刷新后按当前阶段和卡片存在性恢复焦点，并补实际 `renderReview` 函数的重绘回归测试；最终复审待完成。
-- 待完成：复审修复、集成后复测、合并、候选 SHA-256、桌面备份部署与 Edge 验收。完成全部闸门之前保持 🟡。
+- 独立审查：Standards 轨无 HIGH/MEDIUM；Spec 轨发现定期重绘丢失卡片焦点的 MEDIUM。已在 `31acd57` 按当前阶段和卡片存在性恢复焦点，并补实际 `renderReview` 函数的重绘回归测试。Standards / Spec 双轨最终只读复审均确认无遗留 HIGH/MEDIUM；模拟 DOM 测试之外的真实焦点、滚动和浮层效果留待 Edge 验收。
+- 待完成：按集成顺序更新基线并复测、合并 PR、候选 SHA-256、桌面备份部署与 Edge 验收。完成全部闸门之前保持 🟡。

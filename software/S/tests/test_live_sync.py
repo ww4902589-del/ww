@@ -510,6 +510,25 @@ class InstanceFileTests(unittest.TestCase):
             activate.assert_not_called()
         open_browser.assert_not_called()
 
+    def test_missing_record_finds_primary_on_fallback_port(self):
+        opener = mock.Mock()
+
+        def answer(url, *, timeout):
+            self.assertEqual(0.25, timeout)
+            response = mock.MagicMock()
+            payload = {"ok": True, "app": "ComfyBatch", "instance_id": "fallback", "is_primary": True}
+            if url == "http://127.0.0.1:9000/api/ping":
+                payload["app"] = "other"
+            response.__enter__.return_value.read.return_value = json.dumps(payload).encode()
+            return response
+
+        opener.open.side_effect = answer
+        with mock.patch.object(app_module, "build_opener", return_value=opener), \
+                mock.patch.object(app_module, "activate_and_show_existing", return_value=True) as activate:
+            found = app_module.show_existing_or_discover({}, "127.0.0.1", 9000, open_browser=True)
+        self.assertEqual("http://127.0.0.1:9001/", found["url"])
+        activate.assert_called_once_with(found, open_browser=True)
+
 
 class InstanceNamespaceTests(unittest.TestCase):
     """A different --data-dir must not be able to trap a launch.

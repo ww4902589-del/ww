@@ -2296,20 +2296,23 @@ def show_existing_or_discover(
         return existing
     if host not in ("127.0.0.1", "localhost"):
         return {}
-    url = f"http://{host}:{port}/"
-    try:
-        opener = build_opener(ProxyHandler({}))
-        with opener.open(url + "api/ping", timeout=2) as response:
-            info = json.loads(response.read().decode("utf-8"))
-        if not isinstance(info, dict) or not info.get("ok") or info.get("app") != "ComfyBatch":
-            return {}
-        if info.get("is_primary") is not True or not info.get("instance_id"):
-            return {}
-        discovered = {"url": url, "instance_id": str(info["instance_id"])}
-        if activate_and_show_existing(discovered, open_browser=open_browser):
-            return discovered
-    except (OSError, ValueError, TypeError):
-        pass
+    opener = build_opener(ProxyHandler({}))
+    # The primary may have moved from the preferred port when that port was busy.
+    # Mirror choose_launch_port's 21-port range; keep a short timeout per probe.
+    for candidate_port in range(port, port + 21):
+        url = f"http://{host}:{candidate_port}/"
+        try:
+            with opener.open(url + "api/ping", timeout=0.25) as response:
+                info = json.loads(response.read().decode("utf-8"))
+            if not isinstance(info, dict) or not info.get("ok") or info.get("app") != "ComfyBatch":
+                continue
+            if info.get("is_primary") is not True or not info.get("instance_id"):
+                continue
+            discovered = {"url": url, "instance_id": str(info["instance_id"])}
+            if activate_and_show_existing(discovered, open_browser=open_browser):
+                return discovered
+        except (OSError, ValueError, TypeError):
+            continue
     return {}
 
 

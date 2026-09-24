@@ -24,11 +24,22 @@
 - `src/index.html`：密度下拉加「缩略图墙」选项。
 - `src/app.js`：`cardHtml` 渲染浮层（数据取自既有局部变量，无新请求）。
 - `src/app.css`：`density-wall` 样式与 `.thumb-overlay` 浮层样式。
-- `tests/test_page_assets.py`：新增 `ReviewCompactWallTests`（5 项）。
-- `docs/22-紧凑审图与信息浮层_V2.21.md`：设计取舍与测试清单。
-- `README.md`：第 18 条。
+- `tests/test_page_assets.py`：新增 `ReviewCompactWallTests`（6 项）。
+- `docs/22-紧凑审图与信息浮层_V2.21.md`：设计取舍、独立审查与修复记录。
 
 `comfybatch_v2_core.py` / `comfybatch_v2_app.py` **零改动**（纯前端任务）。
+
+## 独立审查
+
+只读独立审查（规范/实现双轨）报出 1 HIGH + 1 MEDIUM + 3 LOW + 5 NIT，**全部处理**：
+
+- HIGH：`setReviewDensity` 移除清单漏 `density-wall`，切档后界面永久卡在墙档
+  ——改为档位清单 forEach 移除，新增回归测试钉住。
+- MEDIUM：`pointer-events:none` 断言整文件搜索永真——收窄到 `.thumb-overlay` 规则块内。
+- LOW：`:hover` 永真断言改联合选择器；HANDOFF 行尾还原 LF；`upscale_factor` 补 esc。
+- NIT：种子计数、码点安全截断、`:focus-within` 文档改"为 #11 预留"、删 flex 容器上
+  无效的 grid 属性；"无图卡片也渲染浮层"保留（编号/状态有用）。
+- 规范轨确认：无越界改动、公开内容 0 泄漏、其余文件行尾纪律全部守住。
 
 ## 验证记录
 
@@ -36,9 +47,10 @@
 |---|---|
 | Python 编译 | 通过 |
 | 前端词法检查 | `tools/js_lexer.py app.js`：模板文本内换行 324 处，其中属性值内 **0** 处 |
-| 全量测试 | **507 项：通过 506，失败 0，跳过 1**（基线 502 + 本次 5） |
-| 新增测试 | `ReviewCompactWallTests` 5 项（见 `docs/22`） |
-| 真机目检 | 隔离实例（8794，真实数据目录）+ 浏览器自动化截图：墙档网格、悬停浮层均正常（见下） |
+| 全量测试 | **508 项：通过 507，失败 0，跳过 1**（基线 502 + 本次 6） |
+| 新增测试 | `ReviewCompactWallTests` 6 项（见 `docs/22`） |
+| 运行时渲染验证 | 隔离实例（8794，真实数据目录）：真实批次数据下 `#reviewBoard` 渲染出 3 张卡片、**3 个浮层节点全部挂载**（compact 档）；墙档为 CSS 切换类，无独立渲染路径 |
+| 视觉截图 | 无头浏览器自动化在本环境不稳定（标签漂移），**未留截图**；悬停视觉效果随 Edge 验收由用户确认 |
 | 公开内容扫描 | 改动行无本机路径 / 机器名 / 凭据 |
 
 ## 冲突提示（集成者看这里）

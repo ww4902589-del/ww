@@ -1483,7 +1483,7 @@ function renderReview(v){
 function setReviewDensity(value){
   const board=$('reviewBoard');
   if(board){
-    board.classList.remove('density-compact','density-standard','density-loose');
+    ['compact','standard','loose','wall'].forEach(d=>board.classList.remove('density-'+d));
     board.classList.add('density-'+(value||'compact'))}
   try{
     localStorage.setItem('comfybatch-review-density',value||'compact')}
@@ -1527,10 +1527,10 @@ function cardHtml(x){
   const issue=errs.length?issuesHtml(errs):'';
   const ovSize=final.width?`${final.width}×${final.height}`:'';
   const ovSeeds=(gen.seeds||{});const ovSeedKeys=Object.keys(ovSeeds);
-  const ovSeed=ovSeedKeys.length?`${ovSeedKeys[0]}=${ovSeeds[ovSeedKeys[0]]}`:'';
-  const ovPrompt=(x.compiled_prompt||x.prompt||'').slice(0,140);
+  const ovSeed=ovSeedKeys.length?`${ovSeedKeys[0]}=${ovSeeds[ovSeedKeys[0]]}${ovSeedKeys.length>1?` (+${ovSeedKeys.length-1})`:''}`:'';
+  const ovPrompt=[...(x.compiled_prompt||x.prompt||'')].slice(0,140).join('');
   const ovRows=[
-    ovSize?`<span class="ov-size">${esc(ovSize)}${x.upscale_factor?` · ×${x.upscale_factor}`:''}</span>`:'',
+    ovSize?`<span class="ov-size">${esc(ovSize)}${x.upscale_factor?` · ×${esc(String(x.upscale_factor))}`:''}</span>`:'',
     ovSeed?`<span class="ov-seed">${esc(ovSeed)}</span>`:'',
     `<span class="ov-status">${esc(status)}${isDup?' · 疑似重复':''}</span>`,
     ovPrompt?`<span class="ov-prompt">${esc(ovPrompt)}</span>`:''

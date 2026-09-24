@@ -2625,7 +2625,6 @@ details[open] > .compact-module-summary .compact-toggle::after {
   grid-template-columns:repeat(auto-fill,minmax(150px,1fr))
 }
 .review-board.density-wall .review-card {
-  grid-template-columns:1fr;
   gap:4px;
   padding:4px
 }

@@ -663,12 +663,29 @@ class ReviewCompactWallTests(unittest.TestCase):
 
     def test_overlay_is_css_driven_and_never_blocks_clicks(self):
         css = css_source()
-        self.assertIn(".thumb-overlay", css)
-        self.assertIn("pointer-events:none", css.replace(" ", ""),
+        # 断言收窄到 .thumb-overlay 规则块内部——文件其他地方早有
+        # pointer-events:none（.busy），整文件搜索是永真断言，钉不住回归。
+        block = re.search(r"\.thumb-overlay\s*\{[^}]*\}", css)
+        self.assertIsNotNone(block, ".thumb-overlay 规则块必须存在")
+        body = block.group(0).replace(" ", "")
+        self.assertIn("pointer-events:none", body,
                       "浮层必须 pointer-events:none，不能挡缩略图点击")
-        self.assertIn(":hover", css, "浮层必须由悬停驱动")
+        # 悬停驱动必须写在浮层自己的规则上（.thumb:hover .thumb-overlay）。
+        self.assertRegex(css, r"\.thumb:hover \.thumb-overlay")
         # 浮层是复制的信息视图（kv 表里已有完整数据），对读屏器隐藏避免双读。
         self.assertIn("aria-hidden", js_source())
+
+    def test_switching_away_from_wall_removes_the_wall_class(self):
+        """切档回归：setReviewDensity 的移除清单必须包含全部档位。
+
+        曾硬编码 remove('density-compact','density-standard','density-loose')
+        ——加墙档时漏改，切回其他档后 density-wall 类残留，CSS 层叠下
+        界面永久卡在墙档。这里钉住"wall 在移除清单里"。
+        """
+        set_fn = js_source().split("function setReviewDensity", 1)[1].split("function ", 1)[0]
+        self.assertIn("classList.remove", set_fn, "切档必须移除旧类")
+        self.assertIn("'wall'", set_fn,
+                      "setReviewDensity 的档位清单必须包含 wall，否则切档后残留")
 
     def test_wall_mode_hides_verbose_blocks_but_keeps_actions(self):
         """墙档收起信息块，但通过/打回按钮和勾选框必须还在，否则没法审图。"""

@@ -416,9 +416,13 @@ function styleMedium(row){
   const label=styleLabelText(row).toLowerCase();
   const drawn=/anime|manga|cartoon|cel|illustration|painting|动漫|漫画|卡通|插画|绘画|赛璐璐/u.test(label);
   const photo=/photo|photograph|realistic|摄影|写实/u.test(label);
-  return drawn&&!photo?'drawn':photo&&!drawn?'photo':'';
+  return drawn&&photo?'mixed':drawn?'drawn':photo?'photo':'';
 }
 function styleKey(row){return `${row.library||row.catalog}\u0000${row.name}`}
+function styleRecFingerprint(row){
+  return JSON.stringify([styleKey(row),row.display_name,row.name_cn,row.library_cn,
+    row.prompt,row.negative_prompt,row.thumbnail]);
+}
 function recommendStylePartners(rows,anchor,selected){
   if(!anchor?.prompt)return [];
   const taken=new Set((selected||[]).map(styleKey));
@@ -426,9 +430,11 @@ function recommendStylePartners(rows,anchor,selected){
   const anchorLabels=new Set(styleTerms(styleLabelText(anchor)));
   const anchorAll=new Set([...anchorLabels,...styleTerms(anchor.prompt)]);
   const medium=styleMedium(anchor);
+  if(medium==='mixed')return [];
   return (rows||[]).filter(row=>row&&row.library&&row.name&&row.prompt&&!taken.has(styleKey(row)))
     .map(row=>{
       const otherMedium=styleMedium(row);
+      if(otherMedium==='mixed')return null;
       if(medium&&otherMedium&&medium!==otherMedium)return null;
       const labelHits=styleTerms(styleLabelText(row)).filter(term=>anchorLabels.has(term));
       const allHits=styleTerms(row.prompt).filter(term=>anchorAll.has(term)&&!labelHits.includes(term));
@@ -456,7 +462,8 @@ function showStyleRecommendations(){
   if(!anchor){status.textContent='请先从本地风格库选择一个具体风格。';return}
   if(!anchor.prompt){status.textContent='当前主风格没有可用模板文字，无法据此推荐。';return}
   styleRecommendations=recommendStylePartners(inventory.styles,anchor,selectedStyles)
-    .map(item=>({...item,anchorKey:styleKey(anchor)}));
+    .map(item=>({...item,anchorKey:styleKey(anchor),
+      anchorFingerprint:styleRecFingerprint(anchor),partnerFingerprint:styleRecFingerprint(item.row)}));
   if(!styleRecommendations.length){status.textContent='本地风格库中没有与当前主风格相关的可用搭配。';return}
   status.textContent=`找到 ${styleRecommendations.length} 个本地风格搭配；应用只增补风格，不改 LoRA。`;
   list.innerHTML=styleRecommendations.map((item,i)=>`<div class="style-recommend-row">
@@ -472,6 +479,8 @@ function applyStyleRecommendation(index){
   const anchor=first?inventory.styles.find(row=>styleKey(row)===styleKey(first)):styleSource();
   const partner=inventory.styles.find(row=>styleKey(row)===styleKey(item.row));
   if(!anchor||styleKey(anchor)!==item.anchorKey||!partner||!partner.prompt||
+     styleRecFingerprint(anchor)!==item.anchorFingerprint||
+     styleRecFingerprint(partner)!==item.partnerFingerprint||
      selectedStyles.some(row=>styleKey(row)===styleKey(partner))||
      selectedStyles.length+(first?1:2)>4){
     $('styleRecommendations').innerHTML='';

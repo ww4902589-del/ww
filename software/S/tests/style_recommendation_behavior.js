@@ -25,7 +25,11 @@ const blank = {
   library: 'painting_绘画_styles', name: 'Blank Watercolor', display_name: '空模板水彩',
   prompt: '',
 };
-const rows = [anchor, partner, photo, blank];
+const mixed = {
+  library: 'anime_动漫_styles', name: 'Photorealistic Anime', display_name: '写实动漫摄影',
+  prompt: 'soft watercolor photograph',
+};
+const rows = [anchor, partner, photo, blank, mixed];
 const ui = {
   styleRecommendations: {innerHTML: ''},
   styleRecommendationStatus: {textContent: ''},
@@ -50,6 +54,8 @@ const ranked = context.recommendStylePartners(rows, anchor, []);
 assert.equal(ranked.length, 1);
 assert.equal(ranked[0].row.name, partner.name);
 assert.ok(ranked[0].shared.length > 0);
+assert.equal(context.styleMedium(mixed), 'mixed');
+assert.equal(context.recommendStylePartners(rows, mixed, []).length, 0);
 assert.equal(context.recommendStylePartners(rows, anchor, [partner]).length, 0);
 assert.equal(context.recommendStylePartners(rows, {...anchor, prompt: ''}, []).length, 0);
 
@@ -75,6 +81,13 @@ assert.equal(JSON.stringify(selectedLoras), lorasBefore);
 rows.push(partner);
 selectedStyles.splice(0, selectedStyles.length);
 chosen = anchor;
+context.showStyleRecommendations();
+partner.prompt = 'new photographic template';
+context.applyStyleRecommendation(0);
+assert.equal(selectedStyles.length, 0);
+assert.match(ui.styleRecommendationStatus.textContent, /已变化/);
+partner.prompt = 'soft watercolor illustration';
+
 context.showStyleRecommendations();
 chosen = photo;
 context.applyStyleRecommendation(0);

@@ -2616,6 +2616,71 @@ details[open] > .compact-module-summary .compact-toggle::after {
   gap:16px;
   grid-template-columns:repeat(auto-fill,minmax(560px,1fr))
 }
+/* ---- V2.21 紧凑审图：缩略图墙与半透明信息浮层 --------------------------
+墙档是给"几十张图快速过一遍"用的：信息块全部收起，只留图、标题行和操作按钮。
+被收起的信息由悬停浮层补回——浮层在所有密度档都可用，暗色渐变底保证在
+照片内容上可读；pointer-events:none 让它永远不挡点击与勾选。 */
+.review-board.density-wall {
+  gap:6px;
+  grid-template-columns:repeat(auto-fill,minmax(150px,1fr))
+}
+.review-board.density-wall .review-card {
+  grid-template-columns:1fr;
+  gap:4px;
+  padding:4px
+}
+.review-board.density-wall .review-card .kv,
+.review-board.density-wall .review-card .review-details,
+.review-board.density-wall .review-card .prompt {
+  display:none
+}
+.review-board.density-wall .review-card h4 {
+  font-size:12px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis
+}
+.review-board.density-wall .review-card .thumb img {
+  aspect-ratio:1;
+  object-fit:cover
+}
+.review-board.density-wall .review-actions button {
+  padding:4px 7px;
+  font-size:11px
+}
+.review-card .thumb-overlay {
+  position:absolute;
+  inset:0;
+  display:flex;
+  flex-direction:column;
+  justify-content:flex-end;
+  gap:2px;
+  padding:8px 8px 6px;
+  border-radius:8px;
+  background:linear-gradient(to top,rgba(10,14,20,.9) 0%,rgba(10,14,20,.62) 48%,rgba(10,14,20,0) 100%);
+  color:#e8eef7;
+  font-size:11px;
+  line-height:1.5;
+  opacity:0;
+  transition:opacity .12s ease;
+  pointer-events:none;
+  overflow:hidden
+}
+.review-card .thumb:hover .thumb-overlay,
+.review-card .thumb:focus-within .thumb-overlay {
+  opacity:1
+}
+.review-card .thumb-overlay .ov-index {
+  font-weight:700;
+  font-size:12px
+}
+.review-card .thumb-overlay .ov-prompt {
+  color:#c3cfdf;
+  display:-webkit-box;
+  -webkit-line-clamp:3;
+  -webkit-box-orient:vertical;
+  overflow:hidden
+}
 .review-card-head .review-pick {
   margin-left:auto
 }

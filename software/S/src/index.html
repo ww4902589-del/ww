@@ -220,6 +220,12 @@
             <div id="stylePreview" class="style-preview"></div>
             <button class="secondary add-selection" onclick="addStyle()">加入风格组合</button>
             <div id="styles" class="selection-list"></div>
+            <div class="style-recommend-box">
+              <div class="subsection-title"><b>本地风格搭配建议</b><span>仅使用风格库，不包含 LoRA</span></div>
+              <button class="secondary" id="recommendStylesButton" onclick="showStyleRecommendations()">为当前主风格推荐搭配</button>
+              <div id="styleRecommendationStatus" class="help" role="status" aria-live="polite">先选一个具体风格，或先加入主风格，再查看搭配建议。</div>
+              <div id="styleRecommendations" class="style-recommendations"></div>
+            </div>
           </div>
           <div class="lora-column">
             <div class="subsection-title"><b>LoRA 组合</b><span>选择后可调整强度和触发词</span></div>

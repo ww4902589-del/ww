@@ -18,6 +18,7 @@ loraSaveTimers={
 }
 ,
 selectedPromptIndexes=new Set();
+let styleRecommendations=[];
 let reviewPicks=new Set();
 let dupGroups=new Set();
 let activePresetId='';
@@ -369,7 +370,8 @@ function renderStylePreview(){
   <b>${esc(x.display_name||x.name_cn||x.name)}</b>
   <small>原名：${esc(x.name)}</small>
   <small>${url?'预览图来自原风格节点':'暂无预览图'}</small>
-  </div>`:'<div>尚未发现可用风格</div>'}
+  </div>`:'<div>尚未发现可用风格</div>';
+  clearStyleRecommendations()}
 function addStyle(){
   const catalog=$('styleLibrary').value,name=$('styleName').value;
   if(!catalog||!name||selectedStyles.some(x=>x.catalog===catalog&&x.name===name))return;
@@ -390,7 +392,98 @@ function renderStyleBasket(){
     <button class="danger" onclick="selectedStyles.splice(${
     i},1);renderStyleBasket()">移除</button>
     </div>`}).join('');
-  renderConfigFeedback()}
+  renderConfigFeedback();
+  clearStyleRecommendations()}
+
+/* Recommendations use only installed style entries. No remote service or
+LoRA state participates in scoring or application. */
+const STYLE_STOP_WORDS=new Set(['style','styles','art','the','and','with','for','high','quality','best','image','picture','masterpiece','风格','画面','作品']);
+function styleTerms(value){
+  const chunks=String(value||'').slice(0,1200).normalize('NFKC').toLowerCase().match(/[a-z0-9]{3,}|[\u3400-\u9fff]{2,}/gu)||[];
+  const words=[];
+  for(const chunk of chunks){
+    if(/^[\u3400-\u9fff]/u.test(chunk)){
+      if(chunk.length<=4)words.push(chunk);
+      for(let i=0;i<chunk.length-1;i++)words.push(chunk.slice(i,i+2));
+    }else words.push(chunk);
+  }
+  return [...new Set(words.filter(word=>!STYLE_STOP_WORDS.has(word)))];
+}
+function styleLabelText(row){
+  return [row.display_name,row.name_cn,row.name,row.library_cn,row.library].filter(Boolean).join(' ');
+}
+function styleMedium(row){
+  const label=styleLabelText(row).toLowerCase();
+  const drawn=/anime|manga|cartoon|cel|illustration|painting|动漫|漫画|卡通|插画|绘画|赛璐璐/u.test(label);
+  const photo=/photo|photograph|realistic|摄影|写实/u.test(label);
+  return drawn&&!photo?'drawn':photo&&!drawn?'photo':'';
+}
+function styleKey(row){return `${row.library||row.catalog}\u0000${row.name}`}
+function recommendStylePartners(rows,anchor,selected){
+  if(!anchor?.prompt)return [];
+  const taken=new Set((selected||[]).map(styleKey));
+  taken.add(styleKey(anchor));
+  const anchorLabels=new Set(styleTerms(styleLabelText(anchor)));
+  const anchorAll=new Set([...anchorLabels,...styleTerms(anchor.prompt)]);
+  const medium=styleMedium(anchor);
+  return (rows||[]).filter(row=>row&&row.library&&row.name&&row.prompt&&!taken.has(styleKey(row)))
+    .map(row=>{
+      const otherMedium=styleMedium(row);
+      if(medium&&otherMedium&&medium!==otherMedium)return null;
+      const labelHits=styleTerms(styleLabelText(row)).filter(term=>anchorLabels.has(term));
+      const allHits=styleTerms(row.prompt).filter(term=>anchorAll.has(term)&&!labelHits.includes(term));
+      if(!labelHits.length&&!allHits.length)return null;
+      const shared=[...labelHits,...allHits].slice(0,3);
+      const score=labelHits.length*5+allHits.length+(row.library!==anchor.library?2:0);
+      return {row,shared,score};
+    }).filter(Boolean)
+    .sort((a,b)=>b.score-a.score||styleKey(a.row).localeCompare(styleKey(b.row)))
+    .slice(0,3);
+}
+function clearStyleRecommendations(){
+  styleRecommendations=[];
+  const list=$('styleRecommendations'),status=$('styleRecommendationStatus');
+  if(list)list.innerHTML='';
+  if(status)status.textContent='先选一个具体风格，或先加入主风格，再查看搭配建议。';
+}
+function showStyleRecommendations(){
+  const list=$('styleRecommendations'),status=$('styleRecommendationStatus');
+  list.innerHTML='';
+  styleRecommendations=[];
+  if(selectedStyles.length>=4){status.textContent='风格组合已达到 4 个，请先移除一个再查看建议。';return}
+  const first=selectedStyles[0];
+  const anchor=first?inventory.styles.find(row=>styleKey(row)===styleKey(first)):styleSource();
+  if(!anchor){status.textContent='请先从本地风格库选择一个具体风格。';return}
+  if(!anchor.prompt){status.textContent='当前主风格没有可用模板文字，无法据此推荐。';return}
+  styleRecommendations=recommendStylePartners(inventory.styles,anchor,selectedStyles)
+    .map(item=>({...item,anchorKey:styleKey(anchor)}));
+  if(!styleRecommendations.length){status.textContent='本地风格库中没有与当前主风格相关的可用搭配。';return}
+  status.textContent=`找到 ${styleRecommendations.length} 个本地风格搭配；应用只增补风格，不改 LoRA。`;
+  list.innerHTML=styleRecommendations.map((item,i)=>`<div class="style-recommend-row">
+    <div><b>${esc(item.row.display_name||item.row.name_cn||item.row.name)}</b>
+    <small>匹配线索：${esc(item.shared.join('、'))}${item.row.library!==anchor.library?' · 来自另一风格库':''}</small></div>
+    <button class="secondary" onclick="applyStyleRecommendation(${i})">${selectedStyles.length?'加入组合':'使用这组风格'}</button>
+  </div>`).join('');
+}
+function applyStyleRecommendation(index){
+  const item=styleRecommendations[index];
+  if(!item)return;
+  const first=selectedStyles[0];
+  const anchor=first?inventory.styles.find(row=>styleKey(row)===styleKey(first)):styleSource();
+  const partner=inventory.styles.find(row=>styleKey(row)===styleKey(item.row));
+  if(!anchor||styleKey(anchor)!==item.anchorKey||!partner||!partner.prompt||
+     selectedStyles.some(row=>styleKey(row)===styleKey(partner))||
+     selectedStyles.length+(first?1:2)>4){
+    $('styleRecommendations').innerHTML='';
+    $('styleRecommendationStatus').textContent='风格目录或当前选择已变化，请重新生成建议。';
+    styleRecommendations=[];
+    return;
+  }
+  if(!first)selectedStyles.push({...anchor,catalog:anchor.library,name:anchor.name});
+  if(!selectedStyles.some(row=>styleKey(row)===styleKey(partner)))
+    selectedStyles.push({...partner,catalog:partner.library,name:partner.name});
+  renderStyleBasket();
+}
 function addLora(){
   const name=$('loraPick').value,source=inventory.loras.find(x=>x.value===name);
   if(source&&!selectedLoras.some(x=>x.name===name)){

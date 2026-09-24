@@ -29,8 +29,9 @@ from comfybatch_image_extract import ImageExtractor
 from comfybatch_library import (
     DEFAULT_PAGE_SIZE as LIBRARY_PAGE_SIZE,
     MAX_PAGE_SIZE as LIBRARY_MAX_PAGE_SIZE,
-    SORTS as LIBRARY_SORTS,
+    SORT_LABELS as LIBRARY_SORT_LABELS,
     LibraryStore,
+    LibraryUnavailable,
     int_or as library_int,
 )
 from comfybatch_nodeschema import NodeSchemaRegistry, active_registry, set_active_registry, structural_fingerprint
@@ -665,13 +666,31 @@ class Application:
         索引失败**不能**挡住审图页——成图与确认是主流程，索引只是它的检索面。
         但也不静默：错误原文留在 ``library_sync_error`` 里，随作品库载荷一起返回。
         """
-        if not run_id:
+        if not run_id or not self.library.available:
             return
         try:
-            self.library.sync_run(run_id, self.reviews.load(run_id))
+            document = dict(self.reviews.load(run_id))
+            # The review document does not carry the output directory -- the
+            # review store never wrote one -- so every indexed row reported an
+            # empty one. The runner still knows it for the run it is on.
+            if not str(document.get("output_dir") or "").strip():
+                document["output_dir"] = self.run_output_dir(run_id)
+            self.library.sync_run(run_id, document)
             self.library_sync_error = self.library.last_warning
-        except (OSError, sqlite3.Error) as exc:
+        except (OSError, sqlite3.Error, LibraryUnavailable) as exc:
             self.library_sync_error = f"作品库索引未更新：{exc}"
+
+    def run_output_dir(self, run_id: str) -> str:
+        """Output directory of ``run_id``, while this process still ran it.
+
+        Empty for a run restored from disk: the review document does not record
+        where its images were copied, so after a restart the honest answer is
+        "unknown" rather than a guess at an older setting.
+        """
+        status = self.runner.status()
+        if str(status.get("run_id") or "") != str(run_id or ""):
+            return ""
+        return str(status.get("output_dir") or "")
 
     def library_payload(self, query: dict[str, list[str]]) -> dict[str, Any]:
         """作品库查询结果：一页记录 + 统计 + 可用的筛选项。
@@ -704,22 +723,39 @@ class Application:
         return {
             **page,
             "stats": self.library.stats(),
-            "sorts": LIBRARY_SORTS,
+            "sorts": LIBRARY_SORT_LABELS,
+            "available": self.library.available,
             "statuses": list(REVIEW_STATUSES),
             "page_size": LIBRARY_PAGE_SIZE,
             "sync_error": self.library_sync_error,
         }
 
+    #: 读图端点接受的扩展名。配合"必须真能解码"，这条路径就不可能是"按记录
+    #: 读任意文件"的入口：索引里哪怕混进一条指向文本文件的记录，端点会拒绝，
+    #: 而不是把那串字节当图发出去。
+    LIBRARY_IMAGE_SUFFIXES = (".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif", ".tif", ".tiff")
+
     def library_source(self, work_id: str) -> pathlib.Path:
         """作品库记录对应的成图文件。
 
         路径只从数据库里取：客户端能报的只有 ``work_id``，报不出磁盘路径。
-        这样即便索引里混进一条指向别处的记录，能取到的也只是那一条自己的图。
+        取到之后还过两道闸——扩展名必须是图片，且必须真能解码成图片。
         """
         item = self.library.get(work_id)
         source = pathlib.Path(str(item.get("copied_to") or ""))
         if not item.get("available") or not source.is_file():
             raise ValueError("这条记录的成图已不在原位置，无法读取")
+        if source.suffix.lower() not in self.LIBRARY_IMAGE_SUFFIXES:
+            raise ValueError(f"这条记录指向的不是图片：{source.suffix or '（无扩展名）'}")
+        try:
+            # ``Image.open`` 只读文件头，够判断"这是不是一张图"，也不至于为
+            # 一次缩略图请求去校验几十兆的像素。
+            with Image.open(source) as probe:
+                decodable = bool(probe.format)
+        except Exception as exc:  # noqa: BLE001 - 任何解码失败都等于"不是图片"
+            raise ValueError(f"这条记录的文件不是可解码的图片：{exc}") from exc
+        if not decodable:
+            raise ValueError("这条记录的文件不是可解码的图片")
         return source
 
     def library_thumbnail(self, work_id: str, size: int = THUMBNAIL_SIZE) -> pathlib.Path:
@@ -1539,6 +1575,17 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt: str, *args) -> None:
         print("[ComfyBatch] " + fmt % args)
 
+    @staticmethod
+    def _reject_extra_query(query: dict[str, list[str]], allowed: set[str]) -> None:
+        """读图端点只接受白名单里的查询参数。
+
+        ``?path=`` 以前会被静默忽略，于是"只认 work_id"这句话在实现上并不成立，
+        参数名拼错也无人知晓。显式拒绝比默默忽略诚实。
+        """
+        extra = sorted(set(query) - set(allowed))
+        if extra:
+            raise ValueError(f"作品库读图只接受 {'、'.join(sorted(allowed))}（多余的参数：{'、'.join(extra)}）")
+
     def _json(self, payload: dict, status: int = 200) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
@@ -1650,8 +1697,9 @@ class Handler(BaseHTTPRequestHandler):
             elif parsed.path == "/api/library":
                 self._json({"ok": True, "library": APP.library_payload(parse_qs(parsed.query))})
             elif parsed.path == "/api/library/preview":
+                query = parse_qs(parsed.query)
+                self._reject_extra_query(query, {"work_id", "size"})
                 with APP.lock:
-                    query = parse_qs(parsed.query)
                     preview = APP.library_thumbnail(
                         query.get("work_id", [""])[0],
                         library_int((query.get("size") or [""])[0], THUMBNAIL_SIZE),
@@ -1667,8 +1715,10 @@ class Handler(BaseHTTPRequestHandler):
             elif parsed.path == "/api/library/image":
                 # 作品库的原图：与 /api/image 不同，它不限于"当前批次"，而是任何
                 # 一条索引记录——因此路径必须来自数据库，客户端只能给 work_id。
+                query = parse_qs(parsed.query)
+                self._reject_extra_query(query, {"work_id"})
                 with APP.lock:
-                    source = APP.library_image(parse_qs(parsed.query).get("work_id", [""])[0])
+                    source = APP.library_image(query.get("work_id", [""])[0])
                     body = source.read_bytes()
                 self.send_response(200)
                 self.send_header("Content-Type", mimetypes.guess_type(str(source))[0] or "application/octet-stream")
@@ -1750,6 +1800,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.wfile.write(body)
             else:
                 self._json({"ok": False, "error": "未找到接口"}, 404)
+        except LibraryUnavailable as exc:
+            self._json({"ok": False, "error": str(exc), "library_unavailable": True}, 503)
         except Exception as exc:
             self._json({"ok": False, "error": str(exc)}, 400)
 
@@ -1776,6 +1828,8 @@ class Handler(BaseHTTPRequestHandler):
                     APP.lock_changed()
         except PermissionError as exc:
             self._json({"ok": False, "error": str(exc), "lease": APP.lease_status(client_id)}, 409)
+        except LibraryUnavailable as exc:
+            self._json({"ok": False, "error": str(exc), "library_unavailable": True}, 503)
         except Exception as exc:
             self._json({"ok": False, "error": str(exc)}, 400)
 

@@ -299,5 +299,78 @@ class LibraryRouteTests(unittest.TestCase):
         self.assertIn('data-step="5"', page)
 
 
+    # ------------------------------------------------- 读图端点的参数纪律
+
+    def test_the_image_endpoints_reject_any_parameter_other_than_work_id(self):
+        """``?path=`` 曾经被静默忽略，于是"只认 work_id"在实现上并不成立。"""
+        self.reindex()
+        target = urllib.parse.quote(str(self.images / "001_00001_.png"))
+        for path in (
+            f"/api/library/image?path={target}",
+            f"/api/library/image?work_id=run-a:0001&path={target}",
+            f"/api/library/preview?work_id=run-a:0001&path={target}",
+            "/api/library/preview?work_id=run-a:0001&size=120&debug=1",
+        ):
+            with self.subTest(path=path):
+                status, body = self.request(path)
+                self.assertEqual(400, status, body)
+                self.assertFalse(json.loads(body)["ok"])
+
+    def test_a_record_pointing_at_a_non_image_cannot_be_served(self):
+        """路径由数据库给，所以"库里那条记录指向什么"必须被验证。
+
+        只要端点是"把那个文件的字节原样发出去"，一条 ``copied_to`` 指向文本
+        文件的记录就成了按记录读任意文件的口子。
+        """
+        plain = self.root / "notes.txt"
+        plain.write_text("这不是图片，只是普通文本。", encoding="utf-8")
+        disguised = self.root / "notes.png"
+        disguised.write_bytes(plain.read_bytes())
+        for index, target in ((1, plain), (2, disguised)):
+            self.app.library.sync_run("run-b", {"run_id": "run-b", "items": {
+                str(index): {
+                    "index": index, "title": "可疑", "status": "completed",
+                    "copied_to": str(target),
+                },
+            }})
+            work_id = f"run-b:{index:04d}"
+            with self.subTest(work_id=work_id):
+                status, body = self.request(f"/api/library/image?work_id={work_id}")
+                self.assertEqual(400, status, body)
+                status, _ = self.request(f"/api/library/preview?work_id={work_id}")
+                self.assertEqual(400, status)
+        page = self.library("?run_id=run-b")
+        self.assertEqual(2, page["total"], "拒绝读图不等于把记录丢掉")
+        self.assertTrue(all(row["available"] for row in page["items"]), "文件确实存在")
+        self.assertEqual("这不是图片，只是普通文本。", plain.read_text(encoding="utf-8"))
+
+    def test_an_unavailable_library_is_reported_as_such(self):
+        """库不可用要说"不可用"，不能伪装成"你请求错了"。"""
+        blocker = self.root / "blocker-file"
+        blocker.write_text("这不是目录。", encoding="utf-8")
+        self.app.library = LibraryStore(blocker / "library.db")
+        try:
+            status, body = self.request("/api/library")
+            self.assertEqual(503, status, body)
+            self.assertTrue(json.loads(body)["library_unavailable"])
+            status, body = self.request("/api/library/reindex", {})
+            self.assertEqual(503, status, body)
+        finally:
+            self.app.library = LibraryStore(self.root / "library.db")
+
+    def test_the_sort_options_are_labels_not_sql(self):
+        self.reindex()
+        page = self.library()
+        self.assertEqual(set(page["sorts"]), {"newest", "oldest", "index", "seed", "size"})
+        self.assertEqual(page["sorts"]["newest"], "最新")
+        for key, label in page["sorts"].items():
+            with self.subTest(key=key):
+                self.assertNotIn("DESC", label.upper())
+                self.assertNotIn("(", label)
+        # 显示的是标签，取值仍然必须是能用的排序键。
+        self.assertEqual(5, self.library("?sort=size")["total"])
+        self.assertEqual(5, self.library("?sort=seed")["total"])
+
+
 if __name__ == "__main__":
     unittest.main()

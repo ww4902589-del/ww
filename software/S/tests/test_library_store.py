@@ -32,8 +32,10 @@ from comfybatch_library import (  # noqa: E402
     MAX_PAGE_SIZE,
     REVIEW_STATUSES,
     SCHEMA_VERSION,
+    SORT_LABELS,
     SORTS,
     LibraryStore,
+    LibraryUnavailable,
     work_id_for,
 )
 
@@ -103,6 +105,23 @@ class SchemaTests(_TempLibrary):
             connection.close()
         for table in ("works", "work_tags", "runs", "meta"):
             self.assertIn(table, tables)
+
+    def test_a_file_that_looks_like_a_database_is_never_moved_aside(self):
+        """宁可"稍后再试"，也不能把一份好库挪走——那等于丢掉全部标签与收藏。"""
+        suspicious = self.root / "looks-like.db"
+        suspicious.write_bytes(b"SQLite format 3\x00" + b"\x00" * 4096)
+        store = LibraryStore(suspicious)
+        self.assertFalse(store.available)
+        self.assertTrue(store.last_warning)
+        self.assertTrue(suspicious.exists(), "看起来仍是数据库的文件不得被挪走")
+        self.assertEqual(list(self.root.glob("looks-like.db.corrupt-*")), [])
+
+    def test_an_empty_file_is_treated_as_a_new_database(self):
+        empty = self.root / "empty.db"
+        empty.write_bytes(b"")
+        store = LibraryStore(empty)
+        self.assertTrue(store.available)
+        self.assertEqual(store.stats()["works"], 0)
 
     def test_reopening_the_same_file_does_not_duplicate_or_lose_rows(self):
         image = self.make_image("a_00001_.png")
@@ -506,6 +525,122 @@ class IdentityTests(unittest.TestCase):
         self.assertEqual(work_id_for("run-a", 7), "run-a:0007")
         self.assertEqual(work_id_for("run-a", "12"), "run-a:0012")
         self.assertEqual(work_id_for("run-a", None), "run-a:0000")
+
+
+class AvailabilityTests(_TempLibrary):
+    """作品库不可用时，程序要能起来，并且如实说自己不可用。
+
+    ``Application`` 在模块级构造 ``LibraryStore``，所以构造抛异常等于整个程序
+    打不开——为了一个"可有可无的索引"付这个代价是错的。
+    """
+
+    def test_a_path_that_cannot_be_created_degrades_instead_of_raising(self):
+        blocker = self.root / "blocker"
+        blocker.write_text("这不是目录，只是个文件。", encoding="utf-8")
+        store = LibraryStore(blocker / "library.db")
+        self.assertFalse(store.available)
+        self.assertTrue(store.last_warning, "不可用必须留下可见原因")
+
+    def test_every_operation_on_an_unavailable_store_says_so(self):
+        blocker = self.root / "blocker"
+        blocker.write_text("这不是目录，只是个文件。", encoding="utf-8")
+        store = LibraryStore(blocker / "library.db")
+        for label, call in (
+            ("query", lambda: store.query()),
+            ("stats", store.stats),
+            ("get", lambda: store.get("run-a:0001")),
+            ("sync_run", lambda: store.sync_run("run-a", {"items": {"1": {"index": 1}}})),
+            ("vacuum", store.vacuum),
+        ):
+            with self.subTest(operation=label):
+                with self.assertRaises(LibraryUnavailable):
+                    call()
+
+
+class SortLabelTests(_TempLibrary):
+    """排序下拉里显示的必须是中文标签，不是 SQL 片段。
+
+    第一版把 ``SORTS``（SQL 子句）直接当选项文本发给页面，下拉框里于是写着
+    ``(mtime_ns > 0) DESC, mtime_ns DESC, ...``。
+    """
+
+    def test_every_sort_key_has_a_label_and_no_label_is_an_expression(self):
+        self.assertEqual(set(SORT_LABELS), set(SORTS), "每个排序键都要有标签")
+        for key, label in SORT_LABELS.items():
+            with self.subTest(key=key):
+                self.assertTrue(label.strip())
+                self.assertNotIn("(", label)
+                self.assertNotIn("DESC", label.upper())
+                self.assertNotIn("mtime", label)
+
+
+class IndexIdentityTests(_TempLibrary):
+    """编号决定身份：没有合法编号的条目不能被折叠到同一个 work_id 上。"""
+
+    def test_an_entry_without_a_numeric_index_is_skipped(self):
+        # 两条都没有可用的 index，退回 dict 的键；键是任意字符串。
+        counters = self.store.sync_run("run-a", {"run_id": "run-a", "items": {
+            "草稿甲": {"title": "甲", "status": "completed"},
+            "草稿乙": {"title": "乙", "status": "completed"},
+        }})
+        self.assertEqual(counters, {"inserted": 0, "updated": 0, "skipped": 2})
+        self.assertEqual(self.store.query()["total"], 0, "宁可不索引，也不能张冠李戴")
+
+    def test_a_usable_entry_next_to_a_broken_one_still_lands(self):
+        image = self.make_image("001_00001_.png")
+        counters = self.store.sync_run("run-a", {"run_id": "run-a", "items": {
+            "1": self.entry(1, "甲", image),
+            "草稿": {"title": "乙", "status": "completed"},
+        }})
+        self.assertEqual(counters, {"inserted": 1, "updated": 0, "skipped": 1})
+        page = self.store.query()
+        self.assertEqual(page["total"], 1)
+        self.assertEqual(page["items"][0]["work_id"], "run-a:0001")
+        self.assertEqual(page["items"][0]["title"], "甲")
+
+
+class ClearIndexTests(_TempLibrary):
+    """清空索引只丢"可重建的部分"：留下的行必须连标签一起留下，
+    丢掉的行的标签必须跟着走。"""
+
+    def test_clearing_the_index_leaves_no_tag_that_no_record_carries(self):
+        first = self.make_image("001_00001_.png")
+        second = self.make_image("002_00001_.png")
+        third = self.make_image("003_00001_.png")
+        self.store.sync_run("run-a", self.document("run-a", [
+            self.entry(1, "甲", first), self.entry(2, "乙", second), self.entry(3, "丙", third),
+        ]))
+        self.store.set_favorite("run-a:0001", True)
+        self.store.add_tags("run-a:0002", ["孤儿标签"])
+        self.store.add_tags("run-a:0003", ["墓碑标签"])
+        self.store.delete("run-a:0003", "验收")
+
+        removed = self.store.clear_index()
+        self.assertEqual(removed["removed"], 1, "只有既未收藏也未删除的那条被清掉")
+        connection = sqlite3.connect(str(self.store.path))
+        try:
+            rows = connection.execute("SELECT work_id, tag FROM work_tags ORDER BY work_id").fetchall()
+        finally:
+            connection.close()
+        self.assertEqual(rows, [("run-a:0003", "墓碑标签")],
+                         "被清掉那条的标签必须一起走，留下的行连标签一起留")
+
+        # 重新同步不能把旧标签"贴"回到新行上。
+        self.store.sync_run("run-a", self.document("run-a", [
+            self.entry(1, "甲", first), self.entry(2, "乙", second),
+        ]))
+        self.assertEqual(self.store.get("run-a:0002")["tags"], [])
+
+    def test_a_tag_on_a_removed_record_is_not_counted(self):
+        image = self.make_image("001_00001_.png")
+        self.store.sync_run("run-a", self.document("run-a", [self.entry(1, "甲", image)]))
+        self.store.add_tags("run-a:0001", ["旧标签"])
+        self.assertEqual(self.store.stats()["tags"], 1)
+        self.store.delete("run-a:0001")
+        self.assertEqual(self.store.stats()["tags"], 0, "统计与 facets 必须同一口径")
+        self.assertEqual(self.store.query(include_deleted=True)["facets"]["tags"], [])
+        self.store.restore("run-a:0001")
+        self.assertEqual(self.store.stats()["tags"], 1, "恢复后标签要回来")
 
 
 if __name__ == "__main__":

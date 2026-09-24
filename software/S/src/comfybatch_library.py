@@ -46,6 +46,9 @@ except Exception:  # noqa: BLE001 - a missing Pillow only costs image dimensions
 #: Bumped when the table layout changes; ``meta`` records what a file is.
 SCHEMA_VERSION = 1
 
+#: 每个 SQLite 文件开头的 16 个字节。用来区分"这不是数据库"和"数据库暂时打不开"。
+SQLITE_MAGIC = b"SQLite format 3\x00"
+
 #: Review states the rest of the program already uses. Imported nowhere on
 #: purpose -- kept as a literal so this module stays free of ``comfybatch_v2_core``
 #: and can be tested (and reused) on its own.
@@ -65,6 +68,19 @@ SORTS: dict[str, str] = {
     "index": "run_id ASC, item_index ASC",
     "seed": "CAST(seed AS INTEGER) ASC, run_id ASC, item_index ASC",
     "size": "size_bytes DESC, run_id DESC, item_index DESC",
+}
+
+#: Human labels for the sort keys.
+#:
+#: The page used to receive the SQL clause as the option text, so the sort
+#: dropdown literally read ``(mtime_ns > 0) DESC, mtime_ns DESC, ...``. The
+#: clause is an implementation detail; the label is the interface.
+SORT_LABELS: dict[str, str] = {
+    "newest": "最新",
+    "oldest": "最早",
+    "index": "按批次编号",
+    "seed": "按种子",
+    "size": "按文件大小",
 }
 
 DEFAULT_PAGE_SIZE = 24
@@ -126,12 +142,26 @@ def _like_pattern(text: str) -> str:
     return f"%{escaped}%"
 
 
+class LibraryUnavailable(RuntimeError):
+    """The database could not be opened *and* could not be replaced.
+
+    The library is a derived index, not the user's work. When it cannot be
+    opened at all the program still has to start and say so -- refusing to load
+    the review page because an index is missing would be the tail wagging the
+    dog.
+    """
+
+
 class LibraryStore:
     """One SQLite file holding every generated image the program knows about."""
 
     def __init__(self, path: pathlib.Path | str) -> None:
         self.path = pathlib.Path(path)
         self.last_warning = ""
+        #: False once the file can neither be opened nor replaced. Every
+        #: operation then raises :class:`LibraryUnavailable` instead of the
+        #: program failing to start.
+        self.available = True
         self._prepare()
 
     # ------------------------------------------------------------- schema
@@ -150,6 +180,8 @@ class LibraryStore:
         lock on the database file, which broke both ``VACUUM`` and cleaning up a
         temporary directory in the tests -- so every call site goes through here.
         """
+        if not self.available:
+            raise LibraryUnavailable(self.last_warning or "作品库当前不可用")
         connection = self._connect()
         try:
             with connection:
@@ -166,20 +198,51 @@ class LibraryStore:
         silently destroyed -- the library is a rebuildable index, so losing the
         index is recoverable, losing the user's *sources* would not be.
         """
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            self.available = False
+            self.last_warning = f"作品库目录无法使用，作品库暂不可用：{exc}"
+            return
         try:
             with self._session() as connection:
                 self._ensure_schema(connection)
             return
-        except sqlite3.DatabaseError as exc:
+        except (sqlite3.Error, OSError) as exc:
             self.last_warning = f"作品库文件无法读取，已另存为备份并新建：{exc}"
+        if not self._is_foreign_file():
+            # 打开失败了，但文件本身还带着 SQLite 文件头——多半是占锁、瞬时 I/O
+            # 错误，或者"能读不能写"。把它挪走等于让用户丢掉全部标签与收藏，
+            # 代价远高于"这次不可用，下次再试"。
+            self.available = False
+            self.last_warning = f"{self.last_warning}（文件看起来仍是数据库，未另存，请稍后重试）"
+            return
         stamp = time.strftime("%Y%m%d-%H%M%S")
         try:
             self.path.replace(self.path.with_name(f"{self.path.name}.corrupt-{stamp}"))
+        except OSError as exc:
+            self.last_warning = f"{self.last_warning}（旧文件没能挪走：{exc}）"
+        try:
+            with self._session() as connection:
+                self._ensure_schema(connection)
+        except (sqlite3.Error, OSError, LibraryUnavailable) as exc:
+            # Second failure -- a read-only directory, another process holding
+            # the file, a path whose parent is not a directory. Give up on the
+            # index rather than taking the whole program down with it.
+            self.available = False
+            self.last_warning = f"{self.last_warning}（作品库暂不可用：{exc}）"
+
+    def _is_foreign_file(self) -> bool:
+        """文件存在、且**不是**一个 SQLite 数据库。
+
+        空文件（0 字节）算数据库：SQLite 会把空文件当合法的新库。读不到也不下结论。
+        """
+        try:
+            with self.path.open("rb") as handle:
+                header = handle.read(len(SQLITE_MAGIC))
         except OSError:
-            pass
-        with self._session() as connection:
-            self._ensure_schema(connection)
+            return False
+        return bool(header) and not header.startswith(SQLITE_MAGIC)
 
     @staticmethod
     def _ensure_schema(connection: sqlite3.Connection) -> None:
@@ -272,6 +335,12 @@ class LibraryStore:
                     counters["skipped"] += 1
                     continue
                 index = entry.get("index", key)
+                # A non-numeric index has no stable identity: ``work_id_for``
+                # would fold every such entry onto ``...:0000`` and the last one
+                # would silently overwrite the others. Skip rather than guess.
+                if not _is_index(index):
+                    counters["skipped"] += 1
+                    continue
                 work_id = work_id_for(run_id, index)
                 row = self._entry_to_row(run_id, index, entry, document, now)
                 # The whitelist is enforced here rather than trusted to
@@ -694,7 +763,15 @@ class LibraryStore:
                 ).fetchone()["n"]
                 or 0
             )
-            tag_count = int(connection.execute("SELECT COUNT(DISTINCT tag) AS n FROM work_tags").fetchone()["n"])
+            # Scoped to live records the same way ``facets`` counts them: a tag
+            # left over from a cleared index must not appear in one number and
+            # vanish from the tag strip in the same payload.
+            tag_count = int(
+                connection.execute(
+                    "SELECT COUNT(DISTINCT t.tag) AS n FROM work_tags t "
+                    "JOIN works w ON w.work_id = t.work_id WHERE w.deleted_at = 0"
+                ).fetchone()["n"]
+            )
             run_count = int(connection.execute("SELECT COUNT(*) AS n FROM runs").fetchone()["n"])
         return {
             "works": facets["total"],
@@ -706,7 +783,9 @@ class LibraryStore:
             "image_bytes": total_bytes,
             "favorite_bytes": favorite_bytes,
             "db_bytes": size_bytes,
-            "db_path": str(self.path),
+            # The absolute path is deliberately not sent: it is the user's data
+            # directory and nothing on the page needs it.
+            "available": self.available,
             "schema_version": SCHEMA_VERSION,
             "warning": self.last_warning,
         }
@@ -730,16 +809,33 @@ class LibraryStore:
         return {"before": before, "after": after}
 
     def clear_index(self) -> dict[str, int]:
-        """Drop every derived row, keeping favourites/tags/deletions.
+        """Drop every derived row, keeping favourites, tags and deletions.
 
         The panel offers this after a manual clean-up of the output folder: what
         the index knows is rebuildable, what the user marked is not, so only the
-        first is thrown away.
+        first is thrown away. Tags survive on the rows that survive -- a
+        favourite keeps its tags, and so does a tombstone.
         """
         with self._session() as connection:
+            # Tags on the dropped rows go with them. Leaving them behind produced
+            # tags that no record carried: invisible in the tag strip, but
+            # reappearing on whatever later took the same ``work_id``.
+            connection.execute(
+                "DELETE FROM work_tags WHERE work_id IN "
+                "(SELECT work_id FROM works WHERE favorite = 0 AND deleted_at = 0)"
+            )
             works = connection.execute("DELETE FROM works WHERE favorite = 0 AND deleted_at = 0").rowcount
             connection.execute("DELETE FROM runs")
         return {"removed": int(works)}
+
+
+def _is_index(value: Any) -> bool:
+    """True for anything that can name a batch slot (``1``, ``"1"``, ``"-2"``)."""
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, int):
+        return True
+    return str(value).strip().lstrip("-").isdigit()
 
 
 def _clean_tags(tags: Iterable[str]) -> list[str]:

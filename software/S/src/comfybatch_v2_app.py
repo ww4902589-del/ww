@@ -2288,6 +2288,31 @@ def activate_and_show_existing(existing: dict[str, Any], *, open_browser: bool) 
     return True
 
 
+def show_existing_or_discover(
+    existing: dict[str, Any], host: str, port: int, *, open_browser: bool,
+) -> dict[str, Any]:
+    """Recover a running local instance when its record has gone missing."""
+    if existing and activate_and_show_existing(existing, open_browser=open_browser):
+        return existing
+    if host not in ("127.0.0.1", "localhost"):
+        return {}
+    url = f"http://{host}:{port}/"
+    try:
+        opener = build_opener(ProxyHandler({}))
+        with opener.open(url + "api/ping", timeout=2) as response:
+            info = json.loads(response.read().decode("utf-8"))
+        if not isinstance(info, dict) or not info.get("ok") or info.get("app") != "ComfyBatch":
+            return {}
+        if info.get("is_primary") is not True or not info.get("instance_id"):
+            return {}
+        discovered = {"url": url, "instance_id": str(info["instance_id"])}
+        if activate_and_show_existing(discovered, open_browser=open_browser):
+            return discovered
+    except (OSError, ValueError, TypeError):
+        pass
+    return {}
+
+
 def main() -> None:
     global APP
     parser = argparse.ArgumentParser(description="ComfyBatch V2")
@@ -2339,8 +2364,10 @@ def main() -> None:
         if args.force_new_instance:
             print("已按 --force-new-instance 跳过单实例检查。")
     else:
-        existing = read_instance_file()
-        if existing and activate_and_show_existing(existing, open_browser=not args.no_browser):
+        existing = show_existing_or_discover(
+            read_instance_file(), args.host, args.port, open_browser=not args.no_browser,
+        )
+        if existing:
             print(f"ComfyBatch 已在运行，已切换到已有窗口：{existing.get('url', '')}")
             return
         # Never leave the user with no way forward: explain both exits.

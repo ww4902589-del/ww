@@ -11,6 +11,7 @@ import os
 import pathlib
 import re
 import socket
+import sqlite3
 import sys
 import threading
 import time
@@ -25,6 +26,13 @@ from PIL import Image
 
 from comfybatch_errors import SEVERITY_BLOCKING, ErrorTranslator
 from comfybatch_image_extract import ImageExtractor
+from comfybatch_library import (
+    DEFAULT_PAGE_SIZE as LIBRARY_PAGE_SIZE,
+    MAX_PAGE_SIZE as LIBRARY_MAX_PAGE_SIZE,
+    SORTS as LIBRARY_SORTS,
+    LibraryStore,
+    int_or as library_int,
+)
 from comfybatch_nodeschema import NodeSchemaRegistry, active_registry, set_active_registry, structural_fingerprint
 from comfybatch_hub import EditLease, InstanceLock, SSE_HEARTBEAT_SECONDS, StateHub
 from comfybatch_params import PARAMS, registry_payload, resolve as resolve_params
@@ -117,6 +125,8 @@ WRITE_ROUTES = frozenset({
     "/api/review/confirm", "/api/review/note", "/api/review/redo", "/api/review/redo-batch",
     "/api/reload-schema", "/api/open-folder",
     "/api/restore-default-presets",
+    "/api/library/favorite", "/api/library/tags", "/api/library/delete",
+    "/api/library/restore", "/api/library/reindex", "/api/library/maintain",
 })
 #: Aspect-ratio labels must match the ``ResolutionSelector`` node's candidate
 #: list byte for byte -- ComfyUI rejects anything else with a 400
@@ -489,6 +499,11 @@ class Application:
         #: missing resources/custom nodes before anything is submitted.
         self.schema: NodeSchemaRegistry = NodeSchemaRegistry.empty()
         self.reviews = ResultReviewStore(data_dir() / "reviews")
+        #: SQLite 作品库：跨批次的检索、标签与收藏。它是复核文档的**派生索引**，
+        #: 所以可以在任何时刻重建，也从不作为成图元数据的权威来源。
+        self.library = LibraryStore(data_dir() / "library.db")
+        #: 最近一次索引失败的原文。索引坏掉不能挡住页面，但也不能悄悄吞掉。
+        self.library_sync_error = self.library.last_warning
         #: User-approved resource replacements, keyed by workflow fingerprint.
         self.resource_rules = ResourceOverrideStore(data_dir() / "resource_rules")
         #: Workflow-level default parameter values ("工作流默认值" scope).
@@ -613,6 +628,7 @@ class Application:
                 self.reviews.ingest(run_id, self.runner.status().get("results") or [])
             except OSError:
                 pass
+        self.sync_library(run_id)
         items = self.reviews.list_for_run(run_id)
         # ``restored`` marks the previous session's results: they can still be
         # reviewed, but redoing needs a fresh run because the bundle and config
@@ -640,6 +656,80 @@ class Application:
             if seeds:
                 summary[str(entry.get("index"))] = seeds
         return summary
+
+    # ---------------------------------------------------------- 作品库
+
+    def sync_library(self, run_id: str) -> None:
+        """把当前批次的复核文档同步进作品库索引。
+
+        索引失败**不能**挡住审图页——成图与确认是主流程，索引只是它的检索面。
+        但也不静默：错误原文留在 ``library_sync_error`` 里，随作品库载荷一起返回。
+        """
+        if not run_id:
+            return
+        try:
+            self.library.sync_run(run_id, self.reviews.load(run_id))
+            self.library_sync_error = self.library.last_warning
+        except (OSError, sqlite3.Error) as exc:
+            self.library_sync_error = f"作品库索引未更新：{exc}"
+
+    def library_payload(self, query: dict[str, list[str]]) -> dict[str, Any]:
+        """作品库查询结果：一页记录 + 统计 + 可用的筛选项。
+
+        筛选值全部来自查询串，因此这里显式归一化：真值走真值集，非法排序与
+        非法状态由 ``LibraryStore.query`` 拒绝并如实报错，不在这里猜。
+        """
+        def first(key: str, default: str = "") -> str:
+            values = query.get(key) or []
+            return (values[0] if values else default) or default
+
+        favorite_text = first("favorite").strip().casefold()
+        favorite: bool | None = None
+        if favorite_text in {"1", "true", "yes"}:
+            favorite = True
+        elif favorite_text in {"0", "false", "no"}:
+            favorite = False
+        page = self.library.query(
+            q=first("q"),
+            run_id=first("run_id"),
+            review_status=first("review_status"),
+            tag=first("tag"),
+            favorite=favorite,
+            model=first("model"),
+            include_deleted=first("include_deleted").strip().casefold() in {"1", "true", "yes"},
+            sort=first("sort", "newest"),
+            limit=min(LIBRARY_MAX_PAGE_SIZE, library_int(first("limit"), LIBRARY_PAGE_SIZE)),
+            offset=library_int(first("offset"), 0),
+        )
+        return {
+            **page,
+            "stats": self.library.stats(),
+            "sorts": LIBRARY_SORTS,
+            "statuses": list(REVIEW_STATUSES),
+            "page_size": LIBRARY_PAGE_SIZE,
+            "sync_error": self.library_sync_error,
+        }
+
+    def library_source(self, work_id: str) -> pathlib.Path:
+        """作品库记录对应的成图文件。
+
+        路径只从数据库里取：客户端能报的只有 ``work_id``，报不出磁盘路径。
+        这样即便索引里混进一条指向别处的记录，能取到的也只是那一条自己的图。
+        """
+        item = self.library.get(work_id)
+        source = pathlib.Path(str(item.get("copied_to") or ""))
+        if not item.get("available") or not source.is_file():
+            raise ValueError("这条记录的成图已不在原位置，无法读取")
+        return source
+
+    def library_thumbnail(self, work_id: str, size: int = THUMBNAIL_SIZE) -> pathlib.Path:
+        """作品库记录的预览图：走既有缩略图缓存，做不出预览时退回原图。"""
+        source = self.library_source(work_id)
+        return self.reviews.ensure_thumbnail(source, size=max(64, min(2048, int(size))))
+
+    def library_image(self, work_id: str) -> pathlib.Path:
+        """作品库记录的原图。审图板要未改动的那一份，这里也一样。"""
+        return self.library_source(work_id)
 
     def inspect_payload(self) -> dict[str, Any]:
         """Effective configuration, audit and blocking problems for the UI."""
@@ -1557,6 +1647,35 @@ class Handler(BaseHTTPRequestHandler):
                 })
             elif parsed.path == "/api/results":
                 self._json({"ok": True, "review": APP.results_payload()})
+            elif parsed.path == "/api/library":
+                self._json({"ok": True, "library": APP.library_payload(parse_qs(parsed.query))})
+            elif parsed.path == "/api/library/preview":
+                with APP.lock:
+                    query = parse_qs(parsed.query)
+                    preview = APP.library_thumbnail(
+                        query.get("work_id", [""])[0],
+                        library_int((query.get("size") or [""])[0], THUMBNAIL_SIZE),
+                    )
+                    body = preview.read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", mimetypes.guess_type(str(preview))[0] or "image/jpeg")
+                self.send_header("Content-Length", str(len(body)))
+                # 同一个路径的字节永远不变（重做会换 mtime 并换预览键），因此可以长缓存。
+                self.send_header("Cache-Control", "private, max-age=604800")
+                self.end_headers()
+                self.wfile.write(body)
+            elif parsed.path == "/api/library/image":
+                # 作品库的原图：与 /api/image 不同，它不限于"当前批次"，而是任何
+                # 一条索引记录——因此路径必须来自数据库，客户端只能给 work_id。
+                with APP.lock:
+                    source = APP.library_image(parse_qs(parsed.query).get("work_id", [""])[0])
+                    body = source.read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", mimetypes.guess_type(str(source))[0] or "application/octet-stream")
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Cache-Control", "private, max-age=604800")
+                self.end_headers()
+                self.wfile.write(body)
             elif parsed.path == "/api/inspect":
                 self._json({"ok": True, "inspect": APP.inspect_payload()})
             elif parsed.path == "/api/events":
@@ -1966,6 +2085,43 @@ class Handler(BaseHTTPRequestHandler):
                 # Explicitly user-initiated: this only opens a folder in Explorer.
                 os.startfile(directory)  # noqa: S606 - deliberate, user-requested
                 self._json({"ok": True, "folder": directory})
+            elif self.path == "/api/library/favorite":
+                self._json({"ok": True, "item": APP.library.set_favorite(
+                    str(value.get("work_id") or ""), bool(value.get("favorite", True)))})
+            elif self.path == "/api/library/tags":
+                work_id = str(value.get("work_id") or "")
+                if "tags" in value:
+                    # 整体替换：面板的标签编辑框只有一个动词，不需要客户端理解增删差异。
+                    tags = value.get("tags")
+                    if not isinstance(tags, list):
+                        raise ValueError("tags 必须是字符串数组")
+                    item = APP.library.set_tags(work_id, tags)
+                else:
+                    tag = str(value.get("tag") or "")
+                    if str(value.get("action") or "add") == "remove":
+                        item = APP.library.remove_tag(work_id, tag)
+                    else:
+                        item = APP.library.add_tags(work_id, [tag])
+                self._json({"ok": True, "item": item})
+            elif self.path == "/api/library/delete":
+                # 只从作品库移除记录，磁盘上的成图一动不动。
+                self._json({"ok": True, "deleted": APP.library.delete(
+                    str(value.get("work_id") or ""), str(value.get("reason") or ""))})
+            elif self.path == "/api/library/restore":
+                self._json({"ok": True, "item": APP.library.restore(str(value.get("work_id") or ""))})
+            elif self.path == "/api/library/reindex":
+                totals = APP.library.sync_all(APP.reviews)
+                APP.library_sync_error = APP.library.last_warning
+                self._json({"ok": True, "reindex": totals, "library": APP.library_payload({})})
+            elif self.path == "/api/library/maintain":
+                action = str(value.get("action") or "")
+                if action == "vacuum":
+                    self._json({"ok": True, "vacuum": APP.library.vacuum()})
+                elif action == "clear-index":
+                    self._json({"ok": True, "cleared": APP.library.clear_index(),
+                                "library": APP.library_payload({})})
+                else:
+                    raise ValueError(f"不支持的维护动作：{action}")
             elif self.path == "/api/reload-schema":
                 registry = APP.refresh_schema()
                 self._json({"ok": True, "schema": APP.schema_payload(), "nodes": len(registry)})

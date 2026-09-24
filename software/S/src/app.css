@@ -2629,3 +2629,166 @@ details[open] > .compact-module-summary .compact-toggle::after {
   font-size:11px;
   margin-left:6px
 }
+
+/* ---- V2.21 作品库：跨批次检索、标签与收藏 ------------------------------
+布局要点：筛选条用自适应栅格，卡片是「缩略图 + 信息 + 标签行 + 操作」四段，
+窄屏自动折成单列。已移除的记录只降低对比度、不隐藏，因为"看不见但还在"
+正是这类界面最容易骗人的地方。 */
+.library-toolbar {
+  display:grid;
+  grid-template-columns:minmax(220px,2fr) repeat(3,minmax(130px,1fr));
+  gap:10px;
+  align-items:end;
+  margin:12px 0
+}
+.library-toolbar label {
+  display:block
+}
+.library-toolbar .lib-query {
+  grid-column:span 2
+}
+.library-toolbar .switch {
+  display:flex;
+  align-items:center;
+  gap:6px;
+  color:var(--muted)
+}
+.library-toolbar button {
+  justify-self:start
+}
+.lib-tags {
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+  margin:6px 0;
+  color:var(--muted)
+}
+.lib-tags:empty {
+  display:none
+}
+.lib-tag {
+  padding:2px 9px;
+  font-size:12px;
+  border-radius:999px;
+  border:1px solid var(--line);
+  background:#f1ece2;
+  color:var(--ink);
+  cursor:pointer
+}
+.lib-tag:hover {
+  border-color:var(--accent);
+  color:var(--accent)
+}
+.lib-board {
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(320px,1fr));
+  gap:12px;
+  margin:12px 0
+}
+.lib-card {
+  display:flex;
+  gap:10px;
+  padding:10px;
+  border:1px solid var(--line);
+  border-radius:10px;
+  background:#fffdf9
+}
+.lib-card.lib-removed {
+  opacity:.6;
+  border-style:dashed
+}
+.lib-thumb {
+  flex:0 0 110px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:#f1ece2;
+  border-radius:8px;
+  overflow:hidden;
+  min-height:92px
+}
+.lib-thumb img {
+  width:110px;
+  height:92px;
+  object-fit:cover;
+  display:block;
+  cursor:zoom-in
+}
+.lib-missing {
+  font-size:11px;
+  color:var(--muted);
+  text-align:center;
+  padding:0 6px
+}
+.lib-body {
+  flex:1 1 auto;
+  min-width:0
+}
+.lib-head {
+  display:flex;
+  align-items:center;
+  gap:8px;
+  font-size:12px;
+  color:var(--muted)
+}
+.lib-head b {
+  color:var(--ink);
+  font-family:Consolas,monospace
+}
+.lib-title {
+  margin:2px 0;
+  font-weight:600;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap
+}
+.lib-meta,
+.lib-prompt {
+  font-size:12px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap
+}
+.lib-tagline {
+  display:block;
+  margin:6px 0;
+  font-size:12px;
+  color:var(--muted)
+}
+.lib-tagline input {
+  width:100%;
+  margin-top:2px;
+  padding:4px 6px;
+  border:1px solid var(--line);
+  border-radius:6px;
+  background:#fff
+}
+.lib-actions {
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap
+}
+.lib-actions button {
+  padding:4px 9px;
+  font-size:12px
+}
+.lib-empty {
+  padding:14px;
+  border:1px dashed var(--line);
+  border-radius:10px;
+  grid-column:1/-1
+}
+.library-footer {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  margin-top:8px
+}
+@media (max-width:900px) {
+  .library-toolbar {
+    grid-template-columns:1fr
+  }
+  .library-toolbar .lib-query {
+    grid-column:span 1
+  }
+}

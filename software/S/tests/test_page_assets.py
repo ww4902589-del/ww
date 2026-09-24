@@ -340,7 +340,7 @@ class ParameterWorkbenchUiTests(unittest.TestCase):
         """
         html = page_source()
         self.assertIn("currentStep===2&&!workbench", html)
-        self.assertIn("const LAST_STEP=4;", html, "阶段数必须与实际阶段一致")
+        self.assertIn("const LAST_STEP=5;", html, "阶段数必须与实际阶段一致")
         # The merge must not drop any pinned id from the two former stages.
         for marker in ('id="paramWorkbench"', 'id="precheck"', 'id="workflowFacts"',
                        'id="workflowFingerprint"', 'id="chainSummary"', 'id="ioSummary"',
@@ -363,8 +363,35 @@ class ParameterWorkbenchUiTests(unittest.TestCase):
                 self.assertEqual(html.count(marker), 1, f"{marker} 必须全局唯一")
                 self.assertIn(marker, stage_two, f"{marker} 必须位于第二页")
 
-        self.assertEqual(html.count('class="step-tab'), 4)
+        self.assertEqual(html.count('class="step-tab'), 5)
         self.assertNotIn("模型与风格</button>", html)
+
+    def test_the_library_stage_is_the_fifth_and_only_the_fifth_surface(self):
+        """作品库是独立阶段：它跨批次，不属于「成图与确认」这一批的结果面。"""
+        html = html_source()
+        stage_five = html[html.index('data-step="5"'):]
+        for marker in ('id="paramWorkbench"', 'id="reviewBoard"', 'id="libBoard"'):
+            with self.subTest(marker=marker):
+                self.assertEqual(html.count(marker), 1, f"{marker} 必须全局唯一")
+        for marker in ('id="libQuery"', 'id="libStatus"', 'id="libRun"', 'id="libSort"',
+                       'id="libTagStrip"', 'id="libSummary"', 'id="libBoard"',
+                       'id="libPageInfo"', 'id="libFavorite"', 'id="libDeleted"'):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, stage_five, f"{marker} 必须位于作品库阶段")
+        # 侧栏标签与阶段一一对应，多的那个不能是"看不见的第五页"。
+        self.assertIn('data-step-target="5"', html)
+        self.assertIn("currentStep===5&&!libraryState.loaded", js_source())
+
+    def test_the_library_only_addresses_images_by_record_id(self):
+        """作品库不许把磁盘路径交给客户端：预览与原图都只能用 work_id 换。"""
+        js = page_source()
+        self.assertIn('/api/library/preview?work_id=', js)
+        self.assertIn('/api/library/image?work_id=', js)
+        self.assertNotIn('/api/library/preview?path=', js)
+        self.assertNotIn('/api/library/image?path=', js)
+        # 危险动作要二次确认，且移除文案必须说清"文件不会被删"。
+        self.assertIn('从作品库移除这条记录？', js)
+        self.assertIn('图片仍在原处', js)
 
     def test_global_image_specification_is_a_first_class_module(self):
         html = page_source()
@@ -607,3 +634,4 @@ class AppModuleWiringTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

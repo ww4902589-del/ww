@@ -146,7 +146,10 @@ class EveryRouteRespondsTests(unittest.TestCase):
 
     def test_get_routes_respond(self):
         for path in ("/", "/api/status", "/api/results", "/api/inspect", "/api/schema",
-                     "/api/inventory", "/api/lora-profiles", "/api/style-lora-presets"):
+                     "/api/inventory", "/api/lora-profiles", "/api/style-lora-presets",
+                     "/api/library",
+                     # 关键词走百分号编码：请求行只能装 ASCII，中文必须编码后再上。
+                     "/api/library?q=%E7%BA%A2%E8%A1%A3&sort=oldest&limit=5"):
             with self.subTest(path=path):
                 status, body = self.request(path)
                 # /api/inventory scans the real workflow directory, which is a temp root.

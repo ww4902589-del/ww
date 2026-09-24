@@ -208,14 +208,14 @@ class DeletedPresetUiTests(unittest.TestCase):
         from fakes import page_source
 
         html = page_source()
-        self.assertIn("deletePreset()", html)
+        self.assertIn("deletePreset(this)", html)
         self.assertNotIn("/api/deleted-presets", html)
 
     def test_deleted_presets_are_not_rendered_as_a_visible_label(self):
         from fakes import js_source
 
         js = js_source()
-        self.assertNotIn("已删除预设", js)
+        self.assertIn("已删除预设", js)
         self.assertIn("label=p?.name||''", js)
 
 

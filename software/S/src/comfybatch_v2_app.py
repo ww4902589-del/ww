@@ -1334,6 +1334,7 @@ class Application:
         profiles = self.lora_profiles()
         for lora in result.get("loras", []):
             profile = profiles.get(str(lora.get("value") or ""))
+            lora["has_saved_profile"] = profile is not None
             if profile:
                 lora.update(profile)
             lora.setdefault("display_name", lora.get("name") or lora.get("value"))

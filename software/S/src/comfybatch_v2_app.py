@@ -1317,8 +1317,16 @@ class Application:
     def configure(self, value: dict) -> None:
         with self.lock:
             self.comfy_root = pathlib.Path(value.get("comfy_root") or self.comfy_root)
-            roots = value.get("workflow_roots") or [str(root) for root in self.workflow_roots]
-            self.workflow_roots = [pathlib.Path(root) for root in roots if str(root).strip()]
+            provided = value.get("workflow_roots")
+            if provided is None:
+                provided = [str(root) for root in self.workflow_roots]
+            # 全空（[] 或 [""]）不清空现有配置：页面表单的空值曾把
+            # workflow_roots 打穿成 []，工作流与模型集体"未发现"
+            # （2026-09-24 真机事故——comfy_root/output_root 是单值，
+            # falsy 时自然走 fallback，唯独这个列表字段有这个洞）。
+            cleaned = [pathlib.Path(root) for root in provided if str(root).strip()]
+            if cleaned:
+                self.workflow_roots = cleaned
             self.comfy_url = str(value.get("comfy_url") or self.comfy_url).rstrip("/")
             self.output_root = pathlib.Path(value.get("output_root") or self.output_root)
             if self.runner.status()["status"] not in {"running", "paused", "starting"}:

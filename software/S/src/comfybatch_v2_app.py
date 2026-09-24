@@ -1742,7 +1742,8 @@ class Handler(BaseHTTPRequestHandler):
                 # Read the version from one place; a hardcoded copy here drifted
                 # out of step the moment the version was bumped.
                 self._json({"ok": True, "instance_id": APP.instance_id, "app": "ComfyBatch",
-                            "version": APP_VERSION, "is_primary": APP.is_primary})
+                            "version": APP_VERSION, "is_primary": APP.is_primary,
+                            "instance_name": instance_name()})
             elif parsed.path == "/api/lease":
                 query = parse_qs(parsed.query)
                 self._json({"ok": True, "lease": APP.lease_status(query.get("client_id", [""])[0])})
@@ -2307,6 +2308,8 @@ def show_existing_or_discover(
             if not isinstance(info, dict) or not info.get("ok") or info.get("app") != "ComfyBatch":
                 continue
             if info.get("is_primary") is not True or not info.get("instance_id"):
+                continue
+            if info.get("instance_name") != instance_name():
                 continue
             discovered = {"url": url, "instance_id": str(info["instance_id"])}
             if activate_and_show_existing(discovered, open_browser=open_browser):

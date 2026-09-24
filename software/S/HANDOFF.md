@@ -3,7 +3,8 @@
 本分支 `handoff/local-s-startup` 从 `origin/main` 的 `7adaa6e` 建立，与下方已合并的紧凑审图记录无关。当前提交仅修改 `src/comfybatch_v2_app.py` 与 `tests/test_live_sync.py`，不覆盖其他 Agent 工作区。
 
 - 根因：测试仅隔离 `COMFYBATCH_DATA_DIR`，而实例记录位于 `LOCALAPPDATA`；运行测试可删掉桌面 S 的 `instance.json`，后续双击因互斥锁已占用却无记录而静默退出。
-- 修复：实例文件测试隔离 `LOCALAPPDATA` 与实例名称；记录缺失/失效时，仅扫描本机首选端口及其 20 个备用端口，校验 `/api/ping` 的应用标识、主实例状态和实例 ID，再请求激活并打开已有页面。
+- 修复：实例文件测试隔离 `LOCALAPPDATA` 与实例名称；记录缺失/失效时，仅扫描本机首选端口及其 20 个备用端口，校验 `/api/ping` 的应用标识、主实例状态、实例 ID 与当前互斥锁同名的命名空间，再请求激活并打开已有页面。
+- 云端独立审查：指出开发实例占用更靠前端口时可能误开的 MEDIUM 问题；已在 `/api/ping` 增加 `instance_name` 并在扫描时比对，回归测试先失败后通过。默认系统浏览器不保证一定是 Edge，桌面 Edge 验收仍属发布闸门。
 - 回归：针对实例文件、缺失记录、非本机地址、备用端口的测试 8 项全部通过；全量 **515 项：514 通过、0 失败、1 跳过**；`python -m compileall -q src tests tools` 通过，`git diff --check` 无错误。全量测试后桌面运行实例的记录仍在且 `/api/ping` 返回 200（此前验证）。
 - 交付边界：此处仅为源码修复。PR #14 尚待最新提交复审、合并、正式构建、桌面备份替换与 Edge 重复启动验收；不得把桌面安装版标记为已修复。
 

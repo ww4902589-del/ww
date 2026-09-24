@@ -200,6 +200,7 @@ class LiveSyncRouteTests(unittest.TestCase):
         self.assertTrue(body["ok"])
         self.assertEqual(app_module.APP.instance_id, body["instance_id"])
         self.assertEqual("ComfyBatch", body["app"])
+        self.assertEqual(app_module.instance_name(), body["instance_name"])
 
     def test_lease_routes_arbitrate_two_pages(self):
         self.request("/api/lease/release", {"client_id": "page-a"})
@@ -470,7 +471,8 @@ class InstanceFileTests(unittest.TestCase):
                 pass
 
             def do_GET(self):
-                payload = {"ok": True, "app": "ComfyBatch", "instance_id": "already-running", "is_primary": True}
+                payload = {"ok": True, "app": "ComfyBatch", "instance_id": "already-running",
+                           "instance_name": "default", "is_primary": True}
                 body = json.dumps(payload).encode()
                 self.send_response(200)
                 self.send_header("Content-Length", str(len(body)))
@@ -516,9 +518,10 @@ class InstanceFileTests(unittest.TestCase):
         def answer(url, *, timeout):
             self.assertEqual(0.25, timeout)
             response = mock.MagicMock()
-            payload = {"ok": True, "app": "ComfyBatch", "instance_id": "fallback", "is_primary": True}
+            payload = {"ok": True, "app": "ComfyBatch", "instance_id": "fallback",
+                       "instance_name": "default", "is_primary": True}
             if url == "http://127.0.0.1:9000/api/ping":
-                payload["app"] = "other"
+                payload["instance_name"] = "devtest"
             response.__enter__.return_value.read.return_value = json.dumps(payload).encode()
             return response
 

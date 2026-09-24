@@ -1474,7 +1474,10 @@ function renderReview(v){
     else seen.set(key,row.index);
   }
   if(!s.some(x=>x.index===activeIndex))activeIndex=-1;
+  const focusedCard=document.activeElement;
+  const restoreFocus=currentStep===4&&focusedCard?.classList?.contains('review-card')?focusedCard.id:'';
   $('reviewBoard').innerHTML=s.map(cardHtml).join('');
+  if(restoreFocus)$(restoreFocus)?.focus({preventScroll:true});
   syncReviewPicks();
   updateReviewJumpStatus();
   const pendingCount=s.filter(x=>x.copied_to&&(x.review_status||'待确认')==='待确认').length;

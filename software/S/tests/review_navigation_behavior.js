@@ -103,4 +103,44 @@ assert.equal(key('Escape', {target: {closest: selector => selector === 'button,a
 assert.equal(elements.drawer.hidden, true);
 assert.ok(calls.some(row => row[0] === 'close-drawer'));
 
+// A status/SSE snapshot redraws every card. The focused card must regain focus.
+const renderSource = source.slice(
+  source.indexOf('function renderReview(v){'),
+  source.indexOf('function setReviewDensity(', source.indexOf('function renderReview(v){'))
+);
+const oldCard = {id: 'card-7', classList: {contains: name => name === 'review-card'}};
+const newCard = {focus: options => calls.push(['restored-focus', options.preventScroll])};
+const redrawDocument = {activeElement: oldCard};
+const redrawElements = {
+  abortBanner: {hidden: true, textContent: ''},
+  reviewSummary: {textContent: ''},
+  confirmAllButton: {textContent: ''},
+  reviewJumpStatus: {textContent: ''},
+  'card-7': newCard,
+};
+Object.defineProperty(redrawElements, 'reviewBoard', {
+  value: {set innerHTML(_html) {redrawDocument.activeElement = null;}},
+});
+const redrawContext = vm.createContext({
+  reviewState: {results: [], review: {}}, activeIndex: 7, currentStep: 4,
+  dupGroups: new Set(), document: redrawDocument,
+  $: id => redrawElements[id],
+  cardHtml: row => `<article id="card-${row.index}"></article>`,
+  syncReviewPicks: () => {}, updateReviewJumpStatus: () => {},
+});
+vm.runInContext(renderSource, redrawContext);
+redrawContext.renderReview({results: [{index: 7, copied_to: 'image.png'}], review: {by_status: {}}});
+assert.ok(calls.some(row => row[0] === 'restored-focus' && row[1] === true));
+const restoredCount = calls.filter(row => row[0] === 'restored-focus').length;
+redrawDocument.activeElement = oldCard;
+redrawContext.currentStep = 3;
+redrawContext.renderReview({results: [{index: 7, copied_to: 'image.png'}], review: {by_status: {}}});
+assert.equal(calls.filter(row => row[0] === 'restored-focus').length, restoredCount);
+redrawDocument.activeElement = oldCard;
+redrawContext.currentStep = 4;
+delete redrawElements['card-7'];
+redrawContext.renderReview({results: [{index: 9, copied_to: 'other.png'}], review: {by_status: {}}});
+assert.equal(calls.filter(row => row[0] === 'restored-focus').length, restoredCount);
+assert.equal(vm.runInContext('activeIndex', redrawContext), -1);
+
 console.log('review navigation behavior passed');

@@ -632,6 +632,73 @@ class AppModuleWiringTests(unittest.TestCase):
         self.assertEqual(declared.group(1), page.group(1), "前后端版本号必须一致")
 
 
+class ReviewCompactWallTests(unittest.TestCase):
+    """任务 #10：缩略图墙密度档与半透明信息浮层。
+
+    墙档是给"几十张图快速过一遍"用的；信息块收起后，浮层是唯一的信息入口，
+    所以浮层必须携带审图真正需要的字段，且永远不挡点击。
+    """
+
+    def test_wall_density_is_an_option(self):
+        html = html_source()
+        self.assertIn('value="wall"', html, "密度下拉必须提供缩略图墙档")
+        self.assertIn("density-wall", css_source(), "墙档必须有对应样式")
+
+    def test_density_choice_is_remembered(self):
+        """用户选过的密度要记住，刷新不回默认。"""
+        js = js_source()
+        self.assertIn("comfybatch-review-density", js)
+        self.assertIn("localStorage.setItem", js)
+
+    def test_the_info_overlay_is_rendered_on_each_card(self):
+        js = js_source()
+        self.assertIn("thumb-overlay", js, "卡片缩略图里必须渲染信息浮层")
+        for marker in ("ov-index", "ov-status", "ov-size", "ov-seed", "ov-prompt"):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, js, f"浮层缺少字段 {marker}")
+        # 浮层信息必须来自真实数据源，而不是写死的占位符。
+        for field in ("generation", "compiled_prompt", "review_status"):
+            with self.subTest(field=field):
+                self.assertIn(field, js)
+
+    def test_overlay_is_css_driven_and_never_blocks_clicks(self):
+        css = css_source()
+        # 断言收窄到 .thumb-overlay 规则块内部——文件其他地方早有
+        # pointer-events:none（.busy），整文件搜索是永真断言，钉不住回归。
+        block = re.search(r"\.thumb-overlay\s*\{[^}]*\}", css)
+        self.assertIsNotNone(block, ".thumb-overlay 规则块必须存在")
+        body = block.group(0).replace(" ", "")
+        self.assertIn("pointer-events:none", body,
+                      "浮层必须 pointer-events:none，不能挡缩略图点击")
+        # 悬停驱动必须写在浮层自己的规则上（.thumb:hover .thumb-overlay）。
+        self.assertRegex(css, r"\.thumb:hover \.thumb-overlay")
+        # 浮层是复制的信息视图（kv 表里已有完整数据），对读屏器隐藏避免双读。
+        self.assertIn("aria-hidden", js_source())
+
+    def test_switching_away_from_wall_removes_the_wall_class(self):
+        """切档回归：setReviewDensity 的移除清单必须包含全部档位。
+
+        曾硬编码 remove('density-compact','density-standard','density-loose')
+        ——加墙档时漏改，切回其他档后 density-wall 类残留，CSS 层叠下
+        界面永久卡在墙档。这里钉住"wall 在移除清单里"。
+        """
+        set_fn = js_source().split("function setReviewDensity", 1)[1].split("function ", 1)[0]
+        self.assertIn("classList.remove", set_fn, "切档必须移除旧类")
+        self.assertIn("'wall'", set_fn,
+                      "setReviewDensity 的档位清单必须包含 wall，否则切档后残留")
+
+    def test_wall_mode_hides_verbose_blocks_but_keeps_actions(self):
+        """墙档收起信息块，但通过/打回按钮和勾选框必须还在，否则没法审图。"""
+        css = css_source()
+        for selector in ("density-wall .review-card .kv",
+                         "density-wall .review-card .review-details",
+                         "density-wall .review-card .prompt"):
+            with self.subTest(selector=selector):
+                self.assertIn(selector, css, f"墙档必须收起 {selector}")
+        self.assertIn("density-wall .review-actions button", css,
+                      "墙档的按钮要有紧凑样式，不能整个藏掉")
+
+
 if __name__ == "__main__":
     unittest.main()
 

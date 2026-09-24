@@ -1483,7 +1483,7 @@ function renderReview(v){
 function setReviewDensity(value){
   const board=$('reviewBoard');
   if(board){
-    board.classList.remove('density-compact','density-standard','density-loose');
+    ['compact','standard','loose','wall'].forEach(d=>board.classList.remove('density-'+d));
     board.classList.add('density-'+(value||'compact'))}
   try{
     localStorage.setItem('comfybatch-review-density',value||'compact')}
@@ -1525,12 +1525,24 @@ function cardHtml(x){
   const styles=(gen.styles||[]).map(st=>st.name||st.catalog).filter(Boolean);
   const errs=x.errors||[];
   const issue=errs.length?issuesHtml(errs):'';
+  const ovSize=final.width?`${final.width}×${final.height}`:'';
+  const ovSeeds=(gen.seeds||{});const ovSeedKeys=Object.keys(ovSeeds);
+  const ovSeed=ovSeedKeys.length?`${ovSeedKeys[0]}=${ovSeeds[ovSeedKeys[0]]}${ovSeedKeys.length>1?` (+${ovSeedKeys.length-1})`:''}`:'';
+  const ovPrompt=[...(x.compiled_prompt||x.prompt||'')].slice(0,140).join('');
+  const ovRows=[
+    ovSize?`<span class="ov-size">${esc(ovSize)}${x.upscale_factor?` · ×${esc(String(x.upscale_factor))}`:''}</span>`:'',
+    ovSeed?`<span class="ov-seed">${esc(ovSeed)}</span>`:'',
+    `<span class="ov-status">${esc(status)}${isDup?' · 疑似重复':''}</span>`,
+    ovPrompt?`<span class="ov-prompt">${esc(ovPrompt)}</span>`:''
+  ].filter(Boolean).join('');
+  const overlay=`<div class="thumb-overlay" aria-hidden="true"><span class="ov-index">#${x.index}</span>${ovRows}</div>`;
   return `<article class="review-card ${x.index===activeIndex?'is-active':''}" id="card-${x.index}" onclick="setActive(${x.index})">
   <div class="thumb" onclick="event.stopPropagation();openViewer(${x.index})">
   ${
   x.copied_to?`<img loading="lazy" src="/api/preview?path=${
   encodeURIComponent(x.copied_to)}" alt="结果 ${
   x.index}">`:`<div class="help">${x.status==='completed'?'无成图':'尚未生成'}</div>`}
+  ${overlay}
   </div>
   <div class="review-card-head">
   <h4>${esc(x.index+'. '+(x.title||''))}</h4>${isDup?'<span class="badge dup">疑似重复产出</span>':''}<span class="badge ${BADGE_CLASS[status]||'pending'}">${esc(status)}</span>

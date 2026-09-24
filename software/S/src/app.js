@@ -216,6 +216,7 @@ async function savePreset(asNew){
     activePresetId=v.preset.id;
     renderPresetOptions();
     $('presetPicker').value=v.preset.id;
+    updatePresetActions();
     $('assignPreset').value=v.preset.id;
     $('presetName').value=v.preset.name;
     renderBundle();
@@ -411,7 +412,7 @@ function renderStyleBasket(){
 function addLora(){
   const name=$('loraPick').value,source=inventory.loras.find(x=>x.value===name);
   if(source&&!selectedLoras.some(x=>x.name===name)){
-    selectedLoras.push({name,display_name:source.display_name||source.name||name,strength:1,trigger_words:[...(source.trigger_words||[])],trigger_status:source.trigger_status,use_triggers:source.use_triggers!==false});
+    selectedLoras.push({name,display_name:source.display_name||source.name||name,strength:1,trigger_words:[...(source.trigger_words||[])],trigger_status:source.trigger_status,has_saved_profile:!!source.has_saved_profile,use_triggers:source.use_triggers!==false});
     renderLoras()}
 }
 async function rememberLora(index){
@@ -465,10 +466,14 @@ async function deleteLoraProfile(index,button){
   setBusy(button,true,'删除中');
   try{
     await api('/api/delete-lora-profile',{method:'POST',body:JSON.stringify({name})});
-    const source=inventory.loras.find(row=>row.value===name);
+    const sourceIndex=inventory.loras.findIndex(row=>row.value===name);
+    const source=inventory.loras[sourceIndex];
     if(source){
       source.has_saved_profile=false;
       source.trigger_status='unknown';
+      source.trigger_words=[];
+      source.display_name=source.name||name;
+      delete source.use_triggers;
     }
     for(const row of selectedLoras)if(row.name===name)row.has_saved_profile=false;
     renderLoraOptions();
@@ -478,7 +483,7 @@ async function deleteLoraProfile(index,button){
     try{
       const v=await api('/api/inventory');
       const latest=(v.inventory?.loras||[]).find(row=>row.value===name);
-      if(source&&latest)Object.assign(source,latest);
+      if(sourceIndex>=0&&latest)inventory.loras[sourceIndex]=latest;
       renderLoraOptions();
     }
     catch(e){notify('档案已删除，但资源状态刷新失败：'+e.message,'error')}
@@ -1112,9 +1117,6 @@ async function applyWorkbench(btn){
 }
 
 async function clearWorkbench(btn){
-  batchParams={
-  }
-  ;
   if(btn)setBusy(btn,true);
   try{
     if(await loadWorkbench())notify('已清空未应用的输入','success')}

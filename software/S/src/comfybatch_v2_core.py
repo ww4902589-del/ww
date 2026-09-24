@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import csv
+import datetime
 import hashlib
 import io
 import json
@@ -2198,23 +2199,38 @@ class RunProgressStore:
     def __init__(self, root: pathlib.Path):
         self.root = pathlib.Path(root)
 
+    @staticmethod
+    def validate_run_id(run_id: str) -> str:
+        value = str(run_id or "").strip()
+        if not value:
+            raise ValueError("进度快照缺少 run_id")
+        if not all(character.isalnum() or character in "-_" for character in value):
+            raise ValueError("run_id 含有不允许的字符，拒绝访问进度快照")
+        return value
+
     def path_for(self, run_id: str) -> pathlib.Path:
-        return self.root / f"{run_id}.json"
+        safe_id = self.validate_run_id(run_id)
+        return self.root / f"{safe_id}.json"
 
     def save(self, document: dict[str, Any]) -> pathlib.Path:
         run_id = str(document.get("run_id") or "").strip()
-        if not run_id:
-            raise ValueError("进度快照缺少 run_id")
-        # ``run_id`` is a uuid4 hex from the runner, but it reaches the filesystem
-        # here, so anything that is not plainly safe is refused rather than
-        # resolved: a crafted id must not be able to escape the snapshot folder.
-        if not all(character.isalnum() or character in "-_" for character in run_id):
-            raise ValueError("run_id 含有不允许的字符，拒绝写入进度快照")
+        run_id = self.validate_run_id(run_id)
         self.root.mkdir(parents=True, exist_ok=True)
         target = self.path_for(run_id)
         temporary = target.with_name(target.name + ".tmp")
         temporary.write_text(json.dumps(document, ensure_ascii=False, indent=2), encoding="utf-8")
-        temporary.replace(target)
+        # On Windows a concurrent status reader can briefly prevent replacing
+        # the existing file. Retry that transient sharing violation; otherwise
+        # the page could show a segment boundary while its durable snapshot is
+        # still one item behind.
+        for attempt in range(20):
+            try:
+                temporary.replace(target)
+                break
+            except PermissionError:
+                if attempt == 19:
+                    raise
+                time.sleep(0.02)
         return target
 
     def load(self, run_id: str) -> dict[str, Any] | None:
@@ -2243,6 +2259,10 @@ class RunProgressStore:
         if not document:
             return False
         try:
+            selected = [int(value) for value in (document.get("selected_indexes") or [])]
+            if selected:
+                completed = {int(value) for value in (document.get("completed_indexes") or [])}
+                return any(index not in completed for index in selected)
             return int(document.get("next_index") or 1) <= int(document.get("total") or 0)
         except (TypeError, ValueError):
             return False
@@ -2254,7 +2274,7 @@ class RunProgressStore:
             rows = [row for row in rows if self.is_resumable(row)]
         if not rows:
             return None
-        return max(rows, key=lambda row: str(row.get("updated_at") or ""))
+        return max(rows, key=lambda row: str(row.get("updated_at") or "").replace("T", " "))
 
     def summary(self, document: dict[str, Any] | None) -> dict[str, Any] | None:
         """Small payload for the page: enough to offer the resume button."""
@@ -2356,6 +2376,11 @@ class BatchRunner:
     def _adapter(self, workflow_path: str) -> "Krea2WorkflowAdapter":
         return Krea2WorkflowAdapter.from_path(workflow_path, self.adapter_registry or active_registry())
 
+    @staticmethod
+    def _original_index(item: PromptItem, position: int) -> int:
+        metadata = item.metadata if isinstance(item.metadata, dict) else {}
+        return int(metadata.get("original_index") or position)
+
     def status(self) -> dict[str, Any]:
         with self._lock:
             return copy.deepcopy(self._state)
@@ -2374,6 +2399,9 @@ class BatchRunner:
             run_id = str((resume or {}).get("run_id") or uuid.uuid4())
             segment_size = max(0, int(getattr(config, "segment_size", 0) or 0))
             restored = [copy.deepcopy(row) for row in ((resume or {}).get("results") or []) if isinstance(row, dict)]
+            selected_indexes = [self._original_index(item, position) for position, item in enumerate(bundle.items, 1)]
+            if len(set(selected_indexes)) != len(selected_indexes) or any(index < 1 for index in selected_indexes):
+                raise ValueError("运行任务编号无效或重复")
             self._state = {
                 "status": "starting",
                 "run_id": run_id,
@@ -2388,6 +2416,8 @@ class BatchRunner:
                 "segment_size": segment_size,
                 "next_index": None,
                 "snapshot_error": "",
+                "selected_indexes": selected_indexes,
+                "prompts_refined": bool((resume or {}).get("prompts_refined")),
                 #: Where this run picked up from; 0 for a fresh batch. The page
                 #: says so rather than presenting a resumed run as a new one.
                 "resumed_from": int((resume or {}).get("next_index") or 1) if resume else 0,
@@ -2398,6 +2428,9 @@ class BatchRunner:
         self._last_bundle = bundle
         self._last_config = config
         self._last_graphs = {}
+        # Persist the intent before the worker starts. A crash before the first
+        # image must still leave a resumable record rather than losing the run.
+        self._write_snapshot("starting")
         threading.Thread(target=self._run, args=(run_id, bundle, config), daemon=True).start()
         return self.status()
 
@@ -2429,7 +2462,8 @@ class BatchRunner:
             if bundle is None or config is None:
                 raise ValueError("还没有可重做的批次，请先运行一次")
 
-            item = next((candidate for position, candidate in enumerate(bundle.items, 1) if position == int(index)), None)
+            item = next((candidate for position, candidate in enumerate(bundle.items, 1)
+                         if self._original_index(candidate, position) == int(index)), None)
             if item is None:
                 raise ValueError(f"批次中没有第 {index} 条任务")
 
@@ -2495,7 +2529,8 @@ class BatchRunner:
             tasks: list[tuple[int, PromptItem, dict[str, Any] | None]] = []
             for index in unique_indexes:
                 item = next(
-                    (candidate for position, candidate in enumerate(bundle.items, 1) if position == index),
+                    (candidate for position, candidate in enumerate(bundle.items, 1)
+                     if self._original_index(candidate, position) == index),
                     None,
                 )
                 if item is None:
@@ -2702,8 +2737,11 @@ class BatchRunner:
         with self._lock:
             if self._state.get("status") != "segment":
                 raise ValueError("当前没有等待确认的分段")
-        self._next_segment.set()
-        return self.status()
+            # Claim this one-shot release while still holding the same lock as
+            # the status check. A concurrent second click now observes running.
+            self._state.update(status="running", next_index=None)
+            self._next_segment.set()
+            return copy.deepcopy(self._state)
 
     def snapshot(self, status: str = "") -> dict[str, Any] | None:
         """The resumable document for the current run, or ``None`` if there is none.
@@ -2726,6 +2764,9 @@ class BatchRunner:
             int(row["index"]) for row in results
             if isinstance(row.get("index"), int) and row.get("status") == "completed"
         })
+        selected_indexes = [int(value) for value in (state.get("selected_indexes") or range(1, int(state.get("total") or 0) + 1))]
+        completed_set = set(completed)
+        next_index = next((index for index in selected_indexes if index not in completed_set), None)
         config_document = asdict(config)
         # Same rule as the run report: the key never leaves the process.
         if (config_document.get("llm") or {}).get("api_key"):
@@ -2733,11 +2774,13 @@ class BatchRunner:
         return {
             "run_id": run_id,
             "status": status or str(state.get("status") or ""),
-            "updated_at": _timestamp(),
+            "updated_at": datetime.datetime.now().isoformat(sep=" ", timespec="microseconds"),
             "segment_size": int(state.get("segment_size") or 0),
             "total": int(state.get("total") or 0),
             "completed_indexes": completed,
-            "next_index": (max(completed) + 1) if completed else 1,
+            "selected_indexes": selected_indexes,
+            "prompts_refined": bool(state.get("prompts_refined")),
+            "next_index": next_index if next_index is not None else (max(selected_indexes, default=0) + 1),
             "output_dir": str(state.get("output_dir") or ""),
             "bundle": bundle.to_dict(),
             "config": config_document,
@@ -2911,12 +2954,23 @@ class BatchRunner:
         aborted_reason = ""
 
         try:
-            items = OpenAICompatibleAdapter().refine(bundle.items, config.llm)
+            # A range-selected run carries only the selected items, so expensive
+            # local refinement and graph compilation never touch excluded tasks.
+            if self._state.get("prompts_refined"):
+                items = bundle.items
+            else:
+                items = OpenAICompatibleAdapter().refine(bundle.items, config.llm)
+                bundle = PromptBundle(name=bundle.name, items=items, source_format=bundle.source_format)
+                self._last_bundle = bundle
+                self._update(prompts_refined=True)
+                self._write_snapshot("running")
             adapter = self._adapter(config.workflow_path)
             first_source_image = next((str(item.metadata.get("source_image") or "") for item in items if isinstance(item.metadata, dict) and item.metadata.get("source_image")), "")
             effective = adapter.capabilities(config, source_image=first_source_image)
             self._update(status="running")
-            for index, item in enumerate(items, 1):
+            submitted_count = len({int(row.get("index") or 0) for row in results if row.get("index")})
+            for position, item in enumerate(items, 1):
+                index = self._original_index(item, position)
                 if index in done_indexes:
                     continue
                 if self._cancel.is_set():
@@ -2935,7 +2989,7 @@ class BatchRunner:
                 preset_name = str(item.metadata.get("style_lora_preset_name") or "").strip() if isinstance(item.metadata, dict) else ""
                 file_title = _safe_name(f"{title}--{preset_name}", title) if preset_name else title
                 current_suffix = f" · {preset_name}" if preset_name else ""
-                self._update(current=f"{index:03d} {title}{current_suffix}", submitted=index - 1)
+                self._update(current=f"{index:03d} {title}{current_suffix}", submitted=submitted_count)
                 result: dict[str, Any] = {"index": index, "title": title, "preset_name": preset_name, "status": "error"}
                 try:
                     item_config = copy.deepcopy(config)
@@ -2964,7 +3018,7 @@ class BatchRunner:
                         graph = adapter.build(compiled_prompt, item_config, prefix, task_negative=item.negative_prompt, source_image=source_image)
                         # Retained for same-seed redos from the review page.
                         self._last_graphs[index] = copy.deepcopy(graph)
-                        if index == 1:
+                        if not audit:
                             # The graph is identical for every item except the seed
                             # and filename, so auditing the first submission is
                             # enough to prove page-to-graph equivalence.
@@ -3045,7 +3099,7 @@ class BatchRunner:
                         # submitting the rest would just repeat the same failure.
                         aborted_reason = summarise_problems(problems)
                         record(result)
-                        self._update(results=copy.deepcopy(results), submitted=index)
+                        self._update(results=copy.deepcopy(results), submitted=submitted_count + 1)
                         break
                     consecutive_failures += 1
                 except Exception as exc:
@@ -3057,13 +3111,14 @@ class BatchRunner:
                     if any(problem.workflow_level for problem in problems):
                         aborted_reason = summarise_problems(problems)
                         record(result)
-                        self._update(results=copy.deepcopy(results), submitted=index)
+                        self._update(results=copy.deepcopy(results), submitted=submitted_count + 1)
                         break
                     consecutive_failures += 1
                 if consecutive_failures >= max(1, int(config.max_consecutive_failures)):
                     aborted_reason = f"连续 {consecutive_failures} 条任务失败，已暂停批次以避免继续浪费算力。"
                 record(result)
-                self._update(results=copy.deepcopy(results), submitted=index)
+                submitted_count = len({int(row.get("index") or 0) for row in results if row.get("index")})
+                self._update(results=copy.deepcopy(results), submitted=submitted_count)
                 # 每条一存：中断可能发生在任何一条之后，快照必须一直是最新的。
                 self._write_snapshot()
                 if aborted_reason:

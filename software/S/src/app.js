@@ -715,6 +715,7 @@ function batchConfig(){
     seed:$('seedMode').value==='fixed'?($('seedValue').value?Number($('seedValue').value):null):null,
     single_subject_guard:$('singleSubject').checked,
     max_retries:Number($('maxRetries').value),
+    task_range:$('taskRange').value.trim(),
     // 0 或不填 = 不分段，整批连续跑。后端会把它夹到 0..1000。
     segment_size:Number($('segmentSize').value)||0,
     resource_overrides:batchOverrides,

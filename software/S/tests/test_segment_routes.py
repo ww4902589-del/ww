@@ -19,6 +19,7 @@ import tempfile
 import threading
 import time
 import unittest
+from unittest import mock
 import urllib.error
 import urllib.request
 from http.server import ThreadingHTTPServer
@@ -228,6 +229,35 @@ class SegmentRouteTests(unittest.TestCase):
         self.assertEqual(SEGMENT_SIZE, len(payload["status"]["results"]))
         # 队列还活着的时候不能同时劝人续跑：那是往同一个 run 里塞第二个队列。
         self.assertIsNone(payload["resumable"])
+
+    def test_start_runs_only_the_requested_original_numbers(self):
+        cls = type(self)
+        cls.import_bundle(count=6)
+        with mock.patch.object(app_module.APP, "validate_start", wraps=app_module.APP.validate_start) as preflight:
+            code, body = cls.request("/api/start", cls.start_payload(task_range="3-4", segment_size=0))
+        self.assertEqual(200, code, body)
+        self.assertEqual(["分段03", "分段04"], [item.title for item in preflight.call_args.args[1].items])
+
+        payload = cls.wait_for_status("completed")
+        self.assertEqual(2, payload["status"]["total"])
+        self.assertEqual([3, 4], [row["index"] for row in payload["status"]["results"]])
+        self.assertEqual([3, 4], cls.store.latest()["selected_indexes"])
+        self.assertTrue(payload["status"]["audit"], "非 1 开始的范围没有留下图审计")
+
+    def test_invalid_task_range_is_a_clean_400(self):
+        cls = type(self)
+        cls.import_bundle(count=6)
+        code, body = cls.request("/api/start", cls.start_payload(task_range="99"))
+        self.assertEqual(400, code, body)
+        self.assertFalse(json.loads(body)["ok"])
+
+    def test_manual_preflight_uses_the_same_selected_numbers(self):
+        cls = type(self)
+        cls.import_bundle(count=6)
+        with mock.patch.object(app_module.APP, "validate_start", wraps=app_module.APP.validate_start) as preflight:
+            code, body = cls.request("/api/preflight", cls.start_payload(task_range="3-4"))
+        self.assertEqual(200, code, body)
+        self.assertEqual(["分段03", "分段04"], [item.title for item in preflight.call_args.args[1].items])
 
     def test_next_segment_is_reachable_and_finishes_the_batch(self):
         cls = type(self)

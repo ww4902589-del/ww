@@ -1156,6 +1156,21 @@ class Application:
             items.append(PromptItem(item.title, item.prompt, metadata, item.negative_prompt))
         return PromptBundle(self.bundle.name, items, self.bundle.source_format)
 
+    def select_run_bundle(self, task_range: str = "") -> PromptBundle:
+        """Freeze the selected tasks and their original numbers for preflight/run."""
+        resolved = self.resolve_bundle_presets()
+        if not task_range.strip():
+            return resolved
+        indexes = parse_prompt_indexes(task_range, len(resolved.items))
+        if not indexes:
+            raise ValueError("任务编号范围不能为空")
+        selected_items: list[PromptItem] = []
+        for original_index in indexes:
+            item = copy.deepcopy(resolved.items[original_index - 1])
+            item.metadata = {**item.metadata, "original_index": original_index}
+            selected_items.append(item)
+        return PromptBundle(resolved.name, selected_items, resolved.source_format)
+
     def save_lora_profile(self, value: dict) -> dict:
         name = str(value.get("name") or "").strip()
         if not name:
@@ -1365,7 +1380,9 @@ class Application:
                 found[name] = str(candidate)
         return found
 
-    def validate_start(self, config: BatchConfig) -> dict:
+    def validate_start(self, config: BatchConfig, bundle: PromptBundle | None = None) -> dict:
+        selected_bundle = bundle if bundle is not None else self.bundle
+        selected_items = selected_bundle.items if selected_bundle else []
         try:
             self.runner.client.json("/system_stats", timeout=4)
         except Exception as exc:
@@ -1382,14 +1399,13 @@ class Application:
             family_text = "、".join(families) or "该工作流原有模型类型"
             raise ValueError(f"模型“{config.model}”与所选工作流不兼容；请选择：{family_text}")
         adapter = Krea2WorkflowAdapter.from_path(config.workflow_path, self.ensure_schema())
-        task_negative = next((item.negative_prompt for item in (self.bundle.items if self.bundle else []) if item.negative_prompt), "")
+        task_negative = next((item.negative_prompt for item in selected_items if item.negative_prompt), "")
         preset_negative = ""
-        if self.bundle:
+        if selected_bundle:
             try:
-                resolved_bundle = self.resolve_bundle_presets()
                 preset_negative = next((
                     str(style.get("negative_prompt") or "").strip()
-                    for item in resolved_bundle.items
+                    for item in selected_items
                     for style in ((item.metadata.get("generation") or {}).get("styles") or [])
                     if str(style.get("negative_prompt") or "").strip()
                 ), "")
@@ -1397,12 +1413,11 @@ class Application:
                 preset_negative = ""
         negative_probe = task_negative or preset_negative
         capability_config = copy.deepcopy(config)
-        if self.bundle:
+        if selected_bundle:
             try:
-                resolved_bundle = self.resolve_bundle_presets()
                 first_generation = next((
                     item.metadata.get("generation")
-                    for item in resolved_bundle.items
+                    for item in selected_items
                     if isinstance(item.metadata, dict) and isinstance(item.metadata.get("generation"), dict)
                 ), None)
                 if isinstance(first_generation, dict):
@@ -1421,7 +1436,7 @@ class Application:
             capability_config.negative_prompt = negative_probe
         source_image = next((
             str(item.metadata.get("source_image") or "")
-            for item in (self.bundle.items if self.bundle else [])
+            for item in selected_items
             if isinstance(item.metadata, dict) and item.metadata.get("source_image")
         ), "")
         report = adapter.capabilities(capability_config, source_image=source_image)
@@ -1723,8 +1738,9 @@ class Handler(BaseHTTPRequestHandler):
                 config = APP.prepare_config(BatchConfig.from_dict(value))
                 if not config.output_dir:
                     config.output_dir = str(APP.output_root)
+                run_bundle = APP.select_run_bundle(str(value.get("task_range") or ""))
                 try:
-                    report = APP.validate_start(config)
+                    report = APP.validate_start(config, run_bundle)
                 except ValueError as exc:
                     self._json({
                         "ok": False,
@@ -1734,7 +1750,7 @@ class Handler(BaseHTTPRequestHandler):
                     }, 400)
                     return
                 pathlib.Path(config.output_dir).mkdir(parents=True, exist_ok=True)
-                state = APP.runner.start(APP.resolve_bundle_presets(), config)
+                state = APP.runner.start(run_bundle, config)
                 self._json({"ok": True, "status": state, "preflight": report})
             elif self.path == "/api/preflight":
                 try:
@@ -1743,7 +1759,8 @@ class Handler(BaseHTTPRequestHandler):
                     # is blocked. Raised outside, its failure reached the page
                     # without the structured context -- no problems, no reason.
                     config = APP.prepare_config(BatchConfig.from_dict(value))
-                    report = APP.validate_start(config)
+                    run_bundle = APP.select_run_bundle(str(value.get("task_range") or ""))
+                    report = APP.validate_start(config, run_bundle)
                 except ValueError as exc:
                     # A blocked preflight must still carry the structured context:
                     # the blocking problems with their candidate lists, the

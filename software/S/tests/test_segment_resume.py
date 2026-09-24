@@ -16,11 +16,15 @@ and never touch a real ComfyUI.
 from __future__ import annotations
 
 import json
+import hashlib
 import pathlib
+import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
+from unittest import mock
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
@@ -38,6 +42,7 @@ from comfybatch_v2_core import (  # noqa: E402
     BatchRunner,
     PromptBundleParser,
     RunProgressStore,
+    OpenAICompatibleAdapter,
 )
 
 #: Statuses that mean the batch will not do anything else on its own.
@@ -195,6 +200,31 @@ class SegmentFixture(unittest.TestCase):
 
 
 class SegmentBoundaryTests(SegmentFixture):
+    def test_only_one_concurrent_next_segment_call_claims_the_boundary(self):
+        runner = self.make_runner()
+        runner.start(bundle(4), self.make_config(segment_size=2))
+        wait_for_segment(runner)
+        barrier = threading.Barrier(3)
+        outcomes = []
+
+        def release():
+            barrier.wait()
+            try:
+                runner.next_segment()
+                outcomes.append("released")
+            except ValueError:
+                outcomes.append("refused")
+
+        workers = [threading.Thread(target=release) for _ in range(2)]
+        for worker in workers:
+            worker.start()
+        barrier.wait()
+        for worker in workers:
+            worker.join(timeout=5)
+
+        self.assertEqual(["refused", "released"], sorted(outcomes))
+        self.assertEqual("completed", wait_finished(runner)["status"])
+
     def test_a_segment_stops_after_exactly_its_size(self):
         runner = self.make_runner()
         runner.start(bundle(5), self.make_config(segment_size=2))
@@ -314,6 +344,27 @@ class SegmentBoundaryTests(SegmentFixture):
 
 
 class SnapshotTests(SegmentFixture):
+    def test_start_saves_a_snapshot_before_the_worker_runs(self):
+        store = RunProgressStore(self.root / "runs")
+        runner = self.make_runner(store=store)
+        started = runner.start(bundle(3), self.make_config(segment_size=2))
+
+        document = store.load(started["run_id"])
+        self.assertIsNotNone(document)
+        self.assertEqual([1, 2, 3], document["selected_indexes"])
+        self.assertEqual(1, document["next_index"])
+        wait_for_segment(runner)
+
+    def test_snapshot_resumes_from_first_failed_index_even_after_later_success(self):
+        store = RunProgressStore(self.root / "runs")
+        runner = self.make_runner(client=self.client(fail_at={1}), store=store)
+        runner.start(bundle(4), self.make_config(segment_size=2))
+        wait_for_segment(runner)
+
+        document = store.latest()
+        self.assertEqual([2], document["completed_indexes"])
+        self.assertEqual(1, document["next_index"])
+
     def test_the_snapshot_records_what_finished_and_where_to_continue(self):
         store = RunProgressStore(self.root / "runs")
         runner = self.make_runner(store=store)
@@ -397,6 +448,100 @@ class SnapshotTests(SegmentFixture):
 
 
 class ResumeTests(SegmentFixture):
+    def test_original_numbers_remain_usable_for_single_and_batch_redo(self):
+        client = self.client()
+        runner = self.make_runner(client=client)
+        chosen = bundle(3)
+        for index, item in zip((11, 12, 13), chosen.items):
+            item.metadata["original_index"] = index
+        runner.start(chosen, self.make_config())
+        self.assertEqual("completed", wait_finished(runner)["status"])
+
+        runner.redo(11, "new_seed")
+        self.assertEqual("completed", wait_finished(runner)["status"])
+        runner.redo_many([12, 13], "new_seed")
+        self.assertEqual("completed", wait_finished(runner)["status"])
+        self.assertEqual(6, len(self.gateway.submitted))
+
+    def test_a_killed_process_resumes_without_touching_completed_files(self):
+        store = RunProgressStore(self.root / "runs")
+        helper = pathlib.Path(__file__).with_name("segment_process_worker.py")
+        first = subprocess.Popen(
+            [sys.executable, str(helper), str(self.root), "first"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+        try:
+            deadline = time.monotonic() + 30
+            document = store.latest()
+            while (not document or document.get("status") != "segment") and time.monotonic() < deadline:
+                time.sleep(0.02)
+                document = store.latest()
+            self.assertIsNotNone(document)
+            trace = self.root / "worker-state.json"
+            self.assertEqual("segment", document["status"],
+                             f"child exit={first.poll()} worker={trace.read_text(encoding='utf-8') if trace.exists() else 'none'} snapshot={document}")
+            first_files = [pathlib.Path(row["copied_to"]) for row in document["results"]]
+            self.assertEqual(2, len(first_files))
+            evidence = [(hashlib.sha256(path.read_bytes()).hexdigest(), path.stat().st_mtime_ns) for path in first_files]
+        finally:
+            first.terminate()
+            first.wait(timeout=5)
+
+        second = subprocess.run(
+            [sys.executable, str(helper), str(self.root), "resume"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=20,
+        )
+        self.assertEqual(0, second.returncode, second.stderr.decode(errors="replace"))
+        finished = store.latest()
+        self.assertEqual([1, 2, 3, 4], [row["index"] for row in finished["results"]])
+        self.assertEqual(evidence, [
+            (hashlib.sha256(path.read_bytes()).hexdigest(), path.stat().st_mtime_ns)
+            for path in first_files
+        ])
+
+    def test_refined_prompts_are_frozen_and_not_refined_again_on_resume(self):
+        store = RunProgressStore(self.root / "runs")
+        first = self.make_runner(store=store)
+
+        def refine(items, _config):
+            refined = bundle(3).items
+            for item in refined:
+                item.prompt = "已确认：" + item.prompt
+            return refined
+
+        with mock.patch.object(OpenAICompatibleAdapter, "refine", side_effect=refine) as first_refine:
+            first.start(bundle(3), self.make_config(segment_size=2))
+            wait_for_segment(first)
+        self.assertEqual(1, first_refine.call_count)
+        self.assertTrue(store.latest()["prompts_refined"])
+        self.assertTrue(store.latest()["bundle"]["items"][2]["prompt"].startswith("已确认："))
+
+        second = self.make_runner(store=store)
+        with mock.patch.object(OpenAICompatibleAdapter, "refine", side_effect=AssertionError("不得重新反推")):
+            second.resume_interrupted()
+            resumed = wait_finished(second)
+        self.assertEqual("completed", resumed["status"])
+        self.assertTrue(resumed["results"][2]["prompt"].startswith("已确认："))
+
+    def test_selected_original_indexes_survive_segment_and_resume(self):
+        store = RunProgressStore(self.root / "runs")
+        chosen = bundle(3)
+        for index, item in zip((11, 12, 13), chosen.items):
+            item.metadata["original_index"] = index
+        first = self.make_runner(store=store)
+        first.start(chosen, self.make_config(segment_size=2))
+        status = wait_for_segment(first)
+
+        self.assertEqual([11, 12], [row["index"] for row in status["results"]])
+        self.assertEqual([11, 12, 13], store.latest()["selected_indexes"])
+        self.assertEqual(13, store.latest()["next_index"])
+
+        second = self.make_runner(store=store)
+        second.resume_interrupted()
+        resumed = wait_finished(second)
+        self.assertEqual([11, 12, 13], [row["index"] for row in resumed["results"]])
+        self.assertTrue(resumed["audit"], "续跑首个任务已完成时丢失图审计")
+
     def test_a_fresh_runner_continues_without_regenerating_finished_items(self):
         store = RunProgressStore(self.root / "runs")
         first = self.make_runner(store=store)
@@ -425,6 +570,7 @@ class ResumeTests(SegmentFixture):
 
         self.assertEqual(original, resumed["run_id"], "续跑换了 run_id，输出目录与审图历史会对不上")
         self.assertEqual(3, resumed["resumed_from"])
+        wait_for_segment(second)
 
     def test_a_failed_item_at_the_break_point_is_retried_on_resume(self):
         store = RunProgressStore(self.root / "runs")
@@ -471,6 +617,14 @@ class ResumeTests(SegmentFixture):
         self.assertEqual("newer", summary["run_id"])
         self.assertEqual(5, summary["next_index"])
 
+    def test_latest_snapshot_distinguishes_runs_within_one_second(self):
+        store = RunProgressStore(self.root / "runs")
+        store.save({"run_id": "first", "total": 2, "next_index": 1,
+                    "updated_at": "2026-09-24 12:00:00.000001"})
+        store.save({"run_id": "second", "total": 2, "next_index": 1,
+                    "updated_at": "2026-09-24 12:00:00.000002"})
+        self.assertEqual("second", store.latest()["run_id"])
+
     def test_resume_is_refused_without_a_snapshot_store(self):
         runner = self.make_runner()
         with self.assertRaises(ValueError):
@@ -502,6 +656,10 @@ class ProgressStoreSafetyTests(unittest.TestCase):
             for hostile in ("../escape", "..\\escape", "a/b", ""):
                 with self.assertRaises(ValueError):
                     store.save({"run_id": hostile, "total": 1, "next_index": 1})
+                with self.assertRaises(ValueError):
+                    store.load(hostile)
+                with self.assertRaises(ValueError):
+                    store.clear(hostile)
 
             self.assertFalse((pathlib.Path(temp) / "escape.json").exists())
             self.assertFalse((pathlib.Path(temp) / "runs").exists(), "被拒绝的写入仍然建了目录")
@@ -514,6 +672,25 @@ class ProgressStoreSafetyTests(unittest.TestCase):
 
             self.assertIsNone(store.load("broken"))
             self.assertEqual([], store.documents())
+
+    def test_a_transient_reader_lock_does_not_lose_the_snapshot(self):
+        with tempfile.TemporaryDirectory() as temp:
+            store = RunProgressStore(pathlib.Path(temp) / "runs")
+            store.save({"run_id": "locked", "next_index": 1})
+            original_replace = pathlib.Path.replace
+            attempts = 0
+
+            def replace_after_reader_closes(source, target):
+                nonlocal attempts
+                attempts += 1
+                if attempts == 1:
+                    raise PermissionError("temporary Windows sharing violation")
+                return original_replace(source, target)
+
+            with mock.patch.object(pathlib.Path, "replace", replace_after_reader_closes):
+                store.save({"run_id": "locked", "next_index": 2})
+            self.assertEqual(2, attempts)
+            self.assertEqual(2, store.load("locked")["next_index"])
 
     def test_is_resumable_only_while_items_remain(self):
         self.assertTrue(RunProgressStore.is_resumable({"total": 10, "next_index": 4}))

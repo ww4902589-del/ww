@@ -340,5 +340,30 @@ class InspectPayloadTests(unittest.TestCase):
         self.assertEqual("参数越界", payload["preflight_errors"][0]["title"])
 
 
+class ConfigureGuardTests(unittest.TestCase):
+    """workflow_roots 的全空列表曾把配置打穿：页面表单空值是 truthy 的 [""]，
+    过滤空串后变成 []，工作流与模型集体"未发现"（2026-09-24 真机事故）。"""
+
+    def test_an_all_blank_workflow_roots_list_keeps_the_current_value(self):
+        app = Application()
+        app.workflow_roots = [pathlib.Path("E:/工作流")]
+        app.configure({"workflow_roots": [""]})
+        self.assertEqual([pathlib.Path("E:/工作流")], app.workflow_roots)
+        app.configure({"workflow_roots": []})
+        self.assertEqual([pathlib.Path("E:/工作流")], app.workflow_roots)
+
+    def test_a_valid_list_still_replaces_the_roots(self):
+        app = Application()
+        app.workflow_roots = [pathlib.Path("E:/工作流")]
+        app.configure({"workflow_roots": ["E:/工作流", "E:/其他流"]})
+        self.assertEqual([pathlib.Path("E:/工作流"), pathlib.Path("E:/其他流")], app.workflow_roots)
+
+    def test_a_missing_key_keeps_the_current_value(self):
+        app = Application()
+        app.workflow_roots = [pathlib.Path("E:/工作流")]
+        app.configure({"comfy_url": "http://127.0.0.1:8188"})
+        self.assertEqual([pathlib.Path("E:/工作流")], app.workflow_roots)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -74,3 +74,10 @@
 
 - 快捷键增强、编号跳转与滚动定位 → 任务 #11。
 - 若墙档用得好，作品库面板（第 5 阶段）可复用同一浮层模式（未做，不属于本任务）。
+
+## 任务 #13：浏览器绘画参考与 `reference` 接入（进行中）
+
+- 负责人：Codex 本任务；独立分支 `handoff/local-s-reference`，基点 `7adaa6e`。领取前已核对桌面清单与 Issue #2；起始分支相对 `origin/main` 无改动。
+- 已核对：现有 `/api/import-images` 将图片写入本机 ComfyUI 输入目录，并通过 `metadata.source_image` 传给工作流 `LoadImage`；尚无独立的 `reference` 字段。输入、输出、失败路径及与 #9 的边界记录在 `docs/26-浏览器绘画参考_V2.21.md`。
+- 用户已确认 `reference` 接入现有图片输入；画布 PNG 应经 `/api/import-images` 生成 `metadata.source_image` 并由已识别的 `LoadImage` 接收，不新增任意节点映射。
+- 待完成：字段契约、浏览器画布、端到端接入、正常与失败路径测试、全量闸门、独立审查、PR、合并、正式构建、桌面备份部署与 Edge 验收；当前保持 🟡。

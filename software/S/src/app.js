@@ -168,13 +168,21 @@ function imagePresets(){
 function imagePresetById(id){
   return imagePresets().find(x=>x.id===id)}
 function renderPresetOptions(){
-  const a=activePresetId||$('presetPicker').value,b=$('assignPreset').value;
+  const a=$('presetPicker').value||activePresetId,b=$('assignPreset').value;
   $('presetPicker').innerHTML='<option value="">自定义全局配置（未载入设定）</option>'+presets().map(x=>`<option value="${
   esc(x.id)}">${esc(x.name)}</option>`).join('');
   opts($('assignPreset'),presets(),x=>x.name,x=>x.id);
   if(presets().some(x=>x.id===a))$('presetPicker').value=a;
   if(presets().some(x=>x.id===b))$('assignPreset').value=b;
-  showPresetName()}
+  showPresetName();
+  updatePresetActions()}
+function updatePresetActions(){
+  const selected=!!presetById($('presetPicker').value);
+  for(const id of ['updatePresetButton','reloadPresetButton','deletePresetButton']){
+    const button=$(id);
+    if(button)button.disabled=!selected;
+  }
+}
 function renderImagePresetOptions(){
   const global=$('globalImagePreset').value,assigned=$('assignImagePreset').value;
   opts($('globalImagePreset'),imagePresets(),x=>x.name,x=>x.id);
@@ -211,6 +219,7 @@ async function savePreset(asNew){
     activePresetId=v.preset.id;
     renderPresetOptions();
     $('presetPicker').value=v.preset.id;
+    updatePresetActions();
     $('assignPreset').value=v.preset.id;
     $('presetName').value=v.preset.name;
     renderBundle();
@@ -223,7 +232,7 @@ function enrichPresetLora(x){
   }
   ;
   return {
-    ...x,display_name:source.display_name||source.name||x.name,trigger_words:[...(source.trigger_words||[])],trigger_status:source.trigger_status||'unknown',use_triggers:x.use_triggers!==false}
+    ...x,display_name:source.display_name||source.name||x.name,trigger_words:[...(source.trigger_words||[])],trigger_status:source.trigger_status||'unknown',has_saved_profile:!!source.has_saved_profile,use_triggers:x.use_triggers!==false}
 }
 function enrichPresetStyle(x){
   const source=inventory.styles.find(row=>row.library===x.catalog&&row.name===x.name)||{
@@ -233,9 +242,11 @@ function enrichPresetStyle(x){
     ...source,...x,display_name:source.display_name||source.name_cn||x.name,thumbnail:source.thumbnail||''}
 }
 function loadPreset(fromSelection=false){
+  updatePresetActions();
   const x=presetById($('presetPicker').value);
   if(!x){
     activePresetId='';
+    $('presetName').value='';
     renderConfigFeedback();
     if(!fromSelection)alert('没有可载入的预设');
     return}
@@ -245,21 +256,27 @@ function loadPreset(fromSelection=false){
   selectedLoras=(x.loras||[]).map(enrichPresetLora);
   renderStyleBasket();
   renderLoras()}
-async function deletePreset(){
+async function deletePreset(button){
   const id=$('presetPicker').value,x=presetById(id);
-  if(!x)return alert('没有可删除的预设');
+  if(!x)return;
   if(!confirm(`删除预设“${x.name}”？已使用它的提示词将恢复全局配置。`))return;
+  setBusy(button,true,'删除中');
   try{
     const v=await api('/api/delete-style-lora-preset',{method:'POST',body:JSON.stringify({id})});
     inventory.style_lora_presets=v.presets;
     bundle=v.bundle||bundle;
-    if(activePresetId===id)activePresetId='';
+    activePresetId='';
+    $('presetPicker').value='';
     $('presetName').value='';
     renderPresetOptions();
     renderBundle();
-    renderConfigFeedback()}
+    renderConfigFeedback();
+    notify(`已删除预设 ${x.name}`,'success')}
   catch(e){
-    alert(e.message)}
+    notify(e.message,'error')}
+  finally{
+    setBusy(button,false);
+    updatePresetActions()}
 }
 async function restoreDefaultPresets(btn){
   if(!confirm('恢复全部默认风格／LoRA 预设？已删除的默认预设会重新出现。'))return;
@@ -276,12 +293,13 @@ async function restoreDefaultPresets(btn){
     setBusy(btn,false)}
 }
 async function clearSavedParams(btn){
-  if(!confirm('清除当前工作流已保存的参数默认值？页面输入不受影响，只删除「记住的默认值」。'))return;
+  if(!confirm('清除当前工作流已保存的参数默认值？页面会重新显示当前参数；本次批次已应用的值不受影响。'))return;
   setBusy(btn,true);
   try{
-    await api('/api/params/clear',{method:'POST',body:JSON.stringify({workflow_path:$('workflow').value})});
+    const v=await api('/api/params/clear',{method:'POST',body:JSON.stringify({workflow_path:$('workflow').value})});
+    workbench=v.params||workbench;
+    renderWorkbench();
     notify('已清除当前工作流保存的参数默认值','success');
-    if(typeof loadWorkbench==='function')loadWorkbench();
   }
   catch(e){
     notify(e.message,'error')}
@@ -397,7 +415,7 @@ function renderStyleBasket(){
 function addLora(){
   const name=$('loraPick').value,source=inventory.loras.find(x=>x.value===name);
   if(source&&!selectedLoras.some(x=>x.name===name)){
-    selectedLoras.push({name,display_name:source.display_name||source.name||name,strength:1,trigger_words:[...(source.trigger_words||[])],trigger_status:source.trigger_status,use_triggers:source.use_triggers!==false});
+    selectedLoras.push({name,display_name:source.display_name||source.name||name,strength:1,trigger_words:[...(source.trigger_words||[])],trigger_status:source.trigger_status,has_saved_profile:!!source.has_saved_profile,use_triggers:source.use_triggers!==false});
     renderLoras()}
 }
 async function rememberLora(index){
@@ -408,7 +426,10 @@ async function rememberLora(index){
     Object.assign(x,v.profile);
     const source=inventory.loras.find(row=>row.value===x.name);
     if(source)Object.assign(source,v.profile);
-    renderLoraOptions()}
+    x.has_saved_profile=true;
+    if(source)source.has_saved_profile=true;
+    renderLoraOptions();
+    renderLoras()}
   catch(e){
     alert('LoRA 资料保存失败：'+e.message)}
 }
@@ -436,21 +457,44 @@ function renderLoras(){
   <input type="checkbox" ${x.use_triggers?'checked':''} onchange="selectedLoras[${
   i}].use_triggers=this.checked;rememberLora(${
   i})">使用触发词</label>
-  <button class="secondary" onclick="deleteLoraProfile('${
-  esc(x.name)}')">删除档案</button>
+  ${x.has_saved_profile?`<button class="secondary" onclick="deleteLoraProfile(${i},this)">删除档案</button>`:''}
   <button class="danger" onclick="selectedLoras.splice(${
   i},1);renderLoras()">×</button>
   </div>`).join('');
   renderConfigFeedback()}
-async function deleteLoraProfile(name){
+async function deleteLoraProfile(index,button){
+  const name=selectedLoras[index]?.name;
+  if(!name)return;
   if(!confirm(`删除 LoRA 档案“${name}”？只是删除软件内保存的触发词档案，不动模型文件。`))return;
+  setBusy(button,true,'删除中');
   try{
     await api('/api/delete-lora-profile',{method:'POST',body:JSON.stringify({name})});
-    // 档案只影响触发词记忆，行内已填的值保留；下次资源扫描后 trigger_status 会同步为未记忆。
+    const sourceIndex=inventory.loras.findIndex(row=>row.value===name);
+    const source=inventory.loras[sourceIndex];
+    if(source){
+      source.has_saved_profile=false;
+      source.trigger_status='unknown';
+      source.trigger_words=[];
+      source.display_name=source.name||name;
+      delete source.use_triggers;
+    }
+    for(const row of selectedLoras)if(row.name===name)row.has_saved_profile=false;
+    renderLoraOptions();
+    renderLoras();
     notify(`已删除档案 ${name}`,'success');
+    // Refresh only this LoRA. A full inventory render would reset workflow and model picks.
+    try{
+      const v=await api('/api/inventory');
+      const latest=(v.inventory?.loras||[]).find(row=>row.value===name);
+      if(sourceIndex>=0&&latest)inventory.loras[sourceIndex]=latest;
+      renderLoraOptions();
+    }
+    catch(e){notify('档案已删除，但资源状态刷新失败：'+e.message,'error')}
   }
   catch(e){
     notify(e.message,'error')}
+  finally{
+    setBusy(button,false)}
 }
 function toggleLLM(){
   $('llmFields').classList.toggle('hidden',!$('llmEnabled').checked)}
@@ -1076,9 +1120,11 @@ async function loadWorkbench(btn){
     batchParams=Object.assign({},workbench.batch_values||{});
     renderWorkbench();
     if(btn)notify('已读取参数清单','success');
+    return true;
   }
   catch(e){
-    notify(e.message,'error')}
+    notify(e.message,'error');
+    return false}
   finally{
     if(btn)setBusy(btn,false)}
 }
@@ -1257,13 +1303,9 @@ async function applyWorkbench(btn){
 }
 
 async function clearWorkbench(btn){
-  batchParams={
-  }
-  ;
   if(btn)setBusy(btn,true);
   try{
-    await loadWorkbench();
-    notify('已清空未应用的输入','success')}
+    if(await loadWorkbench())notify('已清空未应用的输入','success')}
   catch(e){
     notify(e.message,'error')}
   finally{

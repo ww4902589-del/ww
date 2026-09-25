@@ -171,9 +171,9 @@
         <div class="preset-command-bar">
           <label>预设名称<input id="presetName" placeholder="输入名称后可另存"></label>
           <button class="secondary" onclick="savePreset(true)">另存新预设</button>
-          <button class="secondary" onclick="savePreset(false)">更新预设</button>
-          <button class="secondary" onclick="loadPreset(false)">重新载入</button>
-          <button class="danger" onclick="deletePreset()">删除预设</button>
+          <button id="updatePresetButton" class="secondary" onclick="savePreset(false)">更新预设</button>
+          <button id="reloadPresetButton" class="secondary" onclick="loadPreset(false)">重新载入</button>
+          <button id="deletePresetButton" class="danger" onclick="deletePreset(this)">删除预设</button>
           <button class="secondary" onclick="restoreDefaultPresets(this)">恢复默认预设</button>
         </div>
       </div>

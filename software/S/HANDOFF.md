@@ -1,12 +1,16 @@
-# 当前分支交接：S 重复启动无窗口修复（PR #14）
+# S 重复启动无窗口修复与发布记录（PR #14）
 
-本分支 `handoff/local-s-startup` 从 `origin/main` 的 `7adaa6e` 建立，与下方已合并的紧凑审图记录无关。当前提交仅修改 `src/comfybatch_v2_app.py` 与 `tests/test_live_sync.py`，不覆盖其他 Agent 工作区。
+源码分支 `handoff/local-s-startup` 从 `origin/main` 的 `7adaa6e` 建立，与下方已合并的紧凑审图记录无关；源码改动仅涉及 `src/comfybatch_v2_app.py` 与 `tests/test_live_sync.py`，不覆盖其他 Agent 工作区。
 
 - 根因：测试仅隔离 `COMFYBATCH_DATA_DIR`，而实例记录位于 `LOCALAPPDATA`；运行测试可删掉桌面 S 的 `instance.json`，后续双击因互斥锁已占用却无记录而静默退出。
 - 修复：实例文件测试隔离 `LOCALAPPDATA` 与实例名称；记录缺失/失效时，仅扫描本机首选端口及其 20 个备用端口，校验 `/api/ping` 的应用标识、主实例状态、实例 ID 与当前互斥锁同名的命名空间，再请求激活并打开已有页面。
 - 云端独立审查：指出开发实例占用更靠前端口时可能误开的 MEDIUM 问题；已在 `/api/ping` 增加 `instance_name` 并在扫描时比对，回归测试先失败后通过。默认系统浏览器不保证一定是 Edge，桌面 Edge 验收仍属发布闸门。
 - 回归：针对实例文件、缺失记录、非本机地址、备用端口的测试 8 项全部通过；全量 **515 项：514 通过、0 失败、1 跳过**；`python -m compileall -q src tests tools` 通过，`git diff --check` 无错误。全量测试后桌面运行实例的记录仍在且 `/api/ping` 返回 200（此前验证）。
-- 交付边界：此处仅为源码修复。PR #14 尚待最新提交复审、合并、正式构建、桌面备份替换与 Edge 重复启动验收；不得把桌面安装版标记为已修复。
+- 源码合并：PR #14 已合并，合并提交 `f07b8fd90b91731a7b0e004bc68d31015268468e`。云端审查曾提出的 MEDIUM 已由 `2e68e89` 修复；最新提交的云端复审请求尚未返回独立结论。
+- 正式构建：从合并提交的独立干净 worktree 构建；Python 3.13.9 / PyInstaller 6.21.0；构建包 `S.exe` SHA-256 `682D9694C9BD6A41A87F42A8728A57AE1DBB87715FC7019441F9913C3CA25195`。同一合并源码全量测试 **515 项：514 通过、0 失败、1 跳过**。
+- 隔离冒烟：候选包使用隔离数据目录、实例名 `smoke-startup` 和端口 8890；`/api/ping` 返回 2.20 与正确实例名。暂移实例记录后再次启动，`activated_at` 更新，证明能找回并激活运行实例；测试实例随后关闭，测试记录已清理。
+- 桌面部署：旧版 `<桌面目录>\S.exe` 先备份至同目录 `S.exe.v220-pre-pr14-20260925.bak`（SHA-256 `F412DC09C1F67EBE9B79AE835D8B3D670913694B1BBA92B75B02326B04180806`），在服务空闲时停止父子进程，替换后 SHA-256 与候选一致。桌面 8790 的 ping、首页、app.js、app.css 均返回 200；重复启动后仍为两个 PyInstaller 进程且 `activated_at` 更新。当前 Windows HTTP 默认浏览器为 Edge。
+- 待补验收：Windows 窗口检查工具两次无法激活 Edge，因此未声称完成页面视觉验收；本轮未重新做普通网页、图片直链和 B 站封面的实网提取。旧版备份保留以便回退。
 
 # 既有交接记录（已合并）：紧凑审图与半透明信息浮层
 

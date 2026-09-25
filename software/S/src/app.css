@@ -2856,3 +2856,19 @@ details[open] > .compact-module-summary .compact-toggle::after {
     grid-column:span 1
   }
 }
+
+/* 种子读回状态。用浅色主题的令牌，跟卡片同一套配色，不要沿用旧版深色徽章。 */
+.badge.seed-unchecked {
+  background:#fdecef;
+  border-color:var(--accent);
+  color:var(--accent-dark)
+}
+.seed-note {
+  display:block;
+  margin-top:3px;
+  font-size:11px;
+  color:var(--muted)
+}
+.seed-note.warn {
+  color:var(--accent-dark)
+}

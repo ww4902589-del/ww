@@ -35,7 +35,10 @@ from comfybatch_nodeschema import (
     SEVERITY_BLOCKING,
     structural_fingerprint,
     apply_seed,
+    executed_graph,
     graph_seeds,
+    seed_plan,
+    seed_report,
     SOURCE_INJECTED,
     CompiledGraphAudit,
     NodeSchemaRegistry,
@@ -770,6 +773,80 @@ class ImageQualityInspector:
             }
 
 
+class ImageSeedInspector:
+    """The seeds recorded inside a finished image.
+
+    ComfyUI stores the API prompt it executed in the PNG's ``prompt`` text chunk,
+    so the produced file -- not the request we sent -- is the authority on which
+    seed made that picture. Reading it is offline, per-image, and works long after
+    ComfyUI's history has been cleared.
+
+    A file without that chunk (metadata stripped, re-exported, or not a PNG at
+    all) reports ``read=False`` with a reason. Guessing a seed there would defeat
+    the entire point of the check.
+    """
+
+    #: Largest prompt chunk worth parsing. A batch image's graph is a few tens of
+    #: kilobytes; anything far larger is not something to JSON-decode in a loop.
+    MAX_CHUNK = 4 * 1024 * 1024
+
+    @classmethod
+    def inspect(cls, path: str | pathlib.Path) -> dict[str, Any]:
+        try:
+            with Image.open(path) as image:
+                raw = (getattr(image, "text", None) or {}).get("prompt") or ""
+        except Exception as exc:  # noqa: BLE001 - a broken file must not fail a run
+            return {"read": False, "seeds": {}, "reason": f"读取图片元数据失败：{exc}"}
+        if not raw:
+            return {"read": False, "seeds": {}, "reason": "图片内没有 ComfyUI 记录的提示"}
+        if len(raw) > cls.MAX_CHUNK:
+            return {"read": False, "seeds": {}, "reason": "图片内嵌提示过大，已跳过"}
+        try:
+            graph = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            return {"read": False, "seeds": {}, "reason": f"图片内嵌提示不是有效 JSON：{exc}"}
+        if not isinstance(graph, dict):
+            return {"read": False, "seeds": {}, "reason": "图片内嵌提示不是节点图"}
+        return {"read": True, "seeds": graph_seeds(graph), "reason": ""}
+
+
+def real_seed_evidence(source: str | pathlib.Path, entry: dict[str, Any] | None) -> dict[str, Any]:
+    """Where the seeds really came from, most authoritative source first.
+
+    The image's own metadata wins because it is per-file and outlives ComfyUI's
+    history; the executed graph in ``/history`` is the next best thing; when
+    neither can be read the submitted graph is all we have, and ``source`` says
+    so rather than implying the seed was confirmed.
+    """
+    stamped = ImageSeedInspector.inspect(source)
+    if stamped["read"] and stamped["seeds"]:
+        return {"seeds": stamped["seeds"], "available": True, "source": "图片内嵌提示", "reason": ""}
+    executed = executed_graph(entry)
+    history_seeds = graph_seeds(executed) if executed else {}
+    if history_seeds:
+        return {"seeds": history_seeds, "available": True, "source": "执行历史", "reason": ""}
+    reasons: list[str] = []
+    if stamped["read"]:
+        reasons.append("图片内嵌提示未发现具体种子")
+    elif stamped["reason"]:
+        reasons.append(str(stamped["reason"]))
+    if executed:
+        reasons.append("执行历史未发现具体种子")
+    else:
+        reasons.append("执行历史不可用")
+    return {"seeds": {}, "available": False, "source": "未核对", "reason": "；".join(reasons)}
+
+
+def seed_evidence_payload(planned: dict[str, Any], evidence: dict[str, Any]) -> dict[str, Any]:
+    """The ``generation`` keys that record what actually happened to the seed."""
+    return {
+        "real_seeds": evidence["seeds"],
+        "seed_source": evidence["source"],
+        "seed_check": seed_report(planned, evidence["seeds"], available=bool(evidence["available"])),
+        "seed_note": evidence["reason"],
+    }
+
+
 class ResourceInventory:
     """Discovers selectable local ComfyUI resources behind one interface."""
 
@@ -1245,6 +1322,10 @@ class Krea2WorkflowAdapter:
 
     def capabilities(self, config: BatchConfig, source_image: str = "") -> dict[str, Any]:
         selected_variant: dict[str, Any] | None = None
+        #: Nodes of the branch this config selects. ``seed_plan`` needs it: a
+        #: workflow where one branch can be pinned and another cannot must not be
+        #: reported as if both were equally fine.
+        active_seed_ids: set[str] | None = None
         if self._is_api_graph(self.workflow):
             node_types = {str(node.get("class_type")) for node in self.workflow.values()}
             workflow_format = "API"
@@ -1257,6 +1338,7 @@ class Krea2WorkflowAdapter:
             ] if selected_ids is not None else [
                 node for node in self.workflow.get("nodes", []) if int(node.get("mode", 0) or 0) == 0
             ]
+            active_seed_ids = {str(node.get("id")) for node in active_nodes}
             node_types = {str(node.get("type")) for node in active_nodes}
             workflow_format = "UI"
             node_ids = lambda class_type: [str(node.get("id")) for node in active_nodes if str(node.get("type")) == class_type]
@@ -1356,6 +1438,11 @@ class Krea2WorkflowAdapter:
             lora_mode, required_injected_nodes = "不可用", []
         else:
             lora_mode, required_injected_nodes = "未选择", []
+        # 固定种子能落到哪里：预检阶段就说清楚。以前这里什么都没说，用户选「固定种子」
+        # 而工作流的种子由上游节点提供时，每次出图都是随机的，页面上连一行提示都没有。
+        seed_evidence = seed_plan(self.workflow, self._schema(), active_seed_ids)
+        if seed_evidence["warning"]:
+            warnings.append(seed_evidence["warning"])
         width, height = resolve_image_dimensions(config.aspect_ratio, config.megapixels)
         workflow_path = pathlib.Path(config.workflow_path).resolve()
         # The audit, the saved replacement rules and a workflow's saved parameter
@@ -1419,6 +1506,7 @@ class Krea2WorkflowAdapter:
                 "native_fallback": bool(selected_styles and native_styles and prompt_target and not style_hosts and usable_styles),
             },
             "lora": {"mode": lora_mode, "count": len(config.loras), "names": [str(item.get("name") or "") for item in config.loras]},
+            "seed": seed_evidence,
             "dimensions": {"width": width, "height": height},
             "required_injected_nodes": required_injected_nodes,
             "variant": selected_variant or {"id": "", "name": "当前已启用分支", "sampler_count": len(sampler_nodes), "upscale_count": len(upscale_nodes)},
@@ -2203,6 +2291,14 @@ class BatchRunner:
         self.adapter_registry: NodeSchemaRegistry | None = None
         #: Status to restore after a single-item redo finishes.
         self._redo_previous_status = ""
+        #: Monotonic completion order for "use latest". Result rows are kept in
+        #: task-number order for review, so their array position is not recency.
+        self._result_revision = 0
+
+    def _next_result_revision(self) -> int:
+        with self._lock:
+            self._result_revision += 1
+            return self._result_revision
 
     def _adapter(self, workflow_path: str) -> "Krea2WorkflowAdapter":
         return Krea2WorkflowAdapter.from_path(workflow_path, self.adapter_registry or active_registry())
@@ -2217,6 +2313,7 @@ class BatchRunner:
                 raise ValueError("已有批次正在运行")
             run_id = str(uuid.uuid4())
             self._state = {"status": "starting", "run_id": run_id, "total": len(bundle.items), "submitted": 0, "completed": 0, "errors": 0, "current": None, "results": [], "report": None, "output_dir": config.output_dir}
+            self._result_revision = 0
         self._cancel.clear()
         self._resume.set()
         self._last_bundle = bundle
@@ -2456,12 +2553,14 @@ class BatchRunner:
                 "elapsed": round(time.time() - started, 2),
                 "quality": quality,
                 "note": note,
+                "completed_revision": self._next_result_revision(),
                 "generation": {
                     "model": config.model, "styles": config.styles, "style_library": config.style_library,
                     "style_name": config.style_name, "loras": config.loras, "aspect_ratio": config.aspect_ratio,
                     "megapixels": config.megapixels, "source_image": source_image,
                     "workflow_path": config.workflow_path, "workflow_variant": config.workflow_variant,
                     "seeds": graph_seeds(graph),
+                    **seed_evidence_payload(graph_seeds(graph), real_seed_evidence(source, outcome.get("entry"))),
                 },
                 "attempts": [{"attempt": 1, "prompt_id": prompt_id, "quality": quality, "elapsed": round(time.time() - started, 2), "mode": mode}],
             })
@@ -2638,6 +2737,11 @@ class BatchRunner:
                                 f"但在 {source} 找不到文件。请确认输出目录设置正确。"
                             )
                         quality = ImageQualityInspector.inspect(source) if item_config.single_subject_guard else {"repeated_panels": False}
+                        # 这张图真正用的种子。以成图内嵌的提示为准，其次执行历史；
+                        # 两处都读不到就记「未核对」，绝不拿提交值冒充实际值。
+                        result["generation"].update(seed_evidence_payload(
+                            graph_seeds(graph), real_seed_evidence(source, outcome.get("entry")),
+                        ))
                         repeated_panels = bool(quality.get("repeated_panels"))
                         attempts.append({"attempt": attempt + 1, "prompt_id": prompt_id, "quality": quality, "elapsed": round(time.time() - started, 2)})
                         if repeated_panels and attempt < item_config.max_retries:
@@ -2656,6 +2760,7 @@ class BatchRunner:
                             "quality": quality,
                             "attempts": attempts,
                             "review_status": "待确认",
+                            "completed_revision": self._next_result_revision(),
                         })
                         break
                     completed_count += 1
@@ -2712,16 +2817,47 @@ class BatchRunner:
         # 参数没有真正生效，这里把「防止单一图片大量产出」的事后可见性直接
         # 写进批次报告，便于用户排查。
         seed_counts: dict[str, int] = {}
+        real_counts: dict[str, int] = {}
+        unverified: list[int] = []
+        mismatched: list[dict[str, Any]] = []
         for entry in results:
-            seeds = ((entry.get("generation") or {}).get("seeds") or {})
+            generation = entry.get("generation") or {}
+            seeds = generation.get("seeds") or {}
             # graph_seeds 返回的是 {节点.参数: 种子值} 字典，必须取值而不是取键。
             seed_values = seeds.values() if isinstance(seeds, dict) else seeds
             for seed_value in seed_values:
                 key = str(seed_value)
                 seed_counts[key] = seed_counts.get(key, 0) + 1
+            check = generation.get("seed_check") or {}
+            if not check:
+                continue
+            index = int(entry.get("index") or 0)
+            if not check.get("available"):
+                # A completed image whose seed we could not read back is not a
+                # failure and must not be counted as one -- but it is also not
+                # confirmation, so it is listed separately.
+                if entry.get("status") == "completed":
+                    unverified.append(index)
+                continue
+            real = generation.get("real_seeds") or {}
+            for seed_value in (real.values() if isinstance(real, dict) else real):
+                key = str(seed_value)
+                real_counts[key] = real_counts.get(key, 0) + 1
+            if not check.get("effective"):
+                mismatched.append({
+                    "index": index,
+                    "source": generation.get("seed_source") or "",
+                    "detail": check.get("mismatched") or {},
+                    "missing": check.get("missing") or [],
+                })
         seed_stats = {
             "values": seed_counts,
             "duplicates": {key: count for key, count in seed_counts.items() if count > 1},
+            # 实际生效的种子：同一实际种子重复出现＝必然同图，比提交值更可靠。
+            "real_values": real_counts,
+            "real_duplicates": {key: count for key, count in real_counts.items() if count > 1},
+            "mismatched": mismatched,
+            "unverified_indexes": unverified,
         }
         report = {
             **self.status(),

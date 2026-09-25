@@ -974,6 +974,204 @@ def apply_seed(graph: dict[str, Any], seed: int) -> dict[str, Any]:
     return graph
 
 
+def executed_graph(entry: dict[str, Any] | None) -> dict[str, Any]:
+    """The graph ComfyUI reports it ran, taken from a ``/history/<id>`` entry.
+
+    ``/history`` keeps the received prompt as ``[number, prompt_id, graph,
+    extra_data, outputs]``; a few builds store the graph directly. Anything else
+    returns ``{}``, and that distinction matters: "history did not tell us" and
+    "the seed did not apply" look identical to a careless reader, and confusing
+    them would report every older ComfyUI as broken.
+    """
+    if not isinstance(entry, dict):
+        return {}
+    prompt = entry.get("prompt")
+    if isinstance(prompt, dict):
+        return prompt
+    if isinstance(prompt, (list, tuple)) and len(prompt) > 2 and isinstance(prompt[2], dict):
+        return prompt[2]
+    return {}
+
+
+def seed_report(submitted: dict[str, Any], actual: dict[str, Any], *, available: bool = True) -> dict[str, Any]:
+    """Compare the seeds we sent with the seeds that actually produced the image.
+
+    ``available=False`` means the actual side could not be read at all; the
+    caller must then say "未核对" instead of claiming the seed failed. ``effective``
+    is ``None`` in that case, never ``False`` -- an unverified seed and a broken
+    seed deserve different words.
+    """
+    if not available:
+        return {"available": False, "effective": None, "mismatched": {}, "missing": [], "extra": []}
+    mismatched: dict[str, dict[str, Any]] = {}
+    missing: list[str] = []
+    for key, value in submitted.items():
+        if key not in actual:
+            missing.append(key)
+        elif int(actual[key]) != int(value):
+            mismatched[key] = {"submitted": value, "executed": actual[key]}
+    extra = [key for key in actual if key not in submitted]
+    return {
+        "available": True,
+        "effective": not mismatched and not missing and not extra,
+        "mismatched": mismatched,
+        "missing": missing,
+        "extra": extra,
+    }
+
+
+def workflow_seed_map(
+    workflow: dict[str, Any],
+    registry: NodeSchemaRegistry | None = None,
+    node_ids: Any = None,
+    include_muted: bool = False,
+) -> dict[str, Any]:
+    """Every ``seed``/``noise_seed`` input in a workflow, whatever its format.
+
+    ``value`` is the concrete integer set on that node, or ``None`` when the seed
+    is wired from another node -- in which case the frontend's leftover widget
+    value is *not* the seed and must not be reported as one. ``source`` names the
+    node that owns the wire, resolved to the producing node id so a message can
+    point somewhere real.
+
+    ``node_ids`` narrows a UI workflow to one execution branch. Without it the
+    answer would mix branches together: a workflow where one branch can be pinned
+    and another cannot would be reported as if both were fine.
+    """
+    registry = registry or active_registry()
+    wanted = {str(item) for item in node_ids} if node_ids is not None else None
+    is_api = not isinstance(workflow.get("nodes"), list)
+    found: dict[str, Any] = {}
+    if is_api:
+        for node_id, node in (workflow or {}).items():
+            if not isinstance(node, dict):
+                continue
+            inputs = node.get("inputs") or {}
+            for name in SEED_INPUT_NAMES:
+                if name not in inputs:
+                    continue
+                value = inputs[name]
+                if isinstance(value, list) and value:
+                    found[str(node_id)] = {
+                        "type": str(node.get("class_type") or ""), "name": name,
+                        "value": None, "source": str(value[0]),
+                    }
+                elif isinstance(value, int) and not isinstance(value, bool):
+                    found[str(node_id)] = {
+                        "type": str(node.get("class_type") or ""), "name": name,
+                        "value": value, "source": "",
+                    }
+        return found
+
+    nodes = workflow.get("nodes") or []
+    for node in nodes:
+        if not isinstance(node, dict):
+            continue
+        if wanted is not None:
+            if str(node.get("id")) not in wanted:
+                continue
+        elif not include_muted and int(node.get("mode", 0) or 0) != 0:
+            continue
+        entries = [item for item in (node.get("inputs") or []) if isinstance(item, dict)]
+        bound = WidgetBinder.bind(node, registry).widgets
+        for name in SEED_INPUT_NAMES:
+            entry = next((item for item in entries if item.get("name") == name), None)
+            if entry is not None and entry.get("link") is not None:
+                # The frontend keeps the widget's last value in ``widgets_values``
+                # even after it is promoted to a link. That leftover is not the
+                # seed, and reporting it as one would be exactly the kind of
+                # plausible-looking lie this module exists to prevent.
+                source = _link_source(nodes, entry.get("link"))
+                found[str(node.get("id"))] = {
+                    "type": str(node.get("type") or ""), "name": name,
+                    "value": None, "source": str(source.get("id") or "") if source else "",
+                    "source_type": str(source.get("type") or "") if source else "",
+                }
+                continue
+            value = bound.get(name)
+            if isinstance(value, int) and not isinstance(value, bool):
+                found[str(node.get("id"))] = {
+                    "type": str(node.get("type") or ""), "name": name,
+                    "value": value, "source": "", "source_type": "",
+                }
+    return found
+
+
+def _link_source(nodes: list[Any], link_id: Any) -> dict[str, Any] | None:
+    """The node that produces ``link_id``.
+
+    Returns ``None`` when the wire cannot be traced; an unknown source stays
+    unknown instead of being replaced by a plausible-looking node.
+    """
+    for node in nodes:
+        if not isinstance(node, dict):
+            continue
+        for output in node.get("outputs") or []:
+            if isinstance(output, dict) and link_id in (output.get("links") or []):
+                return node
+    return None
+
+
+def seed_plan(
+    workflow: dict[str, Any],
+    registry: NodeSchemaRegistry | None = None,
+    node_ids: Any = None,
+) -> dict[str, Any]:
+    """How much of a workflow's seeding a fixed seed can actually reach.
+
+    Computed from the workflow, not from a compiled graph, so preflight can state
+    it before anything is built. A concrete integer seed can be pinned. A seed
+    wired from another node belongs to that node -- and ``apply_seed`` can only
+    follow the wire if that node has a seed input of its own. When nothing in the
+    selected branch qualifies, asking for a fixed seed does precisely nothing,
+    and that used to be completely silent.
+    """
+    seeds = workflow_seed_map(workflow, registry, node_ids)
+    if isinstance(workflow.get("nodes"), list):
+        everywhere = workflow_seed_map(workflow, registry, None, include_muted=True)
+    else:
+        everywhere = seeds
+    pinnable = {f"{node_id}.{item['name']}": item["value"] for node_id, item in seeds.items() if item["value"] is not None}
+    # The producer may sit in a muted node (branch selection is expressed with
+    # ``mode``), so "can we pin it" is asked of the whole workflow, not just the
+    # branch being reported on.
+    controllable = {node_id for node_id, item in everywhere.items() if item["value"] is not None}
+    linked: dict[str, dict[str, Any]] = {}
+    uncontrollable: list[str] = []
+    for node_id, item in seeds.items():
+        if item["value"] is not None:
+            continue
+        key = f"{node_id}.{item['name']}"
+        source = item["source"]
+        # The producing node itself carries a concrete seed => apply_seed pins it
+        # and every consumer is covered. That is the rgthree Seed shape used by
+        # every real Krea2 workflow in this project.
+        follows = bool(source) and source in controllable
+        linked[key] = {
+            "type": item["type"], "from": source,
+            "from_type": item.get("source_type") or "", "controllable": follows,
+        }
+        if not follows:
+            uncontrollable.append(key)
+    warning = ""
+    if uncontrollable:
+        named = "、".join(
+            f"{key} ← {linked[key]['from'] or '?'}"
+            + (f" {linked[key]['from_type']}" if linked[key]["from_type"] else "")
+            for key in uncontrollable[:3]
+        )
+        warning = (
+            f"该工作流的种子由上游节点提供（{named}），上游节点自身也没有可写的种子参数："
+            "固定种子不会生效，每次都会随机"
+        )
+    return {
+        "pinnable": pinnable,
+        "linked": linked,
+        "uncontrollable": uncontrollable,
+        "warning": warning,
+    }
+
+
 # --------------------------------------------------------------------------- #
 # Compiled graph audit (fourth preflight layer)
 # --------------------------------------------------------------------------- #

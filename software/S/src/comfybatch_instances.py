@@ -109,12 +109,17 @@ def process_alive(pid: int) -> bool:
         try:
             import ctypes
 
+            ERROR_ACCESS_DENIED = 5
             PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
-            handle = ctypes.windll.kernel32.OpenProcess(  # type: ignore[attr-defined]
-                PROCESS_QUERY_LIMITED_INFORMATION, False, int(pid))
+            kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+            handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, int(pid))
             if not handle:
-                return False
-            ctypes.windll.kernel32.CloseHandle(handle)  # type: ignore[attr-defined]
+                # A null handle means "no such process" *or* "not allowed to ask".
+                # Access denied is a live process (typically one started elevated) and
+                # must never be treated as dead: that would delete a running sibling's
+                # record, which is the exact invariant this registry exists to keep.
+                return kernel32.GetLastError() == ERROR_ACCESS_DENIED
+            kernel32.CloseHandle(handle)
             return True
         except Exception:  # noqa: BLE001 - no ctypes: do not prune on a failed probe
             return True
@@ -245,6 +250,13 @@ class InstanceRegistry:
         """
         out: list[InstanceRecord] = []
         if self.root.is_dir():
+            # A process killed between writing its scratch file and renaming it leaves
+            # `<record>.<pid>.tmp` behind; nothing else cleans those up.
+            for stale in self.root.glob("*.tmp"):
+                try:
+                    stale.unlink(missing_ok=True)
+                except OSError:
+                    pass
             for path in sorted(self.root.glob("*.json")):
                 record = self._load(path)
                 if record is None:

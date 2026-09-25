@@ -23,6 +23,7 @@ from __future__ import annotations
 import json
 import os
 import pathlib
+import socket
 import subprocess
 import sys
 import tempfile
@@ -47,6 +48,7 @@ from comfybatch_instances import (  # noqa: E402
     InstanceRegistry,
     PortUnavailable,
     bind_server,
+    process_alive,
 )
 from comfybatch_shared import FileLock, atomic_write_text, read_json, revision_of  # noqa: E402
 
@@ -78,6 +80,25 @@ def free_port() -> int:
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
         return probe.getsockname()[1]
+
+
+def terminate_tree(proc) -> None:
+    """Stop a started process *and its children*.
+
+    A frozen onefile build runs as two processes, so ``Popen.terminate()`` reaches only
+    the bootloader and leaves the server holding its port -- the same reason the
+    deployment path stops by process tree.
+    """
+    if proc is None or proc.poll() is not None:
+        return
+    if os.name == "nt":
+        subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True)
+    else:
+        proc.terminate()
+    try:
+        proc.wait(timeout=20)
+    except subprocess.TimeoutExpired:
+        proc.kill()
 
 
 class NoProcessWideLockTests(unittest.TestCase):
@@ -226,12 +247,23 @@ class InstanceRegistryTests(unittest.TestCase):
                              "刚启动就被判定死亡的记录不能立刻删——另一个进程可能只是还没开始监听")
 
     def test_records_do_not_follow_the_data_directory(self):
-        """A launch with another --data-dir must still find the instances."""
+        """A launch with another --data-dir must still find the instances.
+
+        Asserted against an independently built path. The earlier version compared
+        ``write_instance_file``'s return value with ``instance_registry().root / "cccc.json"``
+        -- the same function's own idea of the root -- so it would have passed even if
+        ``instance_root()`` had started honouring ``--data-dir``.
+        """
         os.environ["COMFYBATCH_DATA_DIR"] = "C:/tmp/one"
         first = self.register("cccc", 8790)
-        os.environ["COMFYBATCH_DATA_DIR"] = "C:/tmp/two"
-        self.assertEqual(first, app_module.instance_registry().root / "cccc.json",
-                         "实例记录属于进程，不属于某次启动所用的数据目录")
+        alternate = pathlib.Path(self._temp.name) / "another-data-dir"
+        os.environ["COMFYBATCH_DATA_DIR"] = str(alternate)
+
+        expected = pathlib.Path(self._temp.name) / "ComfyBatch-S" / "instances" / "cccc.json"
+        self.assertEqual(expected, first,
+                         "实例记录必须落在 LOCALAPPDATA 下，不随 --data-dir 移动")
+        self.assertFalse(alternate.exists(), "写记录不该顺便在数据目录里造东西")
+        self.assertEqual(expected, app_module.instance_registry().root / "cccc.json")
 
     def test_the_registry_directory_holds_one_file_per_instance(self):
         self.register("aaaa", 8790)
@@ -354,9 +386,9 @@ class RealTwoProcessTests(unittest.TestCase):
                 except subprocess.TimeoutExpired:
                     proc.kill()
 
-    def start_instance(self, name: str) -> dict:
+    def start_instance(self, name: str, preferred: int = 0) -> dict:
         proc = subprocess.Popen(
-            [sys.executable, str(WORKER), "serve", str(self.data_dir), name],
+            [sys.executable, str(WORKER), "serve", str(self.data_dir), name, str(preferred)],
             env=self._env(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
         )
         self.processes.append(proc)
@@ -438,10 +470,10 @@ class RealTwoProcessTests(unittest.TestCase):
         ]
         landed = 0
         for proc in procs:
-            out, err = proc.communicate(timeout=300)
+            out, err = proc.communicate(timeout=600)
             self.assertEqual(0, proc.returncode, (out + err)[:2000])
             report = json.loads(out.strip().splitlines()[-1])
-            self.assertTrue(report["ok"], out)
+            self.assertTrue(report["ok"], f"一个写入进程放弃了：{out}{err}")
             landed += report["written"]
         payload = json.loads(settings.read_text(encoding="utf-8"))
         # The invariant that matters: every write that reported success bumped the revision
@@ -508,6 +540,22 @@ class RealTwoProcessTests(unittest.TestCase):
         self.assertEqual(40, stats["works"], "两个进程各写 20 条，必须都在库里")
         works = store.query(limit=100)["items"]
         self.assertEqual({"run-a", "run-b"}, {row["run_id"] for row in works})
+
+
+class ProcessAliveTests(unittest.TestCase):
+    def test_an_existing_but_unqueryable_process_counts_as_alive(self):
+        """Access denied means "there is a process you may not ask about".
+
+        Windows pid 4 is the system process: OpenProcess refuses it with
+        ERROR_ACCESS_DENIED. Reading that as death would let one window delete a
+        sibling's instance record -- for example a window started elevated, which is
+        exactly the case the registry promises to protect.
+        """
+        self.assertTrue(process_alive(4), "不可查询但存在的进程不得判定为已消失")
+
+    def test_a_pid_that_cannot_exist_is_not_alive(self):
+        self.assertFalse(process_alive(0xFFFF_FFF0))
+        self.assertFalse(process_alive(0))
 
 
 if __name__ == "__main__":

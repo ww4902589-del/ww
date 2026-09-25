@@ -1418,7 +1418,9 @@ async function clearWorkbench(btn){
 Three things that keep several open pages from corrupting each other:
 * SSE replaces polling, so every page sees the same server state;
 * one page holds the editing lease, the rest are read-only;
-* a second launch activates the running instance instead of starting a new
+* /api/activate asks this instance to come forward -- used when a person
+ * deliberately focuses another window, not when a second copy is launched:
+ * several instances share one data directory now, so a launch starts one.
 backend. */
 const CLIENT_ID_KEY='comfybatch-client-id';
 const clientId=(()=>{

@@ -119,6 +119,15 @@ def work_id_for(run_id: str, index: Any) -> str:
     return f"{str(run_id).strip()}:{position:04d}"
 
 
+def _is_lock_error(exc: BaseException) -> bool:
+    """Whether SQLite refused because someone else holds the database.
+
+    Kept separate from every other failure on purpose: a locked database must not be
+    treated as a damaged one (no quarantine) nor as a permanent one (no latching).
+    """
+    return "locked" in str(exc).lower() or "busy" in str(exc).lower()
+
+
 def _safe_text(value: Any) -> str:
     if value is None:
         return ""
@@ -167,6 +176,12 @@ class LibraryStore:
         #: operation then raises :class:`LibraryUnavailable` instead of the
         #: program failing to start.
         self.available = True
+        #: True when the last prepare failed only because another process held the
+        #: database. Unlike a damaged file, that is worth retrying: the lock is held
+        #: for the duration of someone's batch sync, not forever, and latching the
+        #: library off for the rest of the process's life -- which is what happened
+        #: before -- tells the user to retry while providing no way to.
+        self._retry_after_lock = False
         self._prepare()
 
     # ------------------------------------------------------------- schema
@@ -202,6 +217,17 @@ class LibraryStore:
         if not self.available:
             raise LibraryUnavailable(self.last_warning or "作品库当前不可用")
         connection = self._connect()
+        if self._retry_after_lock:
+            try:
+                self._ensure_schema(connection)
+            except (sqlite3.Error, OSError):
+                connection.close()
+                self._retry_after_lock = True
+                raise LibraryUnavailable(
+                    self.last_warning or "作品库被另一个进程占用"
+                ) from None
+            self._retry_after_lock = False
+            self.last_warning = ""
         try:
             with connection:
                 yield connection
@@ -228,6 +254,12 @@ class LibraryStore:
                 self._ensure_schema(connection)
             return
         except (sqlite3.Error, OSError) as exc:
+            if _is_lock_error(exc):
+                self._retry_after_lock = True
+                self.last_warning = (
+                    f"作品库暂时被另一个进程占用，已推迟初始化，下次访问会重试：{exc}"
+                )
+                return
             self.last_warning = f"作品库文件无法读取，已另存为备份并新建：{exc}"
         if not self._is_foreign_file():
             # 打开失败了，但文件本身还带着 SQLite 文件头——多半是占锁、瞬时 I/O

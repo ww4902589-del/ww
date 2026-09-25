@@ -33,10 +33,12 @@ guaranteed is that the file is never torn and that the loser is told.
 from __future__ import annotations
 
 import errno
+import functools
 import json
 import os
 import pathlib
 import tempfile
+import threading
 import time
 from dataclasses import dataclass
 from typing import Any, Callable
@@ -128,8 +130,38 @@ def write_json_atomic(path: pathlib.Path, payload: dict[str, Any]) -> None:
     atomic_write_text(path, json.dumps(payload, ensure_ascii=False, indent=2))
 
 
+def with_file_lock(path_attribute: str = "path"):
+    """Run a store method under its file lock.
+
+    For the read-modify-write methods (``remember``, ``forget``, ``reapply``): the lock
+    ``save`` takes only stops two replaces from interleaving, so a caller that read the
+    document first must hold the lock across its read or it will publish a merge computed
+    from a stale copy. The lock is reentrant for one thread, so decorating a method whose
+    body calls ``save`` is safe.
+    """
+
+    def decorate(method):
+        @functools.wraps(method)
+        def wrapper(self, *args, **kwargs):
+            with FileLock(getattr(self, path_attribute)):
+                return method(self, *args, **kwargs)
+
+        return wrapper
+
+    return decorate
+
+
 class FileLockTimeout(RuntimeError):
     """The lock stayed busy for the whole timeout."""
+
+
+#: Which file locks the current *thread* already holds, and how deeply. A store method
+#: that read-modify-writes a document has to hold the lock across its read, and the
+#: write helper it calls takes the same lock -- without this, that nesting would
+#: deadlock. Keyed by (path, thread) so two threads of one process still contend
+#: properly instead of believing they share the lock.
+_HELD_BY_THREAD: dict[tuple[str, int], int] = {}
+_HELD_GUARD = threading.Lock()
 
 
 class FileLock:
@@ -148,6 +180,7 @@ class FileLock:
         self.stale_after = stale_after
         self.token = f"{os.getpid()}-{time.time_ns()}"
         self.broken_stale = 0
+        self._depth = 0
 
     def _try_create(self) -> bool:
         # The lock file's directory may not exist yet (a brand-new data directory), and
@@ -182,10 +215,22 @@ class FileLock:
         except OSError:
             return False
 
+    def _key(self) -> tuple[str, int]:
+        return (str(self.path), threading.get_ident())
+
     def acquire(self) -> bool:
+        key = self._key()
+        with _HELD_GUARD:
+            if _HELD_BY_THREAD.get(key):
+                _HELD_BY_THREAD[key] += 1
+                self._depth += 1
+                return True
         deadline = time.time() + self.timeout
         while True:
             if self._try_create():
+                with _HELD_GUARD:
+                    _HELD_BY_THREAD[key] = 1
+                self._depth = 1
                 return True
             if self._break_if_stale():
                 continue
@@ -194,7 +239,19 @@ class FileLock:
             time.sleep(LOCK_POLL_SECONDS)
 
     def release(self) -> None:
+        key = self._key()
+        with _HELD_GUARD:
+            depth = _HELD_BY_THREAD.get(key, 0)
+            if depth > 1:
+                _HELD_BY_THREAD[key] = depth - 1
+                self._depth -= 1
+                return
+            _HELD_BY_THREAD.pop(key, None)
+            self._depth = 0
         try:
+            # Only the outermost holder removes the file, and only if it is still ours:
+            # a lock that was broken as stale and re-created by someone else must not be
+            # deleted out from under its new owner.
             if self.path.read_text(encoding="utf-8") == self.token:
                 self.path.unlink(missing_ok=True)
         except OSError:

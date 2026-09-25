@@ -48,7 +48,7 @@ V2.21 新增完全在本机 ComfyUI 内运行的图片提示词反推：优先�
     并在短时文件锁内做「读—改—写」；设置文档带修订号，陈旧窗口的保存会被**明确拒绝**
     并提示「已被另一个窗口修改」，而不是静默覆盖。详见
     [多实例与共享数据](docs/06-单实例与多页面同步.md)。
-12. **事件流与编辑租约**：SSE 替代轮询，多页面实时同步；同一时刻只有一个页面可编辑，
+12. **事件流与编辑租约**：SSE 替代轮询，多页面实时同步；同一进程内同一时刻只有一个页面可编辑
     其余只读并可主动「接管编辑」。关掉的标签页会在 45 秒后自动释放租约，不会锁死界面。
 13. **删除不会被复活**：预设删除写入墓碑，墓碑集合是所有副本的并集；实体只来自单一权威
     文件，不再跨文件并集。安装目录那份旧副本改为**只读迁移来源**，更新替换它不可能
@@ -232,7 +232,7 @@ python src/comfybatch_v2_app.py --port 8790 --data-dir ./run
 # 与正式实例并行运行（--instance-name 只影响记录里的名字）
 python src/comfybatch_v2_app.py --instance-name dev --data-dir ./run
 
-# 已有实例失去响应时强制启动
+# （已废弃）
 python src/comfybatch_v2_app.py --force-new-instance
 
 # 测试
@@ -240,7 +240,7 @@ python run_tests.py            # 或 python run_tests.py -v
 ```
 
 常用参数：`--data-dir` 隔离数据目录、`--instance-name` 实例记录里的名字、
-`--force-new-instance` 强制启动、`--comfy-url` 覆盖 ComfyUI 地址、`--no-browser` 不自动开浏览器。
+`--force-new-instance`（已废弃，仅兼容旧脚本）、`--comfy-url` 覆盖 ComfyUI 地址、`--no-browser` 不自动开浏览器。
 
 界面默认在 `http://127.0.0.1:8790/`。数据目录、审核记录与节点定义缓存都随 `--data-dir` 走。
 

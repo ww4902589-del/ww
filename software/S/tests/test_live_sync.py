@@ -1,4 +1,8 @@
-"""Live sync: the SSE stream, the editing lease and the single-instance lock.
+"""Live sync: the SSE stream and the editing lease.
+
+The single-instance lock this file used to cover is gone: several instances may now share
+one data directory, so instance records are per instance and covered by
+``test_multi_instance.py``.
 
 These cover the three mechanisms that stop several open pages from corrupting
 each other. All three were real gaps: pages could hold different configs without

@@ -33,7 +33,7 @@ import comfybatch_v2_app as app_module  # noqa: E402
 from comfybatch_instances import bind_server  # noqa: E402
 
 
-def serve(data_dir: str, instance_name: str) -> int:
+def serve(data_dir: str, instance_name: str, preferred_port: str = "0") -> int:
     from http.server import ThreadingHTTPServer
 
     os.environ["COMFYBATCH_DATA_DIR"] = data_dir
@@ -42,7 +42,9 @@ def serve(data_dir: str, instance_name: str) -> int:
     app_module.APP = app
     app_module.STATIC_ASSETS.update(app_module.load_static_assets())
     server, port = bind_server(
-        "127.0.0.1", 0, lambda host, candidate: ThreadingHTTPServer((host, candidate), app_module.Handler)
+        "127.0.0.1", int(preferred_port),
+        lambda host, candidate: app_module.ExclusiveThreadingHTTPServer(
+            (host, candidate), app_module.Handler),
     )
     url = f"http://127.0.0.1:{port}/"
     app_module.write_instance_file(port=port, url=url, instance_id=app.instance_id)
@@ -59,6 +61,27 @@ def serve(data_dir: str, instance_name: str) -> int:
     return 0
 
 
+def hold_port(port: str, seconds: str) -> int:
+    """Bind ``port`` exclusively and hold it, so another process cannot have it.
+
+    Uses the same server class the application binds with: the whole point of that
+    class is that a second process *cannot* share the port, and a test that held the
+    port with a plain socket would prove nothing about it.
+    """
+    from http.server import ThreadingHTTPServer
+
+    server, actual = bind_server(
+        "127.0.0.1", int(port),
+        lambda host, candidate: app_module.ExclusiveThreadingHTTPServer(
+            (host, candidate), ThreadingHTTPServer.__mro__[1]
+        ),
+    )
+    print(json.dumps({"holding": actual}), flush=True)
+    time.sleep(float(seconds))
+    server.server_close()
+    return 0
+
+
 def write_settings(settings_path: str, key: str, rounds: str) -> int:
     """Write the shared settings ``rounds`` times, refreshing when another window won.
 
@@ -72,23 +95,25 @@ def write_settings(settings_path: str, key: str, rounds: str) -> int:
     store = SettingsStore(pathlib.Path(settings_path), None)
     store.load()
     written = 0
-    deadline = time.monotonic() + 120.0
+    # No deadline: under load the two writers can trade the lock for a while, and a
+    # give-up would turn a slow machine into a red test rather than a finding. The test's
+    # own communicate(timeout=...) is what catches a genuine hang.
     for index in range(int(rounds)):
+        attempt = 0
         while True:
             try:
                 store.save({key: index})
                 written += 1
                 break
             except SettingsConflict:
+                attempt += 1
                 # Back off before reloading: without the pause two processes bounce off
                 # each other's lock and can starve one side indefinitely, which is a load
                 # artefact rather than a property of the store.
                 store.load()
-                if time.monotonic() > deadline:
-                    print(json.dumps({"ok": False, "error": "conflict never cleared",
-                                      "written": written}), flush=True)
-                    return 1
-                time.sleep(0.01)
+                # Back off a little more each time so the two writers cannot keep
+                # colliding on the same half-second boundary.
+                time.sleep(min(0.05, 0.005 * (attempt + 1)))
     print(json.dumps({"ok": True, "written": written}), flush=True)
     return 0
 
@@ -122,9 +147,11 @@ def write_library(db_path: str, run_id: str, count: str, start_at: str = "1") ->
 def main() -> int:
     mode = sys.argv[1] if len(sys.argv) > 1 else ""
     if mode == "serve":
-        return serve(sys.argv[2], sys.argv[3])
+        return serve(sys.argv[2], sys.argv[3], sys.argv[4] if len(sys.argv) > 4 else "0")
     if mode == "settings":
         return write_settings(sys.argv[2], sys.argv[3], sys.argv[4])
+    if mode == "hold":
+        return hold_port(sys.argv[2], sys.argv[3])
     if mode == "library":
         return write_library(sys.argv[2], sys.argv[3], sys.argv[4],
                              sys.argv[5] if len(sys.argv) > 5 else "1")

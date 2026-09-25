@@ -24,7 +24,7 @@ from typing import Any
 from PIL import Image, ImageChops, ImageStat
 
 from comfybatch_params import apply_params, registry_payload
-from comfybatch_shared import FileLock, atomic_write_text, unique_temp_for
+from comfybatch_shared import FileLock, atomic_write_text, unique_temp_for, with_file_lock
 from comfybatch_errors import (
     ErrorCategory,
     ComfyError,
@@ -3424,13 +3424,19 @@ class ResultReviewStore:
         self.root.mkdir(parents=True, exist_ok=True)
         document = {**document, "run_id": run_id, "updated_at": _timestamp()}
         path = self.path_for(run_id)
-        # Held under the shared lock for the whole write: this file is the merge base
-        # for ``ingest``, so a lost update here loses a review decision.
+        # The lock keeps the replace from interleaving with another process's
+        # read-modify-write. It does *not* make this whole-document write safe on its
+        # own: a caller that read the document first must hold the lock across its read,
+        # which ``ingest`` and ``confirm`` do below.
         with FileLock(path):
             atomic_write_text(path, json.dumps(document, ensure_ascii=False, indent=2))
 
     def ingest(self, run_id: str, results: list[dict[str, Any]]) -> dict[str, Any]:
         """Merge a run's results into the review document, preserving decisions.
+
+        The whole read-merge-write runs under the file lock: two windows can both be
+        looking at the same run (both may resume the same interrupted batch), and a
+        merge computed from a stale read would drop whichever decision landed second.
 
         A redo produces a *fresh* single-entry ``attempts`` list rather than a
         grown one, so "the attempt count increased" is not a sufficient signal.
@@ -3438,6 +3444,10 @@ class ResultReviewStore:
         existing item, which is what moves the old version into ``history`` and
         makes the new one the active version.
         """
+        with FileLock(self.path_for(run_id)):
+            return self._ingest_locked(run_id, results)
+
+    def _ingest_locked(self, run_id: str, results: list[dict[str, Any]]) -> dict[str, Any]:
         document = self.load(run_id)
         items: dict[str, Any] = document.setdefault("items", {})
         replaced = False
@@ -3510,6 +3520,12 @@ class ResultReviewStore:
     def confirm(self, run_id: str, indexes: list[int], status: str, note: str = "") -> dict[str, Any]:
         if status not in REVIEW_STATUSES:
             raise ValueError(f"不支持的确认状态：{status}")
+        with FileLock(self.path_for(run_id)):
+            return self._confirm_locked(run_id, indexes, status, note)
+
+    def _confirm_locked(self, run_id: str, indexes: list[int], status: str,
+                        note: str = "") -> dict[str, Any]:
+        # Held across read and write for the same reason as ``_ingest_locked``.
         document = self.load(run_id)
         items: dict[str, Any] = document.get("items") or {}
         if not items:
@@ -3639,6 +3655,7 @@ class ResourceOverrideStore:
         with FileLock(self.path):
             atomic_write_text(self.path, json.dumps(document, ensure_ascii=False, indent=2))
 
+    @with_file_lock()
     def remember(
         self,
         fingerprint: str,
@@ -3685,6 +3702,7 @@ class ResourceOverrideStore:
             stale.append(rule)
         return stale
 
+    @with_file_lock()
     def reapply(self, workflow_path: str, fingerprint: str) -> dict[str, Any]:
         """Re-key rules made for this file onto the current fingerprint."""
         document = self.load()
@@ -3697,6 +3715,7 @@ class ResourceOverrideStore:
         self.save(document)
         return document
 
+    @with_file_lock()
     def forget(self, fingerprint: str, node_id: str, input_name: str) -> dict[str, Any]:
         document = self.load()
         document["rules"].pop(self.key(fingerprint, node_id, input_name), None)
@@ -3771,6 +3790,7 @@ class WorkflowParamsStore:
         values = entry.get("params")
         return dict(values) if isinstance(values, dict) else {}
 
+    @with_file_lock()
     def remember(self, fingerprint: str, workflow_path: str, values: dict[str, Any]) -> dict[str, Any]:
         document = self.load()
         existing = self.for_fingerprint(fingerprint)
@@ -3783,6 +3803,7 @@ class WorkflowParamsStore:
         self.save(document)
         return document
 
+    @with_file_lock()
     def forget(self, fingerprint: str, keys: list[str] | None = None) -> dict[str, Any]:
         document = self.load()
         entry = (document.get("workflows") or {}).get(fingerprint)

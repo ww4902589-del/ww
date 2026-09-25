@@ -342,16 +342,15 @@ class SettingsStore:
 
     def load(self) -> dict:
         candidates = self._candidates()
-        self._loaded_revision = self._primary_revision()
-        if not candidates:
-            return {}
-
-        winner_path, winner = max(candidates, key=lambda item: self._rank(item[1], item[0]))
         # Track the revision of the file this store will *write*, not of the winning
         # candidate: the winner can legitimately be a read-only copy elsewhere (the
         # install-directory migration source), and comparing against that made every
         # first save look like someone else's change.
         self._loaded_revision = self._primary_revision()
+        if not candidates:
+            return {}
+
+        winner_path, winner = max(candidates, key=lambda item: self._rank(item[1], item[0]))
 
         document: dict = {
             key: value for key, value in winner.items()
@@ -424,8 +423,9 @@ class SettingsStore:
             if (self._loaded_revision is not None
                     and previous_revision != self._loaded_revision):
                 raise SettingsConflict(
-                    "设置已被另一个窗口修改（磁盘修订 %d，本窗口基于 %d）。请刷新页面后再试，"
-                    "以免覆盖对方刚做的改动。" % (previous_revision, self._loaded_revision)
+                    "设置已被另一个窗口修改（磁盘修订 %d，本窗口基于 %d），本次改动没有保存。"
+                    "窗口内显示已回退到磁盘内容，请确认后再重做这次修改。"
+                    % (previous_revision, self._loaded_revision)
                 )
 
             payload = {
@@ -612,7 +612,12 @@ class Application:
         try:
             cache = schema_cache_path()
             cache.parent.mkdir(parents=True, exist_ok=True)
-            cache.write_text(json.dumps(registry._info, ensure_ascii=False), encoding="utf-8")
+            # This is a shared, fixed path in the shared data directory -- the same shape as
+            # the writers this stage fixed, and it hid from that sweep only because it has no
+            # `.tmp` sibling at all. A torn read here is silent: the reader swallows
+            # JSONDecodeError and installs an empty registry, which turns parameter
+            # validation off for the session.
+            atomic_write_text(cache, json.dumps(registry._info, ensure_ascii=False))
         except OSError:
             pass
         self.schema = registry
@@ -1169,7 +1174,18 @@ class Application:
         return self.settings_store.load()
 
     def _save_settings(self) -> None:
-        self.settings_store.save(self._settings)
+        try:
+            self.settings_store.save(self._settings)
+        except SettingsConflict:
+            # Another window wrote first, so this change was not applied. Every caller
+            # mutates ``self._settings`` before saving, and the page is rendered from
+            # that map, so leaving it ahead of the file would (a) show presets that do
+            # not exist on disk and (b) make *every* later save fail the same way,
+            # because the store's expected revision never catches up. Reload first,
+            # then report: the change is lost either way, but the window stays usable
+            # and stops lying about what is stored.
+            self._settings = self.settings_store.load()
+            raise
 
     def lora_profiles(self) -> dict[str, dict]:
         profiles = self._settings.get("lora_profiles") or {}
@@ -2421,7 +2437,7 @@ def instance_registry() -> InstanceRegistry:
     return InstanceRegistry()
 
 
-def write_instance_file(*, port: int, url: str, instance_id: str) -> pathlib.Path:
+def write_instance_file(*, port: int, url: str, instance_id: str) -> pathlib.Path | None:
     """Register this process under its own instance id.
 
     One file per instance, so this never writes over a record that describes another
@@ -2435,7 +2451,15 @@ def write_instance_file(*, port: int, url: str, instance_id: str) -> pathlib.Pat
         instance_name=instance_name(),
         started_at=time.time(),
     )
-    return instance_registry().register(record)
+    try:
+        return instance_registry().register(record)
+    except OSError as exc:
+        # Best effort, as before this stage: the record is how *other* windows find
+        # this one, not a precondition for serving. A LOCALAPPDATA that cannot be
+        # written must not turn into a silent exit -- the windowed build has no console
+        # to show a traceback in.
+        print(f"提示：实例记录写入失败（{exc}），本窗口仍可正常使用，只是其它窗口看不到它。")
+        return None
 
 
 def clear_instance_file(instance_id: str) -> bool:
@@ -2493,15 +2517,28 @@ class SettingsConflict(ValueError):
 class ExclusiveThreadingHTTPServer(ThreadingHTTPServer):
     """A server that refuses to share its port.
 
-    ``http.server`` sets ``allow_reuse_address = 1``, and on Windows that lets a
-    second process bind an address another process is already listening on -- the
-    second bind succeeds and then receives nothing. That would make ":func:`bind_server`
-    claiming the port by binding it" a check that always passes, so two instances
-    could both announce the same URL. Turning the option off makes the operating
-    system enforce what the design assumes.
+    ``http.server`` sets ``allow_reuse_address = 1`` (SO_REUSEADDR), and on Windows that lets a
+    second process bind an address another process is already listening on -- the second bind
+    succeeds and then receives nothing, so two instances could both announce the same URL.
+
+    Clearing that flag is not enough on Windows, which is the trap this class exists for:
+    Windows also permits a second bind when *neither* socket asked for SO_REUSEADDR, so two of
+    these servers would still share a port. Windows has an option for what is actually wanted
+    here -- SO_EXCLUSIVEADDRUSE, which makes the address unusable by anyone else -- and Python
+    exposes it. It is set before the bind, because it has to be.
     """
 
     allow_reuse_address = False
+
+    def server_bind(self) -> None:
+        exclusive = getattr(socket, "SO_EXCLUSIVEADDRUSE", None)
+        if exclusive is not None:
+            try:
+                self.socket.setsockopt(socket.SOL_SOCKET, exclusive, 1)
+            except OSError:
+                # Not fatal: without it we are back to the platform's weaker guarantee.
+                pass
+        super().server_bind()
 
 
 def report_startup_failure(message: str) -> None:
@@ -2597,7 +2634,7 @@ def main() -> None:
         url = f"http://{bind_host}:{port}/"
         write_instance_file(port=port, url=url, instance_id=APP.instance_id)
         print(f"ComfyBatch V{APP_VERSION} 已启动：{url}")
-        if port != args.port:
+        if args.port and port != args.port:
             print(f"（首选端口 {args.port} 已被占用，本次改用 {port}。）")
         print(f"实例记录：{instance_record_path(APP.instance_id)}")
         if not args.no_browser:

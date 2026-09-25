@@ -74,12 +74,16 @@ def get(url: str, timeout: float = 10.0) -> tuple[int, bytes]:
         return exc.code, exc.read()
 
 
-def free_port() -> int:
-    import socket
-
-    with socket.socket() as probe:
-        probe.bind(("127.0.0.1", 0))
-        return probe.getsockname()[1]
+def post(url: str, payload: dict, timeout: float = 20.0) -> tuple[int, bytes]:
+    """A JSON POST that returns the status instead of raising, like ``get`` above."""
+    request = urllib.request.Request(
+        url, data=json.dumps(payload).encode("utf-8"), method="POST",
+        headers={"Content-Type": "application/json", "User-Agent": "multi-instance-test/1.0"})
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return response.status, response.read()
+    except urllib.error.HTTPError as exc:
+        return exc.code, exc.read()
 
 
 def terminate_tree(proc) -> None:
@@ -122,6 +126,21 @@ class NoProcessWideLockTests(unittest.TestCase):
         for gone in ("InstanceLock", "instance_mutex_name", "INSTANCE_MUTEX_NAME",
                      "choose_launch_port"):
             self.assertNotIn(gone, source, f"{gone} 不应再出现在启动路径里")
+
+    def test_the_page_script_no_longer_promises_a_single_instance(self):
+        """The copy the user actually reads.
+
+        `app_source()` above only covers the Python side; the page script carried its own
+        single-instance wording for a while and nothing checked it, so this reads it directly.
+        """
+        script = (ROOT / "src" / "app.js").read_text(encoding="utf-8")
+        # The claim, not the word: a comment explaining why the lock is gone is useful, and
+        # "单实例激活" as a section title was the stale copy this is here to prevent.
+        self.assertNotIn("单实例激活", script, "旧的区块标题不能回来")
+        self.assertNotIn("a second launch activates the running instance", script)
+        self.assertIn("不再有单实例锁", script, "注释要说明锁已移除，而不是含糊过去")
+        self.assertIn("api/instances", script,
+                      "多实例在页面上必须有可见入口，否则等于没交付")
 
     def test_the_deprecated_flag_still_parses_and_says_so(self):
         source = app_source()
@@ -557,6 +576,101 @@ class ProcessAliveTests(unittest.TestCase):
         self.assertFalse(process_alive(0xFFFF_FFF0))
         self.assertFalse(process_alive(0))
 
+
+
+class InstanceVisibilityTests(unittest.TestCase):
+    """The page must show that other windows exist, and be able to focus one.
+
+    The lock is gone from the code, but a feature the user cannot see is not delivered: these
+    assertions pin the surface (the rail line, the script entry points, the route) and the
+    behaviour (activating a real sibling advances *that* window's ``activated_at``, which is
+    what the other window reacts to).
+    """
+
+    def test_the_truth_rail_has_a_window_line_and_the_page_can_switch(self):
+        page = (ROOT / "src" / "index.html").read_text(encoding="utf-8")
+        script = (ROOT / "src" / "app.js").read_text(encoding="utf-8")
+        self.assertIn('id="railInstances"', page)
+        self.assertIn("refreshInstances", script)
+        self.assertIn("/api/instances/activate", script)
+
+    def test_activating_a_sibling_advances_its_activated_at(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = pathlib.Path(temp)
+            data_dir = root / "data"
+            data_dir.mkdir()
+            profile = root / "profile"
+            (profile / "Local").mkdir(parents=True)
+            env = dict(os.environ)
+            env["LOCALAPPDATA"] = str(profile / "Local")
+            # Same as the other subprocess test: without these a child can sit on a
+            # full/undecoded pipe instead of getting on with it.
+            env["PYTHONIOENCODING"] = "utf-8"
+            env["PYTHONUNBUFFERED"] = "1"
+
+            records = profile / "Local" / "ComfyBatch-S" / "instances"
+
+            def start(name):
+                """Start a worker and find it through the registry.
+
+                Deliberately not by reading the child's stdout: a blocking read there hangs
+                the whole suite if the child never gets to print, and the registry is the
+                contract anyway -- a record exists only after the port was successfully bound.
+                """
+                proc = subprocess.Popen(
+                    [sys.executable, str(WORKER), "serve", str(data_dir), name, "0"],
+                    env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                self.addCleanup(terminate_tree, proc)
+                deadline = time.time() + 40
+                while time.time() < deadline:
+                    if proc.poll() is not None:
+                        self.fail(f"实例提前退出：{proc.stderr.read()[:1200]}")
+                    for path in sorted(records.glob("*.json")) if records.is_dir() else []:
+                        try:
+                            record = json.loads(path.read_text(encoding="utf-8"))
+                        except (OSError, json.JSONDecodeError):
+                            continue
+                        if record.get("instance_name") != name:
+                            continue
+                        try:
+                            status = get(f"http://127.0.0.1:{record['port']}/api/ping", timeout=3)[0]
+                        except Exception:
+                            continue
+                        if status == 200:
+                            return {"port": int(record["port"]), "instance_id": record["instance_id"]}
+                    time.sleep(0.25)
+                self.fail(f"实例 {name} 没有就绪")
+
+            first = start("visible-a")
+            second = start("visible-b")
+            base = f"http://127.0.0.1:{first['port']}"
+
+            listing = json.loads(get(f"{base}/api/instances")[1])
+            self.assertEqual({first["instance_id"], second["instance_id"]},
+                             {row["instance_id"] for row in listing["instances"]})
+            self.assertEqual(first["instance_id"], listing["this_instance_id"])
+
+            before = json.loads(get(f"http://127.0.0.1:{second['port']}/api/status")[1])
+            self.assertEqual(0, before.get("activated_at") or 0, "还没人请它上前台")
+
+            status, body = post(f"{base}/api/instances/activate",
+                                {"instance_id": second["instance_id"]})
+            self.assertEqual(200, status, body[:400])
+            self.assertTrue(json.loads(body)["activated"])
+            after = json.loads(get(f"http://127.0.0.1:{second['port']}/api/status")[1])
+            self.assertGreater(after.get("activated_at") or 0, 0,
+                               "被激活的必须是那个窗口，不是本窗口")
+            mine = json.loads(get(f"{base}/api/status")[1])
+            self.assertEqual(0, mine.get("activated_at") or 0, "本窗口不该被激活")
+
+            # a window cannot ask itself, and an id that is gone is refused with a message
+            status, _body = post(f"{base}/api/instances/activate",
+                                 {"instance_id": first["instance_id"]})
+            self.assertEqual(400, status)
+            status, body = post(f"{base}/api/instances/activate",
+                                {"instance_id": "does-not-exist"})
+            self.assertEqual(400, status)
+            self.assertIn("不在", json.loads(body)["error"])
 
 if __name__ == "__main__":
     unittest.main()

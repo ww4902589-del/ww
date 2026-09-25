@@ -139,6 +139,42 @@ async function api(path,options={
 function opts(el,rows,label,value){
   el.innerHTML=rows.map(x=>`<option value="${
   esc(value(x))}">${esc(label(x))}</option>`).join('')||'<option value="">未发现</option>'}
+async function refreshInstances(){
+  const box=$('railInstances');
+  if(!box)return;
+  try{
+    const v=await api('/api/instances');
+    const all=v.instances||[];
+    const others=all.filter(x=>x.instance_id!==v.this_instance_id);
+    box.textContent='';
+    if(!others.length){
+      box.textContent=`只有本窗口（:${location.port}）`;
+      return}
+    box.append(document.createTextNode(`共 ${all.length} 个，本页 :${location.port}；切到：`));
+    others.forEach(x=>{
+      const button=document.createElement('button');
+      button.type='button';
+      button.className='instance-jump';
+      button.textContent=`:${x.port}`;
+      button.title=`该窗口的进程 ${x.pid}，启动于 ${x.started_at_text||''}`;
+      button.onclick=()=>focusInstance(x.instance_id,button);
+      box.append(button);
+      box.append(document.createTextNode(' '))});
+  }
+  catch(e){
+    box.textContent='窗口列表不可用'}
+}
+async function focusInstance(instanceId,button){
+  setBusy(button,true,'切换');
+  try{
+    await api('/api/instances/activate',{method:'POST',body:JSON.stringify({instance_id:instanceId})});
+    notify('已请那个窗口切到前台','success')}
+  catch(e){
+    notify(e.message,'error')}
+  finally{
+    setBusy(button,false);
+    refreshInstances()}
+}
 function configurePayload(){
   return {
     comfy_root:$('comfyRoot').value,comfy_url:$('comfyUrl').value,workflow_roots:[$('workflowRoot').value],output_root:$('outputRoot').value}
@@ -1414,7 +1450,7 @@ async function clearWorkbench(btn){
     if(btn)setBusy(btn,false)}
 }
 
-/* ---- 事件流、编辑租约、单实例激活 --------------------------------------
+/* ---- 事件流、编辑租约、窗口切换 ----------------------------------------
 Three things that keep several open pages from corrupting each other:
 * SSE replaces polling, so every page sees the same server state;
 * one page holds the editing lease, the rest are read-only;
@@ -3132,3 +3168,9 @@ async function libraryMaintain(action) {
 }
 
 connectEvents();
+
+// 多实例：同一数据目录可能同时有多个窗口。把「还有哪些窗口」显示出来，并提供切过去的
+// 入口——这是「不再有单实例锁」在界面上唯一可见的证据，否则用户只能靠数进程判断。
+// 定时刷新：窗口开关不产生 SSE 事件，只能轮询。
+refreshInstances();
+setInterval(refreshInstances,20000);

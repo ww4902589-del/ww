@@ -1052,6 +1052,22 @@ body.readonly #start,body.readonly #applyParams {
   border-top:1px solid var(--line);
   margin:12px 0
 }
+/* 多实例：真相栏里的窗口切换按钮。跟本栏其它行内小控件同一套令牌。 */
+.instance-jump {
+  padding:0 6px;
+  margin:0 1px;
+  font-size:11px;
+  font-family:inherit;
+  border:1px solid var(--line);
+  border-radius:8px;
+  background:transparent;
+  color:var(--muted);
+  cursor:pointer
+}
+.instance-jump:hover {
+  color:var(--ink);
+  border-color:var(--accent)
+}
 .rail-blocking {
   width:100%;
   text-align:left;

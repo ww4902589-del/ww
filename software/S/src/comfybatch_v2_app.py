@@ -2273,6 +2273,22 @@ class Handler(BaseHTTPRequestHandler):
                 APP.lease.release(client_id)
                 APP.lock_changed()
                 self._json({"ok": True, "lease": APP.lease_status("")})
+            elif self.path == "/api/instances/activate":
+                # Ask another window on this machine to come forward. Deliberately not
+                # behind the editing lease and not a WRITE_ROUTE: the window that most
+                # wants this is the read-only one, and focusing a sibling changes
+                # nothing in *this* process's data.
+                wanted = str((value or {}).get("instance_id") or "")
+                target = next((row for row in running_instances()
+                               if row["instance_id"] == wanted), None)
+                if not wanted or wanted == APP.instance_id:
+                    self._json({"ok": False, "error": "请选择一个其它窗口"}, status=400)
+                elif target is None:
+                    self._json({"ok": False, "error": "那个窗口已经不在了，可能刚被关掉"},
+                               status=400)
+                else:
+                    self._json({"ok": True, "activated": activate_existing_instance(target),
+                                "instance_id": wanted, "port": target.get("port")})
             elif self.path == "/api/activate":
                 # A second launch asked this instance to come forward. Every page
                 # reacts by jumping to the running task, so "activate the existing
@@ -2520,12 +2536,13 @@ class ExclusiveThreadingHTTPServer(ThreadingHTTPServer):
     ``http.server`` sets ``allow_reuse_address = 1`` (SO_REUSEADDR), and on Windows that lets a
     second process bind an address another process is already listening on -- the second bind
     succeeds and then receives nothing, so two instances could both announce the same URL.
+    Clearing that flag already stops another server of this class from taking the same address
+    (measured: refused 100/100 without the option below).
 
-    Clearing that flag is not enough on Windows, which is the trap this class exists for:
-    Windows also permits a second bind when *neither* socket asked for SO_REUSEADDR, so two of
-    these servers would still share a port. Windows has an option for what is actually wanted
-    here -- SO_EXCLUSIVEADDRUSE, which makes the address unusable by anyone else -- and Python
-    exposes it. It is set before the bind, because it has to be.
+    ``SO_EXCLUSIVEADDRUSE`` closes the holes clearing the flag leaves open: a counterparty that
+    did set SO_REUSEADDR, and a bind to the wildcard address while another socket holds a
+    specific one. It is hardening rather than a fix for the same-address case, and it is set
+    before the bind because it has to be.
     """
 
     allow_reuse_address = False

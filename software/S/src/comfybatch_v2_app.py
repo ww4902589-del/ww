@@ -26,6 +26,7 @@ from PIL import Image
 
 from comfybatch_errors import SEVERITY_BLOCKING, ErrorTranslator
 from comfybatch_image_extract import ImageExtractor
+from comfybatch_interrogate import ImageInterrogator, capability_payload
 from comfybatch_library import (
     DEFAULT_PAGE_SIZE as LIBRARY_PAGE_SIZE,
     MAX_PAGE_SIZE as LIBRARY_MAX_PAGE_SIZE,
@@ -95,7 +96,7 @@ TOMBSTONE_KEYS = frozenset(TOMBSTONE_MAPS.values())
 #: Bumped when the document shape changes, so an upgrade can migrate explicitly.
 SCHEMA_VERSION = 2
 #: The one place the product version is written down.
-APP_VERSION = "2.20"
+APP_VERSION = "2.21"
 #: Shipped preset library. Populated once the loader below is defined, so the
 #: module can be read top to bottom.
 DEFAULT_STYLE_LORA_PRESETS: list[dict] = []
@@ -118,6 +119,7 @@ INSTANCE_MUTEX_NAME = "ComfyBatch-S-desktop"
 #: notify open pages. Listed here once instead of being checked per branch.
 WRITE_ROUTES = frozenset({
     "/api/configure", "/api/import", "/api/import-images", "/api/extract-images", "/api/remap-import",
+    "/api/interrogate",
     "/api/update-bundle", "/api/save-lora-profile", "/api/delete-lora-profile", "/api/save-style-lora-preset",
     "/api/delete-style-lora-preset", "/api/assign-style-lora-preset",
     "/api/assign-image-preset", "/api/params/apply", "/api/params/clear",
@@ -471,6 +473,20 @@ def parse_prompt_indexes(expression: str, total: int) -> list[int]:
     return sorted(selected)
 
 
+def loopback_host(value: str) -> str:
+    """Return the canonical bind host, rejecting every non-local address."""
+    host = str(value or "").strip().lower()
+    if host in {"127.0.0.1", "localhost"}:
+        return "127.0.0.1"
+    raise ValueError("S 仅允许监听本机 127.0.0.1")
+
+
+def is_loopback_url(value: str) -> bool:
+    """Whether a ComfyUI URL is an explicit HTTP(S) loopback endpoint."""
+    parsed = urlparse(str(value or ""))
+    return parsed.scheme in {"http", "https"} and parsed.hostname in {"127.0.0.1", "localhost", "::1"}
+
+
 class Application:
     def __init__(self, settings_path: pathlib.Path | None = None, backup_settings_path: pathlib.Path | None = None) -> None:
         self.settings_path = pathlib.Path(settings_path) if settings_path else default_settings_path()
@@ -488,12 +504,17 @@ class Application:
         self.comfy_url = "http://127.0.0.1:8188"
         self.output_root = DEFAULT_OUTPUT_ROOT
         self.bundle = None
+        # Paths written by the current image import. Bundle metadata is editable
+        # in the browser, so it cannot authorize access to arbitrary local files.
+        self._trusted_source_images: set[str] = set()
+        self._trusted_task_sources: dict[str, str] = {}
         self.last_import: dict[str, Any] | None = None
         #: Owns public-web validation, cover discovery and image verification.
         #: Kept injectable for hermetic tests; callers only see imported tasks.
         self.image_extractor = ImageExtractor()
         self._style_thumbnail_lookup: dict[tuple[str, str], str] = {}
         self.runner = BatchRunner(self.comfy_root, ComfyClient(self.comfy_url))
+        self.image_interrogator = ImageInterrogator(self.runner.client)
         self.lock = threading.RLock()
         #: Node schema from the last successful ``/object_info`` fetch. Installed
         #: process-wide so the compiler can validate parameters and detect
@@ -556,7 +577,9 @@ class Application:
         self.runner.adapter_registry = registry or None
         return registry
 
-    def refresh_schema(self, *, force: bool = True) -> NodeSchemaRegistry:
+    def refresh_schema(
+        self, *, force: bool = True, timeout: float | None = None
+    ) -> NodeSchemaRegistry:
         """Fetch ComfyUI's node definitions and cache them.
 
         Degrades to the on-disk cache so a cold start while ComfyUI is down still
@@ -566,7 +589,7 @@ class Application:
             return self.schema
         registry = NodeSchemaRegistry.empty()
         try:
-            payload = self.runner.client.object_info()
+            payload = self.runner.client.object_info(refresh=force, timeout=timeout)
         except Exception:  # noqa: BLE001 - ComfyUI may simply be offline
             payload = None
         if NodeSchemaRegistry.looks_valid(payload):
@@ -593,6 +616,72 @@ class Application:
         if self.schema:
             return self.schema
         return self.refresh_schema()
+
+    def interrogation_capabilities(self) -> dict[str, Any]:
+        """Report local node readiness without probing any external service."""
+        return capability_payload(self.schema.class_types)
+
+    def interrogate_task(
+        self, index: int, expected_source: str, expected_task_id: str
+    ) -> dict[str, Any]:
+        """Reverse one imported image into a prompt and apply it to that task."""
+        if not expected_source or not expected_task_id:
+            raise ValueError("提示词反推必须携带任务图片和任务身份，请刷新页面后重试")
+        deadline = time.monotonic() + float(getattr(self.image_interrogator, "timeout", 600.0))
+        with self.lock:
+            if self.bundle is None:
+                raise ValueError("请先导入图片")
+            if index < 1 or index > len(self.bundle.items):
+                raise ValueError(f"任务编号 {index} 超出范围")
+            bundle = self.bundle
+            item = bundle.items[index - 1]
+            source_image = str(item.metadata.get("source_image") or "") if isinstance(item.metadata, dict) else ""
+            task_id = str(item.metadata.get("task_id") or "") if isinstance(item.metadata, dict) else ""
+            if source_image != expected_source:
+                raise ValueError("任务图片已变化，请重新点击反推")
+            if task_id != expected_task_id:
+                raise ValueError("任务身份已变化，请重新点击反推")
+        input_root = (self.comfy_root / "input").resolve()
+        candidate = (input_root / source_image).resolve()
+        if (not source_image or source_image not in self._trusted_source_images
+                or not candidate.is_relative_to(input_root) or not candidate.is_file()):
+            raise ValueError("该任务没有可用于反推的本地图片")
+        configured_url = self.comfy_url.rstrip("/")
+        runner_url = str(getattr(self.runner.client, "base_url", configured_url)).rstrip("/")
+        interrogator_url = str(
+            getattr(getattr(self.image_interrogator, "client", None), "base_url", configured_url)
+        ).rstrip("/")
+        execution_urls = {configured_url, runner_url, interrogator_url}
+        if (len(execution_urls) != 1
+                or any(not is_loopback_url(url) for url in execution_urls)):
+            raise ValueError("提示词反推只允许连接本机 ComfyUI（127.0.0.1、localhost 或 ::1）")
+
+        # Refresh at point of use so newly installed local nodes are found
+        # without restarting S; the cache remains the offline fallback.
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError("本机提示词反推总操作超时")
+        self.refresh_schema(force=True, timeout=remaining)
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError("本机提示词反推总操作超时")
+        result = self.image_interrogator.run(
+            source_image, self.schema.class_types, timeout=remaining
+        )
+        with self.lock:
+            if (self.bundle is not bundle or index > len(bundle.items)
+                    or bundle.items[index - 1] is not item
+                    or str(item.metadata.get("source_image") or "") != source_image
+                    or str(item.metadata.get("task_id") or "") != task_id):
+                raise ValueError("反推期间任务合集已变化，请对当前任务重试")
+            item.prompt = result["prompt"]
+            metadata = dict(item.metadata)
+            metadata["interrogation"] = {
+                "backend": result["backend"], "prompt_id": result["prompt_id"],
+                "local_only": True, "updated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+            }
+            item.metadata = metadata
+        return {**result, "index": index, "interrogation": metadata["interrogation"]}
 
     def _inventory(self) -> ResourceInventory:
         return ResourceInventory(self.comfy_root, self.workflow_roots, self.runner.client)
@@ -945,6 +1034,8 @@ class Application:
 
     def import_bundle(self, filename: str, raw: bytes, mapping: dict[str, Any] | None = None) -> tuple[PromptBundle, dict[str, Any] | None]:
         self.bundle = PromptBundleParser.parse(filename, raw, mapping=mapping)
+        self._trusted_source_images.clear()
+        self._trusted_task_sources.clear()
         self.last_import = {"filename": filename, "raw": raw}
         info = PromptBundleParser.xlsx_mapping_info(raw) if pathlib.Path(filename).suffix.lower() == ".xlsx" else None
         if info is not None and mapping:
@@ -994,6 +1085,7 @@ class Application:
             target.write_bytes(raw)
             relative = target.relative_to(input_root).as_posix()
             metadata = {
+                "task_id": uuid.uuid4().hex,
                 "input_type": "image",
                 "processing_mode": mode,
                 "processing_mode_name": mode_name,
@@ -1017,6 +1109,15 @@ class Application:
                 metadata=metadata,
             ))
         self.bundle = PromptBundle(f"图片合集-{session_id}", items, "images")
+        self._trusted_source_images = {
+            str(item.metadata["source_image"])
+            for item in items
+            if isinstance(item.metadata, dict) and item.metadata.get("source_image")
+        }
+        self._trusted_task_sources = {
+            str(item.metadata["task_id"]): str(item.metadata["source_image"])
+            for item in items
+        }
         self.last_import = None
         return self.bundle
 
@@ -1316,6 +1417,11 @@ class Application:
 
     def configure(self, value: dict) -> None:
         with self.lock:
+            runner_status = self.runner.status()["status"]
+            next_comfy_url = str(value.get("comfy_url") or self.comfy_url).rstrip("/")
+            if (runner_status in {"running", "paused", "starting"}
+                    and next_comfy_url != self.comfy_url):
+                raise ValueError("批量任务运行或暂停期间不能更换 ComfyUI 地址，请先结束当前任务")
             self.comfy_root = pathlib.Path(value.get("comfy_root") or self.comfy_root)
             provided = value.get("workflow_roots")
             if provided is None:
@@ -1327,10 +1433,11 @@ class Application:
             cleaned = [pathlib.Path(root) for root in provided if str(root).strip()]
             if cleaned:
                 self.workflow_roots = cleaned
-            self.comfy_url = str(value.get("comfy_url") or self.comfy_url).rstrip("/")
+            self.comfy_url = next_comfy_url
             self.output_root = pathlib.Path(value.get("output_root") or self.output_root)
-            if self.runner.status()["status"] not in {"running", "paused", "starting"}:
+            if runner_status not in {"running", "paused", "starting"}:
                 self.runner = BatchRunner(self.comfy_root, ComfyClient(self.comfy_url))
+                self.image_interrogator = ImageInterrogator(self.runner.client)
 
     def inventory(self) -> dict:
         result = self._inventory().snapshot()
@@ -1391,6 +1498,7 @@ class Application:
         if self.bundle is None:
             raise ValueError("请先导入提示词合集")
         items: list[PromptItem] = []
+        next_task_sources: dict[str, str] = {}
         for index, value in enumerate(values, 1):
             title = str(value.get("title") or f"提示词 {index:03d}").strip()
             prompt = str(value.get("prompt") or "").strip()
@@ -1399,12 +1507,28 @@ class Application:
                 raise ValueError(f"第 {index} 条提示词为空")
             repeat = max(1, min(100, int(value.get("repeat") or 1)))
             metadata = dict(value.get("metadata") or {})
+            task_id = str(metadata.get("task_id") or "").strip() or uuid.uuid4().hex
+            source_image = str(metadata.get("source_image") or "")
+            known_source = self._trusted_task_sources.get(task_id)
+            if known_source:
+                source_image = known_source
+            elif source_image not in self._trusted_source_images:
+                source_image = ""
             for copy_index in range(repeat):
                 copy_title = title if repeat == 1 else f"{title}-{copy_index + 1:02d}"
-                items.append(PromptItem(copy_title, prompt, metadata, negative_prompt))
+                copy_metadata = dict(metadata)
+                copy_task_id = task_id if copy_index == 0 and task_id not in next_task_sources else uuid.uuid4().hex
+                copy_metadata["task_id"] = copy_task_id
+                if source_image:
+                    copy_metadata["source_image"] = source_image
+                    next_task_sources[copy_task_id] = source_image
+                else:
+                    copy_metadata.pop("source_image", None)
+                items.append(PromptItem(copy_title, prompt, copy_metadata, negative_prompt))
         if not items:
             raise ValueError("至少保留一条提示词")
         self.bundle = PromptBundle(self.bundle.name, items, self.bundle.source_format)
+        self._trusted_task_sources = next_task_sources
         return self.bundle
 
     def prepare_config(self, config: BatchConfig) -> BatchConfig:
@@ -1751,7 +1875,8 @@ class Handler(BaseHTTPRequestHandler):
                 query = parse_qs(parsed.query)
                 self._json({"ok": True, "params": APP.params_payload(query.get("workflow_path", [""])[0])})
             elif parsed.path == "/api/schema":
-                self._json({"ok": True, "schema": APP.schema_payload()})
+                self._json({"ok": True, "schema": APP.schema_payload(),
+                            "interrogation": APP.interrogation_capabilities()})
             elif parsed.path == "/api/image":
                 query = parse_qs(parsed.query)
                 requested = pathlib.Path(query.get("path", [""])[0]).resolve()
@@ -1862,6 +1987,12 @@ class Handler(BaseHTTPRequestHandler):
                     str(value.get("url") or ""), str(value.get("mode") or "ai_enhance")
                 )
                 self._json({"ok": True, "bundle": bundle.to_dict(), "extracted": extracted, "mapping": None})
+            elif self.path == "/api/interrogate":
+                result = APP.interrogate_task(
+                    int(value.get("index") or 0), str(value.get("source_image") or ""),
+                    str(value.get("task_id") or "")
+                )
+                self._json({"ok": True, **result})
             elif self.path == "/api/remap-import":
                 bundle, mapping = APP.remap_import(dict(value.get("mapping") or {}))
                 self._json({"ok": True, "bundle": bundle.to_dict(), "mapping": mapping})
@@ -2343,6 +2474,10 @@ def main() -> None:
         help="即使检测到已有实例也强制启动一个新的（已有实例无响应时使用）。",
     )
     args = parser.parse_args()
+    try:
+        bind_host = loopback_host(args.host)
+    except ValueError as exc:
+        parser.error(str(exc))
 
     # Must be set before Application() is constructed below.
     if args.data_dir:
@@ -2354,6 +2489,7 @@ def main() -> None:
         if args.comfy_url:
             APP.comfy_url = args.comfy_url
             APP.runner = BatchRunner(APP.comfy_root, ComfyClient(args.comfy_url))
+            APP.image_interrogator = ImageInterrogator(APP.runner.client)
     if args.data_dir:
         print(f"数据目录：{APP.settings_path.parent}")
 
@@ -2387,15 +2523,15 @@ def main() -> None:
     APP.is_primary = True
     server = None
     try:
-        action, port = choose_launch_port(args.host, args.port)
-        url = f"http://{args.host}:{port}/"
+        action, port = choose_launch_port(bind_host, args.port)
+        url = f"http://{bind_host}:{port}/"
         if action == "reuse":
             # A server on our port answered but the mutex was free: a leftover
             # process from a crashed run. Adopt it rather than double-binding.
             if not args.no_browser:
                 webbrowser.open(url)
             return
-        server = ThreadingHTTPServer((args.host, port), Handler)
+        server = ThreadingHTTPServer((bind_host, port), Handler)
         write_instance_file(port=port, url=url, instance_id=APP.instance_id)
         print(f"ComfyBatch V{APP_VERSION} 已启动：{url}")
         if not args.no_browser:

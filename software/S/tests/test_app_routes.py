@@ -43,7 +43,7 @@ from fakes import (  # noqa: E402
 import comfybatch_nodeschema  # noqa: E402
 import comfybatch_v2_app as app_module  # noqa: E402
 from comfybatch_v2_app import Application, Handler  # noqa: E402
-from comfybatch_v2_core import ResultReviewStore  # noqa: E402
+from comfybatch_v2_core import ResourceOverrideStore, ResultReviewStore  # noqa: E402
 
 #: Long enough for real work, short enough that a hang fails rather than hangs CI.
 RESPONSE_TIMEOUT = 20
@@ -66,6 +66,12 @@ class BodyReadIntegrityTests(unittest.TestCase):
         body = source.split("def do_POST", 1)[1]
         self.assertNotIn("_read_json", body.replace("value = self._read_json()", ""))
 
+    def test_cli_comfy_override_updates_interrogator_client(self):
+        source = (SOURCE_ROOT / "comfybatch_v2_app.py").read_text(encoding="utf-8")
+        override = source.split("if args.comfy_url:", 1)[1].split("if args.data_dir:", 1)[0]
+        self.assertIn("APP.runner = BatchRunner", override)
+        self.assertIn("APP.image_interrogator = ImageInterrogator(APP.runner.client)", override)
+
 
 class EveryRouteRespondsTests(unittest.TestCase):
     """Start the real handler and require a response from every route."""
@@ -79,6 +85,7 @@ class EveryRouteRespondsTests(unittest.TestCase):
         workflow = write_workflow(root / "workflow.json", ui_workflow(model="Krea2-red.safetensors"))
 
         app = Application(settings_path=root / "settings.json", backup_settings_path=None)
+        app.resource_rules = ResourceOverrideStore(root / "resource_rules")
         app.comfy_root = comfy
         app.workflow_roots = [root]
         app.output_root = root / "out"
@@ -171,6 +178,27 @@ class EveryRouteRespondsTests(unittest.TestCase):
         })
         self.assertEqual(200, status)
         self.assertTrue(json.loads(body)["ok"])
+
+    def test_interrogate_route_requires_both_identity_fields(self):
+        import base64
+
+        png = base64.b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+        )
+        app = app_module.APP
+        app.import_images([{"filename": "identity.png", "raw": png}])
+        item = app.bundle.items[0]
+        source = item.metadata["source_image"]
+        task_id = item.metadata["task_id"]
+
+        for payload in (
+            {"index": 1, "task_id": task_id},
+            {"index": 1, "source_image": source},
+        ):
+            with self.subTest(payload=payload):
+                status, body = self.request("/api/interrogate", payload)
+                self.assertEqual(400, status)
+                self.assertIn("必须携带任务图片和任务身份", json.loads(body)["error"])
 
     def test_review_routes_respond_and_do_not_hang(self):
         """The regression: confirm/note/redo must answer, not block.
@@ -462,6 +490,10 @@ class EveryRouteRespondsTests(unittest.TestCase):
             "000000000000", "11", "model_name", "SomethingElse.pth",
             workflow_path=self.workflow_path,
         )
+        app.last_preflight = {
+            "effective": {"workflow": {"path": self.workflow_path}},
+            "audit": {"workflow_fingerprint": fingerprint},
+        }
         try:
             status, body = self.request("/api/inspect")
             self.assertEqual(200, status)
@@ -620,6 +652,7 @@ class EveryRouteRespondsTests(unittest.TestCase):
             ("/api/assign-image-preset", {"preset_id": "square-m", "indexes": [1]}),
             ("/api/update-bundle", {"items": [{"title": "验收", "prompt": "一条提示词"}]}),
             ("/api/remap-import", {"mapping": {"title": "", "positive": "", "negative": "", "metadata": ""}}),
+            ("/api/interrogate", {"index": 0}),
         ):
             with self.subTest(path=path):
                 status, body = self.request(path, payload)

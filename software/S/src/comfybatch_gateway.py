@@ -30,10 +30,10 @@ from comfybatch_errors import ComfyError, ErrorTranslator, Problem
 class ComfyGateway(Protocol):
     """Everything the batch runner is allowed to know about ComfyUI."""
 
-    def object_info(self) -> dict[str, Any]: ...
+    def object_info(self, *, refresh: bool = False, timeout: float | None = None) -> dict[str, Any]: ...
     def models(self, folder: str) -> list[str]: ...
-    def submit(self, graph: dict[str, Any], client_id: str) -> str: ...
-    def poll(self, prompt_id: str) -> dict[str, Any]: ...
+    def submit(self, graph: dict[str, Any], client_id: str, *, timeout: float = 60) -> str: ...
+    def poll(self, prompt_id: str, *, timeout: float = 30) -> dict[str, Any]: ...
     def interrupt(self) -> None: ...
 
 
@@ -77,9 +77,10 @@ class ProductionGateway:
     def system_stats(self) -> dict[str, Any]:
         return self.request("/system_stats", timeout=6)
 
-    def object_info(self, *, refresh: bool = False) -> dict[str, Any]:
+    def object_info(self, *, refresh: bool = False, timeout: float | None = None) -> dict[str, Any]:
         if self._object_info is None or refresh:
-            self._object_info = self.request("/object_info", timeout=60)
+            request_timeout = 60.0 if timeout is None else max(0.001, min(60.0, timeout))
+            self._object_info = self.request("/object_info", timeout=request_timeout)
         return self._object_info
 
     def models(self, folder: str) -> list[str]:
@@ -113,8 +114,8 @@ class ProductionGateway:
 
     # ------------------------------------------------------------- execution
 
-    def submit(self, graph: dict[str, Any], client_id: str) -> str:
-        result = self.request("/prompt", "POST", {"prompt": graph, "client_id": client_id}, timeout=60)
+    def submit(self, graph: dict[str, Any], client_id: str, *, timeout: float = 60) -> str:
+        result = self.request("/prompt", "POST", {"prompt": graph, "client_id": client_id}, timeout=timeout)
         if not isinstance(result, dict):
             raise ComfyError("ComfyUI 返回了无法解析的提交结果", status=0, body=result)
         if result.get("node_errors"):
@@ -136,14 +137,14 @@ class ProductionGateway:
             )
         return str(result["prompt_id"])
 
-    def poll(self, prompt_id: str) -> dict[str, Any]:
+    def poll(self, prompt_id: str, *, timeout: float = 30) -> dict[str, Any]:
         """One history probe, normalised.
 
         Returns ``{"state": "pending"|"done"|"error", "images": [...],
         "problems": [...], "entry": {...}}`` so the runner never has to guess
         whether "no images yet" means running or dead.
         """
-        history = self.request("/history/" + prompt_id, timeout=30)
+        history = self.request("/history/" + prompt_id, timeout=timeout)
         entry = (history or {}).get(prompt_id)
         if not entry:
             return {"state": "pending", "images": [], "problems": [], "entry": {}}
@@ -165,7 +166,9 @@ class ProductionGateway:
             }
         if images:
             return {"state": "done", "images": images, "problems": [], "entry": entry}
-        if status.get("completed") is False and status_str == "success":
+        # Text-only output nodes have no images. A successful history entry is
+        # still complete; otherwise image-to-prompt waits until its deadline.
+        if status_str == "success":
             return {"state": "done", "images": [], "problems": [], "entry": entry}
         return {"state": "pending", "images": [], "problems": [], "entry": entry}
 
@@ -222,7 +225,7 @@ class FakeComfyGateway:
 
     # --------------------------------------------------------------- protocol
 
-    def object_info(self, *, refresh: bool = False) -> dict[str, Any]:
+    def object_info(self, *, refresh: bool = False, timeout: float | None = None) -> dict[str, Any]:
         return self._object_info
 
     def models(self, folder: str) -> list[str]:
@@ -231,7 +234,7 @@ class FakeComfyGateway:
     def all_models(self) -> dict[str, list[str]]:
         return {folder: list(values) for folder, values in self._models.items() if values}
 
-    def submit(self, graph: dict[str, Any], client_id: str) -> str:
+    def submit(self, graph: dict[str, Any], client_id: str, *, timeout: float = 60) -> str:
         if self.fail_with is not None:
             self.fail_times += 1
             raise self.fail_with
@@ -240,7 +243,7 @@ class FakeComfyGateway:
         self.make_output(f"out{len(self.submitted)}.png")
         return f"prompt-{len(self.submitted)}"
 
-    def poll(self, prompt_id: str) -> dict[str, Any]:
+    def poll(self, prompt_id: str, *, timeout: float = 30) -> dict[str, Any]:
         if self.execution_error is not None:
             return {"state": "error", "images": [], "problems": list(self.execution_error), "entry": {}}
         if self.output_dir is None:

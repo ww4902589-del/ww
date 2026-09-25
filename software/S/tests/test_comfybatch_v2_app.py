@@ -3,7 +3,9 @@ import io
 import pathlib
 import sys
 import tempfile
+import time
 import unittest
+from types import SimpleNamespace
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
@@ -36,6 +38,183 @@ class ApplicationPreflightTests(unittest.TestCase):
             self.assertEqual([640, 360], bundle.items[0].metadata["source_dimensions"])
             self.assertTrue((comfy / "input" / bundle.items[0].metadata["source_image"]).is_file())
             self.assertNotIn(":", pathlib.Path(bundle.items[0].metadata["source_image"]).name)
+            task_ids = [item.metadata.get("task_id") for item in bundle.items]
+            self.assertTrue(all(task_ids), "每个图片任务导入时必须获得稳定身份")
+            self.assertEqual(len(task_ids), len(set(task_ids)), "同批图片任务 ID 必须唯一")
+
+    def test_bundle_update_cannot_replace_server_owned_source_image(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = pathlib.Path(temp)
+            comfy = root / "ComfyUI"
+            (comfy / "input").mkdir(parents=True)
+            image_buffer = io.BytesIO()
+            Image.new("RGB", (8, 8), "navy").save(image_buffer, format="PNG")
+            app = Application(settings_path=root / "settings.json")
+            app.comfy_root = comfy
+            bundle = app.import_images([{"filename": "safe.png", "raw": image_buffer.getvalue()}])
+            trusted = bundle.items[0].metadata["source_image"]
+            (comfy / "input" / "other.png").write_bytes(image_buffer.getvalue())
+
+            updated = app.update_bundle([{
+                "title": "edited", "prompt": "keep", "negative_prompt": "",
+                "metadata": {**bundle.items[0].metadata, "source_image": "other.png"},
+            }])
+
+            self.assertEqual(trusted, updated.items[0].metadata["source_image"])
+
+    def test_bundle_update_preserves_source_when_an_image_task_is_duplicated(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = pathlib.Path(temp)
+            comfy = root / "ComfyUI"
+            (comfy / "input").mkdir(parents=True)
+            first_buffer = io.BytesIO()
+            second_buffer = io.BytesIO()
+            Image.new("RGB", (8, 8), "navy").save(first_buffer, format="PNG")
+            Image.new("RGB", (8, 8), "gold").save(second_buffer, format="PNG")
+            app = Application(settings_path=root / "settings.json")
+            app.comfy_root = comfy
+            bundle = app.import_images([
+                {"filename": "first.png", "raw": first_buffer.getvalue()},
+                {"filename": "second.png", "raw": second_buffer.getvalue()},
+            ])
+            first = bundle.items[0].to_dict()
+            duplicate = bundle.items[0].to_dict()
+            duplicate["metadata"] = {**duplicate["metadata"], "task_id": "browser-copy"}
+            second = bundle.items[1].to_dict()
+
+            updated = app.update_bundle([first, duplicate, second])
+
+            self.assertEqual(
+                [first["metadata"]["source_image"], first["metadata"]["source_image"], second["metadata"]["source_image"]],
+                [item.metadata["source_image"] for item in updated.items],
+            )
+            self.assertEqual(
+                [first["metadata"]["task_id"], "browser-copy", second["metadata"]["task_id"]],
+                [item.metadata["task_id"] for item in updated.items],
+            )
+
+    def test_interrogation_rejects_a_stale_task_identity_before_submission(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = pathlib.Path(temp)
+            comfy = root / "ComfyUI"
+            (comfy / "input").mkdir(parents=True)
+            image_buffer = io.BytesIO()
+            Image.new("RGB", (8, 8), "navy").save(image_buffer, format="PNG")
+            app = Application(settings_path=root / "settings.json")
+            app.comfy_root = comfy
+            bundle = app.import_images([{"filename": "safe.png", "raw": image_buffer.getvalue()}])
+            source = bundle.items[0].metadata["source_image"]
+
+            with self.assertRaisesRegex(ValueError, "任务身份已变化"):
+                app.interrogate_task(1, source, "stale-task-id")
+
+    def test_interrogation_rejects_result_if_bundle_changes_while_waiting(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = pathlib.Path(temp)
+            comfy = root / "ComfyUI"
+            (comfy / "input").mkdir(parents=True)
+            image_buffer = io.BytesIO()
+            Image.new("RGB", (8, 8), "navy").save(image_buffer, format="PNG")
+            raw = image_buffer.getvalue()
+            app = Application(settings_path=root / "settings.json")
+            app.comfy_root = comfy
+            bundle = app.import_images([{"filename": "first.png", "raw": raw}])
+            source = bundle.items[0].metadata["source_image"]
+            app.schema = SimpleNamespace(class_types={"LoadImage", "H3ShowText", "BLIPCaption"})
+            app.refresh_schema = lambda force=False, timeout=None: app.schema
+
+            class ReplacingInterrogator:
+                timeout = 1.0
+
+                def run(self, *_args, **_kwargs):
+                    app.import_images([{"filename": "second.png", "raw": raw}])
+                    return {"prompt": "stale", "backend": "BLIPCaption", "prompt_id": "p", "local_only": True}
+
+            app.image_interrogator = ReplacingInterrogator()
+            with self.assertRaisesRegex(ValueError, "任务合集已变化"):
+                app.interrogate_task(1, source, bundle.items[0].metadata["task_id"])
+            self.assertNotEqual("stale", app.bundle.items[0].prompt)
+
+    def test_interrogation_requires_source_and_task_identity(self):
+        app = Application()
+        for source, task_id in (("", "task"), ("image.png", "")):
+            with self.subTest(source=source, task_id=task_id), self.assertRaisesRegex(
+                ValueError, "必须携带任务图片和任务身份"
+            ):
+                app.interrogate_task(1, source, task_id)
+
+    def test_schema_refresh_counts_toward_interrogation_total_timeout(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = pathlib.Path(temp)
+            comfy = root / "ComfyUI"
+            (comfy / "input").mkdir(parents=True)
+            image_buffer = io.BytesIO()
+            Image.new("RGB", (8, 8), "navy").save(image_buffer, format="PNG")
+            app = Application(settings_path=root / "settings.json")
+            app.comfy_root = comfy
+            bundle = app.import_images([{"filename": "safe.png", "raw": image_buffer.getvalue()}])
+            item = bundle.items[0]
+            observed: dict[str, float] = {}
+
+            def refresh_schema(*, force=True, timeout=None):
+                observed["refresh"] = timeout
+                time.sleep(0.02)
+                app.schema = SimpleNamespace(class_types={"LoadImage", "H3ShowText", "BLIPCaption"})
+                return app.schema
+
+            class CapturingInterrogator:
+                timeout = 0.2
+
+                def run(self, _source, _types, *, timeout=None):
+                    observed["run"] = timeout
+                    return {"prompt": "caption", "backend": "BLIPCaption", "prompt_id": "p", "local_only": True}
+
+            app.refresh_schema = refresh_schema
+            app.image_interrogator = CapturingInterrogator()
+            app.interrogate_task(1, item.metadata["source_image"], item.metadata["task_id"])
+
+            self.assertGreater(observed["refresh"], observed["run"])
+            self.assertLessEqual(observed["refresh"], 0.2)
+            self.assertGreater(observed["run"], 0)
+
+    def test_running_remote_client_cannot_be_hidden_by_loopback_configuration(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = pathlib.Path(temp)
+            comfy = root / "ComfyUI"
+            (comfy / "input").mkdir(parents=True)
+            image_buffer = io.BytesIO()
+            Image.new("RGB", (8, 8), "navy").save(image_buffer, format="PNG")
+            app = Application(settings_path=root / "settings.json")
+            app.comfy_root = comfy
+            bundle = app.import_images([{"filename": "safe.png", "raw": image_buffer.getvalue()}])
+            item = bundle.items[0]
+            remote_url = "https://remote.example.invalid:8188"
+            app.comfy_url = remote_url
+            app.runner.client.base_url = remote_url
+            app.runner._state["status"] = "running"
+
+            with self.assertRaisesRegex(ValueError, "运行或暂停期间不能更换"):
+                app.configure({"comfy_url": "http://127.0.0.1:8188"})
+            self.assertEqual(remote_url, app.comfy_url)
+            with self.assertRaisesRegex(ValueError, "只允许连接本机 ComfyUI"):
+                app.interrogate_task(1, item.metadata["source_image"], item.metadata["task_id"])
+
+    def test_interrogation_checks_the_actual_execution_client_url(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = pathlib.Path(temp)
+            comfy = root / "ComfyUI"
+            (comfy / "input").mkdir(parents=True)
+            image_buffer = io.BytesIO()
+            Image.new("RGB", (8, 8), "navy").save(image_buffer, format="PNG")
+            app = Application(settings_path=root / "settings.json")
+            app.comfy_root = comfy
+            bundle = app.import_images([{"filename": "safe.png", "raw": image_buffer.getvalue()}])
+            item = bundle.items[0]
+            app.comfy_url = "http://127.0.0.1:8188"
+            app.runner.client.base_url = "https://remote.example.invalid:8188"
+
+            with self.assertRaisesRegex(ValueError, "只允许连接本机 ComfyUI"):
+                app.interrogate_task(1, item.metadata["source_image"], item.metadata["task_id"])
 
     def test_resolves_selected_style_text_for_node_independent_compilation(self):
         with tempfile.TemporaryDirectory() as temp:

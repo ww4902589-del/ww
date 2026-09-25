@@ -602,6 +602,7 @@ function renderBundle(){
     <div>原文件：${esc(x.metadata?.source_filename||'')}</div>
     <div>原尺寸：${esc(dims.length?dims.join('×'):'未知')}</div>
     <div>输入位置：${esc(source)}</div>
+    <button class="secondary interrogate-button" data-agent-action="interrogate-image" aria-label="反推第 ${n} 张图片的提示词" onclick="interrogateTask(${n},this)">本机反推提示词</button>
     </div>
     </div>`:'';return `<div class="item ${
     selectedPromptIndexes.has(n)?'selected':''}">
@@ -630,14 +631,34 @@ function renderBundle(){
   updateSelectionStatus();
   renderImageSpecSummary();
   renderConfigFeedback()}
+function newTaskId(){
+  return globalThis.crypto?.randomUUID?.()||`task-${Date.now()}-${Math.random().toString(16).slice(2)}`}
 function duplicateTask(index){
-  bundle.items.splice(index+1,0,JSON.parse(JSON.stringify(bundle.items[index])));
+  const copy=JSON.parse(JSON.stringify(bundle.items[index]));
+  copy.metadata={...(copy.metadata||{}),task_id:newTaskId()};
+  bundle.items.splice(index+1,0,copy);
   selectedPromptIndexes.clear();
   renderBundle()}
 function deleteTask(index){
   bundle.items.splice(index,1);
   selectedPromptIndexes.clear();
   renderBundle()}
+async function interrogateTask(index,button){
+  const sourceImage=String(bundle.items[index-1]?.metadata?.source_image||'');
+  const taskId=String(bundle.items[index-1]?.metadata?.task_id||'');
+  setBusy(button,true,'反推中');
+  notify('正在使用本机 ComfyUI 分析图片，首次加载模型可能需要几分钟。','info');
+  try{
+    const v=await api('/api/interrogate',{method:'POST',body:JSON.stringify({index,source_image:sourceImage,task_id:taskId})});
+    const item=bundle.items[index-1];
+    if(!item||String(item.metadata?.source_image||'')!==sourceImage||String(item.metadata?.task_id||'')!==taskId)
+      throw new Error('反推期间任务列表已变化，请对当前图片重试');
+    item.prompt=v.prompt;
+    item.metadata={...(item.metadata||{}),interrogation:v.interrogation};
+    renderBundle();
+    notify(`第 ${index} 张图片已使用 ${v.backend} 生成提示词`)
+  }catch(err){notify(err.message,'error')}
+  finally{setBusy(button,false)}}
 async function syncBundle(){
   const items=[];
   for(const item of bundle.items){

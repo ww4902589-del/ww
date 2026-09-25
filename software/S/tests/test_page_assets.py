@@ -435,6 +435,29 @@ class ParameterWorkbenchUiTests(unittest.TestCase):
                          "提示词文件、图片文件与链接图片三条导入路径都应调用 precheckAfterImport")
         self.assertIn("/api/extract-images", html)
 
+    def test_image_tasks_offer_local_prompt_interrogation(self):
+        html = page_source()
+        for marker in ("interrogateTask", "/api/interrogate", "本机反推提示词",
+                       'data-agent-action="interrogate-image"'):
+            self.assertIn(marker, html)
+        handler = html.split("async function interrogateTask", 1)[1].split("async function syncBundle", 1)[0]
+        self.assertNotIn("bundle=v.bundle", handler,
+                         "反推响应不得用服务端旧副本覆盖页面上尚未同步的编辑")
+        self.assertIn("source_image:sourceImage", handler)
+        self.assertIn("!==sourceImage", handler,
+                      "等待期间任务索引漂移时不得把结果写入另一张图片")
+
+    def test_interrogation_uses_stable_identity_when_same_source_task_is_duplicated(self):
+        html = page_source()
+        duplicate = html.split("function duplicateTask", 1)[1].split("function deleteTask", 1)[0]
+        handler = html.split("async function interrogateTask", 1)[1].split("async function syncBundle", 1)[0]
+        self.assertIn("task_id:newTaskId()", duplicate,
+                      "复制图片任务必须获得新身份，不能沿用原任务 ID")
+        self.assertIn("task_id:taskId", handler,
+                      "反推请求必须携带点击时的稳定任务 ID")
+        self.assertIn("!==taskId", handler,
+                      "完成时必须按稳定任务 ID 拒绝同来源复制项")
+
     def test_truth_rail_carries_the_capability_facts(self):
         """B1：采样链路与输入输出常驻真相栏，任何阶段可见。"""
         html = page_source()

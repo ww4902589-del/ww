@@ -2258,6 +2258,44 @@ details[open] > .compact-module-summary .compact-toggle::after {
 .run-controls .actions {
   margin:0
 }
+/* 分段生成：沿用 .run-controls 的版式，但右侧是一个窄数字框加一个按钮，
+   不能继承 .actions > * 的 flex:1——那会把两者都撑成半宽，数字框会大得离谱。 */
+.segment-controls .actions {
+  align-items:flex-end;
+  justify-content:flex-end
+}
+.segment-controls .inline-field {
+  flex:0 0 118px;
+  margin:0
+}
+.segment-controls .actions > button {
+  flex:0 0 auto;
+  width:auto;
+  margin:0
+}
+.resume-banner {
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:10px;
+  margin:12px 0 0;
+  padding:11px 13px;
+  border:1px solid #d9b45c;
+  border-radius:12px;
+  background:#fdf6e3;
+  color:var(--ink);
+  font-size:13px
+}
+/* 同上一条：display:flex 会盖掉 [hidden] 的 display:none，不写这一行，
+   没有可续跑批次时这条提示也会一直挂在那儿。 */
+.resume-banner[hidden] {
+  display:none
+}
+.resume-banner button {
+  flex:0 0 auto;
+  width:auto;
+  margin:0
+}
 @media(max-width:1040px) {
   .workspace {
     grid-template-columns:190px minmax(0,1fr)

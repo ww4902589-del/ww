@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import csv
+import datetime
 import hashlib
 import io
 import json
@@ -294,7 +295,14 @@ class BatchConfig:
     #: failures. Workflow-level failures stop immediately regardless.
     max_consecutive_failures: int = 3
     #: Run one item, then pause for confirmation before releasing the rest.
+    #: Kept for compatibility: a value of ``True`` now means "one item per
+    #: segment", which is the same promise this field always advertised.
     trial_first: bool = False
+    #: Split the batch into segments of this many items and stop for
+    #: confirmation at every boundary. ``0`` submits the whole batch in one go,
+    #: which is what every version before V2.21 did. The queue still owns the
+    #: slot while it waits, so nothing else can start in the gap.
+    segment_size: int = 0
     #: User-chosen resource replacements for this batch, keyed by
     #: ``{node_id: {input_name: value}}``. Never applied silently: the audit
     #: tags these inputs as ``user_replaced``.
@@ -310,6 +318,7 @@ class BatchConfig:
 
     @classmethod
     def from_dict(cls, value: dict[str, Any]) -> "BatchConfig":
+        segment_size = cls.parse_segment_size(value)
         return cls(
             workflow_path=str(value.get("workflow_path", "")),
             model=str(value.get("model", "")),
@@ -330,11 +339,35 @@ class BatchConfig:
             max_consecutive_failures=max(1, min(50, int(value.get("max_consecutive_failures", 3)))),
             trial_first=bool(value.get("trial_first", False)),
             resource_overrides=dict(value.get("resource_overrides") or {}),
+            segment_size=segment_size,
             seed=int(value["seed"]) if value.get("seed") not in (None, "") else None,
             # Kept verbatim: an unrecognised purpose must reach preflight and be
             # refused there, not be normalised away into "no assertion".
             purpose=str(value.get("purpose") or "").strip(),
         )
+
+    @staticmethod
+    def parse_segment_size(value: dict[str, Any]) -> int:
+        """Read ``segment_size``, falling back to the older ``trial_first`` flag.
+
+        ``trial_first`` was declared long ago and never read by anything, so
+        honouring it here is what finally makes it mean what its comment says.
+        An unusable value raises with the offending input in the message: a
+        silently clamped segment size would look like it worked and then stop
+        the batch somewhere the user did not ask for.
+        """
+        raw = value.get("segment_size")
+        if raw in (None, ""):
+            return 1 if value.get("trial_first") else 0
+        try:
+            size = int(raw)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"每段条数必须是整数，收到 {raw!r}") from exc
+        if size < 0:
+            raise ValueError(f"每段条数不能为负数，收到 {size}")
+        # 1000 is far above any batch this tool has ever been given; the ceiling
+        # exists so a typo cannot ask for a segment longer than the whole run.
+        return min(1000, size)
 
 
 class PromptBundleParser:
@@ -2244,6 +2277,126 @@ class ComfyClient:
         self.gateway.interrupt()
 
 
+#: Statuses in which the queue still owns the slot. Nothing else may start a
+#: batch, redo an item or reconfigure the runner while one of these is current.
+#: ``segment`` belongs here precisely because a batch waiting at a segment
+#: boundary is not finished -- letting a second batch start in that gap is the
+#: bug this list exists to prevent.
+ACTIVE_STATUSES = ("starting", "running", "paused", "segment")
+
+
+class RunProgressStore:
+    """Persists enough of a batch to continue it after the process went away.
+
+    The runner keeps its state in memory, so a crash, a closed window or a
+    machine that lost power used to mean the remaining items were simply gone.
+    One JSON document per run records the bundle, the config and which indexes
+    already finished, which is what makes 断点续跑 possible: everything the
+    queue needs to pick the batch up again lives in this file.
+
+    Written atomically (temp file + replace) because the file is rewritten after
+    every item: a half-written snapshot would be worse than no snapshot at all.
+    """
+
+    def __init__(self, root: pathlib.Path):
+        self.root = pathlib.Path(root)
+
+    @staticmethod
+    def validate_run_id(run_id: str) -> str:
+        value = str(run_id or "").strip()
+        if not value:
+            raise ValueError("进度快照缺少 run_id")
+        if not all(character.isalnum() or character in "-_" for character in value):
+            raise ValueError("run_id 含有不允许的字符，拒绝访问进度快照")
+        return value
+
+    def path_for(self, run_id: str) -> pathlib.Path:
+        safe_id = self.validate_run_id(run_id)
+        return self.root / f"{safe_id}.json"
+
+    def save(self, document: dict[str, Any]) -> pathlib.Path:
+        run_id = str(document.get("run_id") or "").strip()
+        run_id = self.validate_run_id(run_id)
+        self.root.mkdir(parents=True, exist_ok=True)
+        target = self.path_for(run_id)
+        temporary = target.with_name(target.name + ".tmp")
+        temporary.write_text(json.dumps(document, ensure_ascii=False, indent=2), encoding="utf-8")
+        # On Windows a concurrent status reader can briefly prevent replacing
+        # the existing file. Retry that transient sharing violation; otherwise
+        # the page could show a segment boundary while its durable snapshot is
+        # still one item behind.
+        for attempt in range(20):
+            try:
+                temporary.replace(target)
+                break
+            except PermissionError:
+                if attempt == 19:
+                    raise
+                time.sleep(0.02)
+        return target
+
+    def load(self, run_id: str) -> dict[str, Any] | None:
+        path = self.path_for(run_id)
+        if not path.is_file():
+            return None
+        try:
+            document = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        return document if isinstance(document, dict) else None
+
+    def documents(self) -> list[dict[str, Any]]:
+        if not self.root.is_dir():
+            return []
+        rows: list[dict[str, Any]] = []
+        for path in sorted(self.root.glob("*.json")):
+            document = self.load(path.stem)
+            if document is not None:
+                rows.append(document)
+        return rows
+
+    @staticmethod
+    def is_resumable(document: dict[str, Any] | None) -> bool:
+        """A run is resumable while items remain, whatever stopped it."""
+        if not document:
+            return False
+        try:
+            selected = [int(value) for value in (document.get("selected_indexes") or [])]
+            if selected:
+                completed = {int(value) for value in (document.get("completed_indexes") or [])}
+                return any(index not in completed for index in selected)
+            return int(document.get("next_index") or 1) <= int(document.get("total") or 0)
+        except (TypeError, ValueError):
+            return False
+
+    def latest(self, *, resumable_only: bool = False) -> dict[str, Any] | None:
+        """Newest snapshot by ``updated_at``, falling back to file order."""
+        rows = self.documents()
+        if resumable_only:
+            rows = [row for row in rows if self.is_resumable(row)]
+        if not rows:
+            return None
+        return max(rows, key=lambda row: str(row.get("updated_at") or "").replace("T", " "))
+
+    def summary(self, document: dict[str, Any] | None) -> dict[str, Any] | None:
+        """Small payload for the page: enough to offer the resume button."""
+        if not document or not self.is_resumable(document):
+            return None
+        return {
+            "run_id": str(document.get("run_id") or ""),
+            "total": int(document.get("total") or 0),
+            "completed": len(document.get("completed_indexes") or []),
+            "next_index": int(document.get("next_index") or 1),
+            "status": str(document.get("status") or ""),
+            "updated_at": str(document.get("updated_at") or ""),
+        }
+
+    def clear(self, run_id: str) -> None:
+        path = self.path_for(run_id)
+        if path.is_file():
+            path.unlink()
+
+
 class OpenAICompatibleAdapter:
     """Optional adapter; disabled by default and sends only prompt text when enabled."""
 
@@ -2281,14 +2434,34 @@ class OpenAICompatibleAdapter:
 class BatchRunner:
     """Owns queue ordering, pause/resume/cancel, output copying and reports."""
 
-    def __init__(self, comfy_root: pathlib.Path, client: ComfyClient | None = None):
+    def __init__(self, comfy_root: pathlib.Path, client: ComfyClient | None = None, progress_store: "RunProgressStore | None" = None):
         self.comfy_root = pathlib.Path(comfy_root)
         self.client = client or ComfyClient()
+        #: Where the per-item progress snapshot is written. ``None`` disables
+        #: snapshots entirely, which is what the hermetic tests want.
+        self.progress_store = progress_store
         self._lock = threading.RLock()
         self._resume = threading.Event()
         self._resume.set()
         self._cancel = threading.Event()
-        self._state: dict[str, Any] = {"status": "idle", "run_id": None, "total": 0, "submitted": 0, "completed": 0, "errors": 0, "current": None, "results": [], "report": None}
+        #: Released by ``next_segment`` to carry the queue past a segment
+        #: boundary. Cleared each time the queue arrives at one, so a stale
+        #: release can never skip the next boundary.
+        self._next_segment = threading.Event()
+        self._state: dict[str, Any] = {
+            "status": "idle", "run_id": None, "total": 0, "submitted": 0, "completed": 0,
+            "errors": 0, "current": None, "results": [], "report": None,
+            #: 0 means the whole batch runs in one go (the behaviour of every
+            #: release before this one).
+            "segment_size": 0,
+            #: First index of the segment waiting for confirmation, or ``None``
+            #: when the queue is not at a boundary.
+            "next_index": None,
+            #: Non-empty when writing the snapshot failed. Kept visible instead
+            #: of swallowed: a batch whose progress cannot be saved must not
+            #: pretend it can be resumed.
+            "snapshot_error": "",
+        }
         #: Kept so a single item can be re-run from the review page without the
         #: caller having to resend the whole bundle and config.
         self._last_bundle: PromptBundle | None = None
@@ -2313,22 +2486,62 @@ class BatchRunner:
     def _adapter(self, workflow_path: str) -> "Krea2WorkflowAdapter":
         return Krea2WorkflowAdapter.from_path(workflow_path, self.adapter_registry or active_registry())
 
+    @staticmethod
+    def _original_index(item: PromptItem, position: int) -> int:
+        metadata = item.metadata if isinstance(item.metadata, dict) else {}
+        return int(metadata.get("original_index") or position)
+
     def status(self) -> dict[str, Any]:
         with self._lock:
             return copy.deepcopy(self._state)
 
-    def start(self, bundle: PromptBundle, config: BatchConfig) -> dict[str, Any]:
+    def start(self, bundle: PromptBundle, config: BatchConfig, *, resume: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Begin a batch, or continue one from a saved progress snapshot.
+
+        ``resume`` is a document produced by :meth:`snapshot`. When it is given
+        the run keeps its original ``run_id`` -- so the output folder and the
+        review history still line up -- and every index it already completed is
+        skipped instead of being generated a second time.
+        """
         with self._lock:
-            if self._state["status"] in {"running", "paused", "starting"}:
+            if self._state["status"] in ACTIVE_STATUSES:
                 raise ValueError("已有批次正在运行")
-            run_id = str(uuid.uuid4())
-            self._state = {"status": "starting", "run_id": run_id, "total": len(bundle.items), "submitted": 0, "completed": 0, "errors": 0, "current": None, "results": [], "report": None, "output_dir": config.output_dir}
-            self._result_revision = 0
+            run_id = str((resume or {}).get("run_id") or uuid.uuid4())
+            segment_size = max(0, int(getattr(config, "segment_size", 0) or 0))
+            restored = [copy.deepcopy(row) for row in ((resume or {}).get("results") or []) if isinstance(row, dict)]
+            selected_indexes = [self._original_index(item, position) for position, item in enumerate(bundle.items, 1)]
+            if len(set(selected_indexes)) != len(selected_indexes) or any(index < 1 for index in selected_indexes):
+                raise ValueError("运行任务编号无效或重复")
+            self._state = {
+                "status": "starting",
+                "run_id": run_id,
+                "total": len(bundle.items),
+                "submitted": len(restored),
+                "completed": sum(1 for row in restored if row.get("status") == "completed"),
+                "errors": sum(1 for row in restored if row.get("status") == "error"),
+                "current": None,
+                "results": restored,
+                "report": None,
+                "output_dir": config.output_dir,
+                "segment_size": segment_size,
+                "next_index": None,
+                "snapshot_error": "",
+                "selected_indexes": selected_indexes,
+                "prompts_refined": bool((resume or {}).get("prompts_refined")),
+                #: Where this run picked up from; 0 for a fresh batch. The page
+                #: says so rather than presenting a resumed run as a new one.
+                "resumed_from": int((resume or {}).get("next_index") or 1) if resume else 0,
+            }
+            self._result_revision = 0
         self._cancel.clear()
         self._resume.set()
+        self._next_segment.clear()
         self._last_bundle = bundle
         self._last_config = config
         self._last_graphs = {}
+        # Persist the intent before the worker starts. A crash before the first
+        # image must still leave a resumable record rather than losing the run.
+        self._write_snapshot("starting")
         threading.Thread(target=self._run, args=(run_id, bundle, config), daemon=True).start()
         return self.status()
 
@@ -2354,13 +2567,14 @@ class BatchRunner:
         # Claim the slot inside the same lock as the check: releasing between the
         # two would let a batch start in the gap and corrupt the state.
         with self._lock:
-            if self._state["status"] in {"running", "paused", "starting"}:
+            if self._state["status"] in ACTIVE_STATUSES:
                 raise ValueError("已有批次正在运行，无法重做单条任务")
             bundle, config = self._last_bundle, self._last_config
             if bundle is None or config is None:
                 raise ValueError("还没有可重做的批次，请先运行一次")
 
-            item = next((candidate for position, candidate in enumerate(bundle.items, 1) if position == int(index)), None)
+            item = next((candidate for position, candidate in enumerate(bundle.items, 1)
+                         if self._original_index(candidate, position) == int(index)), None)
             if item is None:
                 raise ValueError(f"批次中没有第 {index} 条任务")
 
@@ -2417,7 +2631,7 @@ class BatchRunner:
         # two would let a batch start in the gap and corrupt the state. The batch
         # version validates every index in this one critical section.
         with self._lock:
-            if self._state["status"] in {"running", "paused", "starting"}:
+            if self._state["status"] in ACTIVE_STATUSES:
                 raise ValueError("已有批次正在运行，无法批量重做")
             bundle, config = self._last_bundle, self._last_config
             if bundle is None or config is None:
@@ -2426,7 +2640,8 @@ class BatchRunner:
             tasks: list[tuple[int, PromptItem, dict[str, Any] | None]] = []
             for index in unique_indexes:
                 item = next(
-                    (candidate for position, candidate in enumerate(bundle.items, 1) if position == index),
+                    (candidate for position, candidate in enumerate(bundle.items, 1)
+                     if self._original_index(candidate, position) == index),
                     None,
                 )
                 if item is None:
@@ -2594,10 +2809,18 @@ class BatchRunner:
                 self._state.update(values)
 
     def pause(self) -> dict[str, Any]:
-        self._resume.clear()
+        """Stop releasing new items, but only while the queue is actually running.
+
+        Doing this at a segment boundary used to clear the resume event without
+        changing the status: the batch looked like it was waiting for 「下一段」,
+        and then froze for good the moment that button was pressed. A no-op is
+        the honest answer -- there is nothing to pause when nothing is moving.
+        """
         with self._lock:
-            if self._state["status"] == "running":
-                self._state["status"] = "paused"
+            if self._state["status"] != "running":
+                return self.status()
+            self._resume.clear()
+            self._state["status"] = "paused"
         return self.status()
 
     def resume(self) -> dict[str, Any]:
@@ -2615,6 +2838,162 @@ class BatchRunner:
         except Exception:
             pass
         return self.status()
+
+    # ---- 分段生成与断点续跑 ------------------------------------------------
+
+    def next_segment(self) -> dict[str, Any]:
+        """Release the queue past the segment boundary it is waiting at.
+
+        Refusing when nothing is waiting is the point: a stray click must not
+        quietly arm the gate so that the *next* boundary is skipped.
+        """
+        with self._lock:
+            if self._state.get("status") != "segment":
+                raise ValueError("当前没有等待确认的分段")
+            # Claim this one-shot release while still holding the same lock as
+            # the status check. A concurrent second click now observes running.
+            self._state.update(status="running", next_index=None)
+            self._next_segment.set()
+            return copy.deepcopy(self._state)
+
+    def snapshot(self, status: str = "") -> dict[str, Any] | None:
+        """The resumable document for the current run, or ``None`` if there is none.
+
+        ``status`` overrides the live status so a caller can write the snapshot
+        *before* it publishes that status -- which is what makes the file on disk
+        always at least as new as what the page is showing.
+
+        ``next_index`` is derived from the completed rows rather than from a
+        counter, so it stays right when an item failed and the batch carried on.
+        """
+        with self._lock:
+            state = copy.deepcopy(self._state)
+            bundle, config = self._last_bundle, self._last_config
+        run_id = str(state.get("run_id") or "")
+        if not run_id or bundle is None or config is None:
+            return None
+        results = list(state.get("results") or [])
+        completed = sorted({
+            int(row["index"]) for row in results
+            if isinstance(row.get("index"), int) and row.get("status") == "completed"
+        })
+        selected_indexes = [int(value) for value in (state.get("selected_indexes") or range(1, int(state.get("total") or 0) + 1))]
+        completed_set = set(completed)
+        next_index = next((index for index in selected_indexes if index not in completed_set), None)
+        config_document = asdict(config)
+        # Same rule as the run report: the key never leaves the process.
+        if (config_document.get("llm") or {}).get("api_key"):
+            config_document["llm"]["api_key"] = ""
+        return {
+            "run_id": run_id,
+            "status": status or str(state.get("status") or ""),
+            "updated_at": datetime.datetime.now().isoformat(sep=" ", timespec="microseconds"),
+            "segment_size": int(state.get("segment_size") or 0),
+            "total": int(state.get("total") or 0),
+            "completed_indexes": completed,
+            "selected_indexes": selected_indexes,
+            "prompts_refined": bool(state.get("prompts_refined")),
+            "next_index": next_index if next_index is not None else (max(selected_indexes, default=0) + 1),
+            "output_dir": str(state.get("output_dir") or ""),
+            "bundle": bundle.to_dict(),
+            "config": config_document,
+            "results": results,
+        }
+
+    def last_bundle(self) -> "PromptBundle | None":
+        """The prompt collection the current (or most recent) run was built from.
+
+        Public because resuming has to hand the collection back to the page, and
+        letting the application layer read ``_last_bundle`` directly would make
+        that a private detail with a public caller.
+        """
+        return self._last_bundle
+
+    def resumable(self) -> dict[str, Any] | None:
+        """Summary of the newest unfinished run, for the page's resume prompt."""
+        if self.progress_store is None:
+            return None
+        with self._lock:
+            if self._state.get("status") in ACTIVE_STATUSES:
+                # A batch that is still running owns its snapshot; offering to
+                # "resume" it would invite a second queue into the same run.
+                return None
+        return self.progress_store.summary(self.progress_store.latest(resumable_only=True))
+
+    def resume_interrupted(self, run_id: str = "") -> dict[str, Any]:
+        """Continue the newest unfinished batch from its saved snapshot."""
+        if self.progress_store is None:
+            raise ValueError("本次启动没有开启进度快照，无法续跑")
+        with self._lock:
+            if self._state["status"] in ACTIVE_STATUSES:
+                raise ValueError("已有批次正在运行，无法续跑")
+        document = self.progress_store.load(run_id) if run_id else self.progress_store.latest(resumable_only=True)
+        if not document:
+            raise ValueError("没有可以续跑的批次")
+        if not self.progress_store.is_resumable(document):
+            raise ValueError("上一次批次已经全部完成，无需续跑")
+        saved_bundle = document.get("bundle") or {}
+        items = [
+            PromptItem(
+                title=str(row.get("title") or ""),
+                prompt=str(row.get("prompt") or ""),
+                metadata=dict(row.get("metadata") or {}),
+                negative_prompt=str(row.get("negative_prompt") or ""),
+            )
+            for row in (saved_bundle.get("items") or [])
+            if isinstance(row, dict)
+        ]
+        if not items:
+            raise ValueError("进度快照里没有可用的提示词，无法续跑")
+        bundle = PromptBundle(
+            name=str(saved_bundle.get("name") or "续跑批次"),
+            items=items,
+            source_format=str(saved_bundle.get("source_format") or "resume"),
+        )
+        # The frozen config is reused verbatim: a resumed batch has to be the
+        # batch the user confirmed, not a fresh resolution of the same paths.
+        config = BatchConfig.from_dict(dict(document.get("config") or {}))
+        return self.start(bundle, config, resume=document)
+
+    def _wait_for_next_segment(self, index: int, segment_size: int) -> bool:
+        """Hold the queue at a segment boundary until the user releases it.
+
+        Returns ``False`` when the batch was cancelled while waiting. The status
+        stays ``segment`` rather than ``paused`` so the page can tell "you paused
+        me" from "I finished a segment and need a decision".
+        """
+        self._next_segment.clear()
+        # 先落盘、再公布状态：页面一旦看到「等待下一段」，快照就已经在磁盘上，
+        # 此刻断电也还能续跑；反过来就有个"状态已到、文件未到"的空窗。
+        self._write_snapshot("segment")
+        self._update(
+            status="segment",
+            next_index=index,
+            current=f"本段已完成（每段 {segment_size} 条）· 待确认后从第 {index:03d} 条继续",
+        )
+        while not self._cancel.is_set() and not self._next_segment.wait(0.2):
+            pass
+        if self._cancel.is_set():
+            return False
+        self._update(status="running", next_index=None)
+        return True
+
+    def _write_snapshot(self, status: str = "") -> None:
+        """Save the progress document. A failure is reported, never raised."""
+        if self.progress_store is None:
+            return
+        document = self.snapshot(status)
+        if document is None:
+            return
+        try:
+            self.progress_store.save(document)
+        except (OSError, ValueError) as exc:
+            # Losing one snapshot must not kill an otherwise healthy batch, but
+            # the page has to be able to say that resume is unavailable.
+            self._update(snapshot_error=f"{type(exc).__name__}: {exc}")
+        else:
+            if self._state.get("snapshot_error"):
+                self._update(snapshot_error="")
 
     def _update(self, **values: Any) -> None:
         with self._lock:
@@ -2648,30 +3027,82 @@ class BatchRunner:
     def _run(self, run_id: str, bundle: PromptBundle, config: BatchConfig) -> None:
         output_dir = pathlib.Path(config.output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
-        results: list[dict[str, Any]] = []
+        # A resumed batch inherits the rows it already produced, so the report
+        # and the review page show one continuous run rather than just the tail.
+        with self._lock:
+            results: list[dict[str, Any]] = [copy.deepcopy(row) for row in (self._state.get("results") or [])]
+        # Indexes that already produced an image. They are skipped, never
+        # re-submitted: 断点续跑 must not regenerate what is already on disk.
+        done_indexes = {
+            int(row["index"]) for row in results
+            if isinstance(row.get("index"), int) and row.get("status") == "completed"
+        }
+        completed_count = len(done_indexes)
+        segment_size = max(0, int(getattr(config, "segment_size", 0) or 0))
+        # 段按「本次运行跑了几条」计数，不按绝对编号。用绝对编号的话，续跑会
+        # 立刻撞上中断前那道边界、白停一次；按计数则每次续跑都从新的一段开始，
+        # 用户点一次「续跑」就真的往前跑一段。
+        processed_in_segment = 0
+
+        def record(row: dict[str, Any]) -> None:
+            """Store one item's outcome, replacing any earlier attempt at it.
+
+            A resumed batch re-runs the item that was in flight when it stopped,
+            so the same index can legitimately be written twice. Keeping both
+            rows would double-count it in the metrics and leave the failure
+            displayed next to the success forever.
+            """
+            seat = next(
+                (position for position, existing in enumerate(results) if existing.get("index") == row.get("index")),
+                None,
+            )
+            if seat is None:
+                results.append(row)
+            else:
+                results[seat] = row
+
         effective: dict[str, Any] = {}
         audit: dict[str, Any] = {}
         consecutive_failures = 0
         aborted_reason = ""
-        completed_count = 0
 
         try:
-            items = OpenAICompatibleAdapter().refine(bundle.items, config.llm)
+            # A range-selected run carries only the selected items, so expensive
+            # local refinement and graph compilation never touch excluded tasks.
+            if self._state.get("prompts_refined"):
+                items = bundle.items
+            else:
+                items = OpenAICompatibleAdapter().refine(bundle.items, config.llm)
+                bundle = PromptBundle(name=bundle.name, items=items, source_format=bundle.source_format)
+                self._last_bundle = bundle
+                self._update(prompts_refined=True)
+                self._write_snapshot("running")
             adapter = self._adapter(config.workflow_path)
             first_source_image = next((str(item.metadata.get("source_image") or "") for item in items if isinstance(item.metadata, dict) and item.metadata.get("source_image")), "")
             effective = adapter.capabilities(config, source_image=first_source_image)
             self._update(status="running")
-            for index, item in enumerate(items, 1):
+            submitted_count = len({int(row.get("index") or 0) for row in results if row.get("index")})
+            for position, item in enumerate(items, 1):
+                index = self._original_index(item, position)
+                if index in done_indexes:
+                    continue
                 if self._cancel.is_set():
                     break
+                # 分段闸门：跑满一段就先停下等人确认。闸门放在「开始下一条之前」，
+                # 所以一段正好是 segment_size 条，不多不少。
+                if segment_size and processed_in_segment >= segment_size:
+                    if not self._wait_for_next_segment(index, segment_size):
+                        break
+                    processed_in_segment = 0
                 self._resume.wait()
                 if self._cancel.is_set():
                     break
+                processed_in_segment += 1
                 title = _safe_name(item.title, f"item-{index:03d}")
                 preset_name = str(item.metadata.get("style_lora_preset_name") or "").strip() if isinstance(item.metadata, dict) else ""
                 file_title = _safe_name(f"{title}--{preset_name}", title) if preset_name else title
                 current_suffix = f" · {preset_name}" if preset_name else ""
-                self._update(current=f"{index:03d} {title}{current_suffix}", submitted=index - 1)
+                self._update(current=f"{index:03d} {title}{current_suffix}", submitted=submitted_count)
                 result: dict[str, Any] = {"index": index, "title": title, "preset_name": preset_name, "status": "error"}
                 try:
                     item_config = copy.deepcopy(config)
@@ -2700,7 +3131,7 @@ class BatchRunner:
                         graph = adapter.build(compiled_prompt, item_config, prefix, task_negative=item.negative_prompt, source_image=source_image)
                         # Retained for same-seed redos from the review page.
                         self._last_graphs[index] = copy.deepcopy(graph)
-                        if index == 1:
+                        if not audit:
                             # The graph is identical for every item except the seed
                             # and filename, so auditing the first submission is
                             # enough to prove page-to-graph equivalence.
@@ -2786,8 +3217,8 @@ class BatchRunner:
                         # Workflow-level defects are identical for every item, so
                         # submitting the rest would just repeat the same failure.
                         aborted_reason = summarise_problems(problems)
-                        results.append(result)
-                        self._update(results=copy.deepcopy(results), submitted=index)
+                        record(result)
+                        self._update(results=copy.deepcopy(results), submitted=submitted_count + 1)
                         break
                     consecutive_failures += 1
                 except Exception as exc:
@@ -2798,14 +3229,17 @@ class BatchRunner:
                     self._update(errors=self._state["errors"] + 1)
                     if any(problem.workflow_level for problem in problems):
                         aborted_reason = summarise_problems(problems)
-                        results.append(result)
-                        self._update(results=copy.deepcopy(results), submitted=index)
+                        record(result)
+                        self._update(results=copy.deepcopy(results), submitted=submitted_count + 1)
                         break
                     consecutive_failures += 1
                 if consecutive_failures >= max(1, int(config.max_consecutive_failures)):
                     aborted_reason = f"连续 {consecutive_failures} 条任务失败，已暂停批次以避免继续浪费算力。"
-                results.append(result)
-                self._update(results=copy.deepcopy(results), submitted=index)
+                record(result)
+                submitted_count = len({int(row.get("index") or 0) for row in results if row.get("index")})
+                self._update(results=copy.deepcopy(results), submitted=submitted_count)
+                # 每条一存：中断可能发生在任何一条之后，快照必须一直是最新的。
+                self._write_snapshot()
                 if aborted_reason:
                     break
             if aborted_reason and not self._cancel.is_set():
@@ -2885,6 +3319,11 @@ class BatchRunner:
             report["config"]["llm"]["api_key"] = ""
         report_path = output_dir / f"comfybatch-v2-{run_id[:8]}-report.json"
         report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+        # 收尾快照先落盘、再公布最终状态。全部跑完时 next_index 会超过 total，于是
+        # 它自然从「可续跑」列表里消失，不需要额外清理；顺序反过来就会有一瞬
+        # "页面说跑完了、快照却还说能续跑"。
+        self._update(next_index=None)
+        self._write_snapshot(final_status)
         self._update(status=final_status, current=None, results=results, report=str(report_path), aborted_reason=aborted_reason, audit=audit)
 
 

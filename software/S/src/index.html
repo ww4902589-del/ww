@@ -310,6 +310,15 @@
         <button class="danger" onclick="control('cancel',this)">取消剩余任务</button>
         </div>
       </div>
+      <div class="run-controls segment-controls">
+        <div><b>分段生成</b><small>可先填任务编号（如 11-20 或 1,3,8-10），只运行所选任务并保留原编号。「每段条数」留 0 表示所选任务连续跑完；填大于 0 时，每跑完这么多张就停下，点「下一段」继续。半路关闭后可从第一个未完成编号续跑。</small></div>
+        <div class="actions">
+        <label class="inline-field">任务编号<input id="taskRange" type="text" inputmode="numeric" placeholder="全部，例如 11-20"></label>
+        <label class="inline-field">每段条数<input id="segmentSize" type="number" min="0" max="1000" step="1" value="0"></label>
+        <button id="nextSegmentButton" class="secondary" onclick="nextSegment(this)" disabled>下一段</button>
+        </div>
+      </div>
+      <div id="resumeBanner" class="resume-banner" hidden></div>
       <div class="bar"><i id="progress"></i></div>
       <div class="metrics">
         <div class="metric"><span>总数</span><strong id="total">0</strong></div>

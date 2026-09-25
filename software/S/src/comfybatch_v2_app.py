@@ -41,6 +41,7 @@ from comfybatch_nodeschema import (
 from comfybatch_hub import EditLease, InstanceLock, SSE_HEARTBEAT_SECONDS, StateHub
 from comfybatch_params import PARAMS, registry_payload, resolve as resolve_params
 from comfybatch_v2_core import (
+    ACTIVE_STATUSES,
     REDO_MODES,
     REVIEW_STATUSES,
     THUMBNAIL_SIZE,
@@ -54,6 +55,7 @@ from comfybatch_v2_core import (
     ResourceInventory,
     ResourceOverrideStore,
     ResultReviewStore,
+    RunProgressStore,
     WorkflowParamsStore,
     _safe_name,
 )
@@ -128,6 +130,7 @@ WRITE_ROUTES = frozenset({
     "/api/resource/apply", "/api/resource/forget", "/api/resource/reapply",
     "/api/preflight", "/api/start", "/api/pause", "/api/resume", "/api/cancel",
     "/api/review/confirm", "/api/review/note", "/api/review/redo", "/api/review/redo-batch",
+    "/api/segment/next", "/api/segment/resume",
     "/api/reload-schema", "/api/open-folder",
     "/api/restore-default-presets",
     "/api/library/favorite", "/api/library/tags", "/api/library/delete",
@@ -515,7 +518,7 @@ class Application:
         #: Kept injectable for hermetic tests; callers only see imported tasks.
         self.image_extractor = ImageExtractor()
         self._style_thumbnail_lookup: dict[tuple[str, str], str] = {}
-        self.runner = BatchRunner(self.comfy_root, ComfyClient(self.comfy_url))
+        self.runner = self._new_runner()
         self.image_interrogator = ImageInterrogator(self.runner.client)
         self.lock = threading.RLock()
         #: Node schema from the last successful ``/object_info`` fetch. Installed
@@ -957,6 +960,9 @@ class Application:
             "is_primary": self.is_primary,
             "lease": self.lease_status(client_id),
             "status": status,
+            # 和 ``/api/status`` 一样带上未跑完的批次：页面主要靠推送渲染，
+            # 只在轮询里给这一项，会让「续跑」按钮在推送路径上一直不出现。
+            "resumable": self.runner.resumable(),
             "bundle": self.bundle.to_dict() if self.bundle else None,
             "review": self.results_payload(),
             "schema_nodes": len(self.schema),
@@ -1379,6 +1385,21 @@ class Application:
             items.append(PromptItem(item.title, item.prompt, metadata, item.negative_prompt))
         return PromptBundle(self.bundle.name, items, self.bundle.source_format)
 
+    def select_run_bundle(self, task_range: str = "") -> PromptBundle:
+        """Freeze the selected tasks and their original numbers for preflight/run."""
+        resolved = self.resolve_bundle_presets()
+        if not task_range.strip():
+            return resolved
+        indexes = parse_prompt_indexes(task_range, len(resolved.items))
+        if not indexes:
+            raise ValueError("任务编号范围不能为空")
+        selected_items: list[PromptItem] = []
+        for original_index in indexes:
+            item = copy.deepcopy(resolved.items[original_index - 1])
+            item.metadata = {**item.metadata, "original_index": original_index}
+            selected_items.append(item)
+        return PromptBundle(resolved.name, selected_items, resolved.source_format)
+
     def save_lora_profile(self, value: dict) -> dict:
         name = str(value.get("name") or "").strip()
         if not name:
@@ -1417,11 +1438,36 @@ class Application:
             }
             self._save_settings()
 
+    def _new_runner(self) -> BatchRunner:
+        """A runner wired to the shared progress-snapshot store.
+
+        The store lives in the data directory, so 断点续跑 works across a restart:
+        a new process finds the snapshot of the batch the old one was running.
+        """
+        return BatchRunner(
+            self.comfy_root,
+            ComfyClient(self.comfy_url),
+            progress_store=RunProgressStore(data_dir() / "runs"),
+        )
+
+    def resume_interrupted(self, run_id: str = "") -> dict[str, Any]:
+        """Continue an unfinished batch, restoring the page's task list as well.
+
+        The snapshot carries the prompt collection, so after a restart the page
+        has to be given it back: without this the batch would run while the task
+        list sat empty, which reads as "it is generating something I cannot see".
+        """
+        state = self.runner.resume_interrupted(run_id)
+        restored = self.runner.last_bundle()
+        if restored is not None:
+            self.bundle = restored
+        return state
+
     def configure(self, value: dict) -> None:
         with self.lock:
             runner_status = self.runner.status()["status"]
             next_comfy_url = str(value.get("comfy_url") or self.comfy_url).rstrip("/")
-            if (runner_status in {"running", "paused", "starting"}
+            if (runner_status in ACTIVE_STATUSES
                     and next_comfy_url != self.comfy_url):
                 raise ValueError("批量任务运行或暂停期间不能更换 ComfyUI 地址，请先结束当前任务")
             self.comfy_root = pathlib.Path(value.get("comfy_root") or self.comfy_root)
@@ -1437,8 +1483,8 @@ class Application:
                 self.workflow_roots = cleaned
             self.comfy_url = next_comfy_url
             self.output_root = pathlib.Path(value.get("output_root") or self.output_root)
-            if runner_status not in {"running", "paused", "starting"}:
-                self.runner = BatchRunner(self.comfy_root, ComfyClient(self.comfy_url))
+            if self.runner.status()["status"] not in ACTIVE_STATUSES:
+                self.runner = self._new_runner()
                 self.image_interrogator = ImageInterrogator(self.runner.client)
 
     def inventory(self) -> dict:
@@ -1597,7 +1643,9 @@ class Application:
                 found[name] = str(candidate)
         return found
 
-    def validate_start(self, config: BatchConfig) -> dict:
+    def validate_start(self, config: BatchConfig, bundle: PromptBundle | None = None) -> dict:
+        selected_bundle = bundle if bundle is not None else self.bundle
+        selected_items = selected_bundle.items if selected_bundle else []
         try:
             self.runner.client.json("/system_stats", timeout=4)
         except Exception as exc:
@@ -1614,14 +1662,13 @@ class Application:
             family_text = "、".join(families) or "该工作流原有模型类型"
             raise ValueError(f"模型“{config.model}”与所选工作流不兼容；请选择：{family_text}")
         adapter = Krea2WorkflowAdapter.from_path(config.workflow_path, self.ensure_schema())
-        task_negative = next((item.negative_prompt for item in (self.bundle.items if self.bundle else []) if item.negative_prompt), "")
+        task_negative = next((item.negative_prompt for item in selected_items if item.negative_prompt), "")
         preset_negative = ""
-        if self.bundle:
+        if selected_bundle:
             try:
-                resolved_bundle = self.resolve_bundle_presets()
                 preset_negative = next((
                     str(style.get("negative_prompt") or "").strip()
-                    for item in resolved_bundle.items
+                    for item in selected_items
                     for style in ((item.metadata.get("generation") or {}).get("styles") or [])
                     if str(style.get("negative_prompt") or "").strip()
                 ), "")
@@ -1629,12 +1676,11 @@ class Application:
                 preset_negative = ""
         negative_probe = task_negative or preset_negative
         capability_config = copy.deepcopy(config)
-        if self.bundle:
+        if selected_bundle:
             try:
-                resolved_bundle = self.resolve_bundle_presets()
                 first_generation = next((
                     item.metadata.get("generation")
-                    for item in resolved_bundle.items
+                    for item in selected_items
                     if isinstance(item.metadata, dict) and isinstance(item.metadata.get("generation"), dict)
                 ), None)
                 if isinstance(first_generation, dict):
@@ -1653,7 +1699,7 @@ class Application:
             capability_config.negative_prompt = negative_probe
         source_image = next((
             str(item.metadata.get("source_image") or "")
-            for item in (self.bundle.items if self.bundle else [])
+            for item in selected_items
             if isinstance(item.metadata, dict) and item.metadata.get("source_image")
         ), "")
         report = adapter.capabilities(capability_config, source_image=source_image)
@@ -1824,6 +1870,9 @@ class Handler(BaseHTTPRequestHandler):
                     "status": APP.runner.status(),
                     "bundle": APP.bundle.to_dict() if APP.bundle else None,
                     "review": APP.results_payload(),
+                    # 未跑完的批次（含上次进程中断留下的）在这里露出来，页面据此显示
+                    # 「续跑」；正在跑的批次不属于可续跑，runner 内部已经排除。
+                    "resumable": APP.runner.resumable(),
                     "lease": APP.lease_status(query.get("client_id", [""])[0]),
                     "activated_at": APP.hub.activated_at,
                     "instance_id": APP.instance_id,
@@ -2007,8 +2056,9 @@ class Handler(BaseHTTPRequestHandler):
                 config = APP.prepare_config(BatchConfig.from_dict(value))
                 if not config.output_dir:
                     config.output_dir = str(APP.output_root)
+                run_bundle = APP.select_run_bundle(str(value.get("task_range") or ""))
                 try:
-                    report = APP.validate_start(config)
+                    report = APP.validate_start(config, run_bundle)
                 except ValueError as exc:
                     self._json({
                         "ok": False,
@@ -2018,7 +2068,7 @@ class Handler(BaseHTTPRequestHandler):
                     }, 400)
                     return
                 pathlib.Path(config.output_dir).mkdir(parents=True, exist_ok=True)
-                state = APP.runner.start(APP.resolve_bundle_presets(), config)
+                state = APP.runner.start(run_bundle, config)
                 self._json({"ok": True, "status": state, "preflight": report})
             elif self.path == "/api/preflight":
                 try:
@@ -2027,7 +2077,8 @@ class Handler(BaseHTTPRequestHandler):
                     # is blocked. Raised outside, its failure reached the page
                     # without the structured context -- no problems, no reason.
                     config = APP.prepare_config(BatchConfig.from_dict(value))
-                    report = APP.validate_start(config)
+                    run_bundle = APP.select_run_bundle(str(value.get("task_range") or ""))
+                    report = APP.validate_start(config, run_bundle)
                 except ValueError as exc:
                     # A blocked preflight must still carry the structured context:
                     # the blocking problems with their candidate lists, the
@@ -2088,6 +2139,18 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"ok": True, "status": APP.runner.resume()})
             elif self.path == "/api/cancel":
                 self._json({"ok": True, "status": APP.runner.cancel()})
+            elif self.path == "/api/segment/next":
+                # 没有等待中的分段时 next_segment 会抛错，POST 分发器把错误消息
+                # 原样回给页面，所以这里不需要再包一层。
+                self._json({"ok": True, "status": APP.runner.next_segment()})
+            elif self.path == "/api/segment/resume":
+                state = APP.resume_interrupted(str(value.get("run_id") or ""))
+                self._json({
+                    "ok": True,
+                    "status": state,
+                    # 续跑后页面要能渲染任务清单，所以把恢复出来的合集一并回传。
+                    "bundle": APP.bundle.to_dict() if APP.bundle else None,
+                })
             elif self.path == "/api/review/confirm":
                 indexes = [int(item) for item in (value.get("indexes") or [])]
                 if not indexes and value.get("index") is not None:
@@ -2493,7 +2556,7 @@ def main() -> None:
         APP = Application()
         if args.comfy_url:
             APP.comfy_url = args.comfy_url
-            APP.runner = BatchRunner(APP.comfy_root, ComfyClient(args.comfy_url))
+            APP.runner = APP._new_runner()
             APP.image_interrogator = ImageInterrogator(APP.runner.client)
     if args.data_dir:
         print(f"数据目录：{APP.settings_path.parent}")

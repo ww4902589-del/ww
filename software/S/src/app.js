@@ -61,6 +61,9 @@ let libraryState={
 ;
 let railStatus=null;
 let activeIndex=-1;
+// 队列还活着的状态，和后端 core 里的 ACTIVE_STATUSES 一一对应。分段落在这个
+// 集合里：它没跑完，只是停在下个分段边界等人点「下一段」。
+const ACTIVE_RUN_STATUSES=['starting','running','paused','segment'];
 let batchOverrides={
 }
 ;
@@ -508,6 +511,67 @@ async function control(action,button){
   finally{
     setBusy(button,false)}
 }
+async function nextSegment(button){
+  setBusy(button,true,'正在继续');
+  try{
+    await api('/api/segment/next',{method:'POST',body:'{}'});
+    notify('已继续下一段');
+    poll(true)}
+  catch(e){
+    notify(e.message,'error')}
+  finally{
+    setBusy(button,false)}
+}
+async function resumeInterrupted(button){
+  if(!confirm('把上次没跑完的批次接着跑？提示词、工作流和参数都用当时那一份。'))return;
+  setBusy(button,true,'正在续跑');
+  try{
+    const v=await api('/api/segment/resume',{method:'POST',body:'{}'});
+    // 后端把当时的提示词合集一并还回来。不接住它，续跑之后看板就空了，
+    // 用户也没法核对「接着跑的到底是不是那批提示词」。
+    if(v.bundle){
+      bundle=v.bundle;
+      bundle.items.forEach(x=>x.count=x.count||1);
+      if(!selectedPromptIndexes)selectedPromptIndexes=new Set();
+      renderBundle()}
+    notify('已从上次中断的地方接着跑');
+    poll(true)}
+  catch(e){
+    notify(e.message,'error')}
+  finally{
+    setBusy(button,false)}
+}
+function renderResumeBanner(entry){
+  const banner=$('resumeBanner');
+  if(!banner)return;
+  if(!entry){
+    banner.hidden=true;
+    banner.innerHTML='';
+    return}
+  // 正在跑的批次不会出现在这里：后端在队列活着时就不把它算作「可续跑」，
+  // 所以这条提示只会在真的停住时露出来——停在分段边界，或者上次没跑完就关了软件。
+  // 两种情况都要说清楚差多少条：只说「没跑完」，用户还得自己数。
+  const total=Number(entry.total||0),done=Number(entry.completed||0),left=Math.max(0,total-done);
+  const next=String(Number(entry.next_index||1)).padStart(3,'0');
+  const why=entry.status==='segment'?'停在分段边界，等你确认':'上次没有跑完';
+  const when=entry.updated_at?` · 最后一次进度 ${
+  esc(entry.updated_at)}
+  `:'';
+  banner.hidden=false;
+  banner.innerHTML=`<b>有一个批次${
+  why}
+  ：</b>共 ${
+  total}
+  条，已完成 ${
+  done}
+  条，还有 ${
+  left}
+  条没跑（从第 ${
+  next}
+  条接着跑）${
+  when}
+  <button class="secondary" onclick="resumeInterrupted(this)">接着跑</button>`;
+}
 function currentWorkflow(){
   return inventory.workflows.find(x=>x.value===$('workflow').value)||{
   }
@@ -688,6 +752,9 @@ function batchConfig(){
     seed:$('seedMode').value==='fixed'?($('seedValue').value?Number($('seedValue').value):null):null,
     single_subject_guard:$('singleSubject').checked,
     max_retries:Number($('maxRetries').value),
+    task_range:$('taskRange').value.trim(),
+    // 0 或不填 = 不分段，整批连续跑。后端会把它夹到 0..1000。
+    segment_size:Number($('segmentSize').value)||0,
     resource_overrides:batchOverrides,
     llm:{
       enabled:$('llmEnabled').checked,
@@ -1241,6 +1308,7 @@ function connectEvents(){
       return}
     if(payload.status){
       applyStatus(payload.status);lastRunStatus=payload.status.status}
+    renderResumeBanner(payload.resumable);
     if(payload.bundle&&(!bundle||(typeof isReadOnly==='function'&&isReadOnly()))){
       bundle=payload.bundle;bundle.items.forEach(x=>x.count=x.count||1);renderBundle()
     }
@@ -1284,14 +1352,21 @@ function applyStatus(s){
     const el=$(k);if(el)el.textContent=s[k]||0}
   );
   $('progress').style.width=(s.total?Math.round(100*(s.completed+s.errors)/s.total):0)+'%';
+  const finished=(s.completed||0)+(s.errors||0);
   $('runText').textContent=`状态：${
   s.status}
   ${
   s.current?' · 当前：'+s.current:''}
   ${
+  s.status==='segment'?' · 已停在分段边界（已完成 '+finished+'/'+s.total+'），点「下一段」继续':''}
+  ${
   s.report?' · 报告：'+s.report:''}
   `;
-  $('start').disabled=!comfyConnected||isReadOnly()||['running','paused','starting'].includes(s.status);
+  $('start').disabled=!comfyConnected||isReadOnly()||ACTIVE_RUN_STATUSES.includes(s.status);
+  // 「下一段」只在真的停住等人时才可点。正在提交的那几秒不能翻回来——
+  // 否则 650ms 一次的轮询会在请求还没回来时把按钮重新点亮。
+  const nextBtn=$('nextSegmentButton');
+  if(nextBtn&&!nextBtn.classList.contains('busy'))nextBtn.disabled=isReadOnly()||s.status!=='segment';
   railStatus=s;
   // 每条状态路径都更新真相栏，所以推送与轮询不会显示不同的值。
   if(typeof renderRail==='function')renderRail();
@@ -1507,15 +1582,18 @@ async function poll(immediate=false){
       renderBundle()
     }
     applyStatus(s);
+    renderResumeBanner(v.resumable);
     if(typeof applyLease==='function')applyLease(v.lease||{
     }
     );
     renderReview(v.review);
-    if(lastRunStatus&&lastRunStatus!==s.status&&['completed','completed_with_errors','cancelled','aborted'].includes(s.status))notify(`运行状态：${
-    s.status}
-    `,s.errors?'error':'success');
+    if(lastRunStatus&&lastRunStatus!==s.status){
+      if(['completed','completed_with_errors','cancelled','aborted'].includes(s.status))notify(`运行状态：${
+      s.status}
+      `,s.errors?'error':'success');
+      else if(s.status==='segment')notify('已到分段边界，确认没问题就点「下一段」接着跑','success')}
     lastRunStatus=s.status;
-    pollTimer=setTimeout(()=>poll(),['running','paused','starting'].includes(s.status)?650:2200)}
+    pollTimer=setTimeout(()=>poll(),ACTIVE_RUN_STATUSES.includes(s.status)?650:2200)}
   catch(e){
     pollTimer=setTimeout(()=>poll(),2500)}
 }

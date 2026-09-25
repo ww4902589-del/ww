@@ -336,7 +336,10 @@
         <div><h2>成图预览与确认</h2><p>逐张查看、通过、打回重做或记录问题；确认状态在重启后保留。</p></div>
       </div>
       <div class="review-toolbar">
-        <span class="help">审图快捷键：<b>J</b>/<b>K</b> 上下、<b>Y</b> 通过、<b>N</b> 打回、<b>Enter</b> 看原图</span>
+        <span class="help">审图快捷键：<b>G</b> 输入编号、<b>J</b>/<b>K</b> 上下、<b>Y</b> 通过、<b>N</b> 打回、<b>Enter</b> 看原图</span>
+        <label class="review-jump">跳转编号<input id="reviewJumpIndex" type="number" min="1" step="1" inputmode="numeric" onkeydown="reviewJumpKey(event)" aria-describedby="reviewJumpStatus"></label>
+        <button class="secondary" id="reviewJumpButton" onclick="jumpToReview()">定位</button>
+        <span id="reviewJumpStatus" class="help" role="status" aria-live="polite"></span>
         <button class="secondary" id="confirmAllButton" onclick="confirmAllPending(this)">全部通过</button>
         <button class="secondary" id="selectAllPendingButton" onclick="selectAllPending()">全选待审</button>
         <button class="secondary" id="redoSelectedButton" onclick="openRejectBatchDialog()">打回选中</button>

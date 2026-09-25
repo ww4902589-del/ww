@@ -1714,8 +1714,13 @@ function renderReview(v){
       dupGroups.add(row.index)}
     else seen.set(key,row.index);
   }
+  if(!s.some(x=>x.index===activeIndex))activeIndex=-1;
+  const focusedCard=document.activeElement;
+  const restoreFocus=currentStep===4&&focusedCard?.classList?.contains('review-card')?focusedCard.id:'';
   $('reviewBoard').innerHTML=s.map(cardHtml).join('');
+  if(restoreFocus)$(restoreFocus)?.focus({preventScroll:true});
   syncReviewPicks();
+  updateReviewJumpStatus();
   const pendingCount=s.filter(x=>x.copied_to&&(x.review_status||'待确认')==='待确认').length;
   const confirmBtn=$('confirmAllButton');
   if(confirmBtn)confirmBtn.textContent=pendingCount?`全部通过（${pendingCount}）`:'全部通过';
@@ -1777,7 +1782,7 @@ function cardHtml(x){
     ovPrompt?`<span class="ov-prompt">${esc(ovPrompt)}</span>`:''
   ].filter(Boolean).join('');
   const overlay=`<div class="thumb-overlay" aria-hidden="true"><span class="ov-index">#${x.index}</span>${ovRows}</div>`;
-  return `<article class="review-card ${x.index===activeIndex?'is-active':''}" id="card-${x.index}" onclick="setActive(${x.index})">
+  return `<article class="review-card ${x.index===activeIndex?'is-active':''}" id="card-${x.index}" tabindex="-1" aria-label="第 ${x.index} 张 ${esc(x.title||'')}" onclick="setActive(${x.index})">
   <div class="thumb" onclick="event.stopPropagation();openViewer(${x.index})">
   ${
   x.copied_to?`<img loading="lazy" src="/api/preview?path=${
@@ -1845,9 +1850,47 @@ function issuesHtml(errors){
   </div>`).join('');
 }
 
+function updateReviewJumpStatus(message){
+  const status=$('reviewJumpStatus');
+  if(!status)return;
+  const rows=reviewState.results||[];
+  status.textContent=message!==undefined?message:(activeIndex>=0?`当前第 ${activeIndex} 张`:rows.length?`共 ${rows.length} 张可定位`:'当前没有可定位的结果');
+}
+
 function setActive(index){
   activeIndex=index;
-  document.querySelectorAll('.review-card').forEach(el=>el.classList.toggle('is-active',el.id==='card-'+index))}
+  document.querySelectorAll('.review-card').forEach(el=>el.classList.toggle('is-active',el.id==='card-'+index));
+  updateReviewJumpStatus();
+}
+
+function focusReview(index){
+  const row=(reviewState.results||[]).find(x=>x.index===index);
+  const card=row?$('card-'+index):null;
+  if(!card)return false;
+  setActive(index);
+  card.scrollIntoView({behavior:'smooth',block:'center'});
+  card.focus({preventScroll:true});
+  return true;
+}
+
+function jumpToReview(){
+  const input=$('reviewJumpIndex');
+  const value=String(input?.value||'').trim();
+  if(!/^[1-9]\d*$/.test(value)||!Number.isSafeInteger(Number(value))){
+    updateReviewJumpStatus('请输入有效的正整数编号');
+    return false;
+  }
+  const index=Number(value);
+  if(!focusReview(index)){
+    updateReviewJumpStatus(`当前批次没有第 ${index} 张`);
+    return false;
+  }
+  return true;
+}
+
+function reviewJumpKey(event){
+  if(event.key==='Enter'){event.preventDefault();jumpToReview()}
+}
 
 async function reviewConfirm(index,status,note){
   try{
@@ -2459,17 +2502,33 @@ function closeDrawer(){
   $('drawer').hidden=true}
 
 document.addEventListener('keydown',e=>{
-  if(e.target.matches('input,textarea,select'))return;
-  if(document.getElementById('viewer')?.open)return;
-  if(!document.getElementById('viewer').open&&$('drawer')&&!$('drawer').hidden&&e.key==='Escape'){closeDrawer();return}
-  const rows=(reviewState.results||[]).filter(x=>x.copied_to);
+  if(e.defaultPrevented||e.ctrlKey||e.altKey||e.metaKey||e.shiftKey)return;
+  if(e.target.closest('input,textarea,select,[contenteditable]'))return;
+  if(e.key==='Escape'&&$('drawer')&&!$('drawer').hidden){closeDrawer();return;}
+  if(e.target.closest('button,a,summary'))return;
+  if(currentStep!==4||document.querySelector('dialog[open]'))return;
+  if($('drawer')&&!$('drawer').hidden)return;
+  const rows=reviewState.results||[];
   if(!rows.length)return;
+  const key=e.key.toLowerCase();
+  if(key==='g'){
+    e.preventDefault();
+    $('reviewJumpIndex').focus();
+    $('reviewJumpIndex').select();
+    return;
+  }
   const at=rows.findIndex(x=>x.index===activeIndex);
-  if(e.key==='j'||e.key==='J'){const next=rows[Math.min(rows.length-1,at+1)];setActive(next.index);document.getElementById('card-'+next.index)?.scrollIntoView({block:'nearest'})}
-  else if(e.key==='k'||e.key==='K'){const prev=rows[Math.max(0,at-1)];setActive(prev.index);document.getElementById('card-'+prev.index)?.scrollIntoView({block:'nearest'})}
-  else if((e.key==='y'||e.key==='Y')&&at>=0){reviewConfirm(rows[at].index,'已通过')}
-  else if((e.key==='n'||e.key==='N')&&at>=0){reviewReject(rows[at].index)}
-  else if(e.key==='Enter'&&at>=0){openViewer(rows[at].index)}
+  if(key==='j'||key==='k'){
+    e.preventDefault();
+    const position=key==='j'?Math.min(rows.length-1,at+1):at<0?rows.length-1:Math.max(0,at-1);
+    focusReview(rows[position].index);
+    return;
+  }
+  const active=rows[at];
+  if(!active?.copied_to)return;
+  if(key==='y'){e.preventDefault();reviewConfirm(active.index,'已通过')}
+  else if(key==='n'){e.preventDefault();reviewReject(active.index)}
+  else if(e.key==='Enter'){e.preventDefault();openViewer(active.index)}
 });
 
 /* ---- 阶段 2 的工作流事实 + 常驻真相栏 -----------------------------------

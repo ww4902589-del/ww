@@ -2732,6 +2732,25 @@ details[open] > .compact-module-summary .compact-toggle::after {
   margin-left:6px
 }
 
+.review-jump {
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  white-space:nowrap
+}
+.review-jump input {
+  width:74px;
+  min-width:0
+}
+.review-card.is-active,
+.review-card:focus-visible {
+  outline:3px solid #c95a68;
+  outline-offset:2px
+}
+.review-card:focus .thumb-overlay {
+  opacity:1
+}
+
 /* ---- V2.21 作品库：跨批次检索、标签与收藏 ------------------------------
 布局要点：筛选条用自适应栅格，卡片是「缩略图 + 信息 + 标签行 + 操作」四段，
 窄屏自动折成单列。已移除的记录只降低对比度、不隐藏，因为"看不见但还在"

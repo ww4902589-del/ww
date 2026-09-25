@@ -15,6 +15,16 @@ const keyboard = source.slice(
 assert.ok(functions.startsWith('function updateReviewJumpStatus('));
 assert.ok(keyboard.startsWith("document.addEventListener('keydown',e=>{"));
 
+// The evaluated region calls helpers that live elsewhere in app.js, and one of them
+// (the seed read-back helper) arrived with a later feature branch. Slice the real
+// definition in rather than stubbing it, so this test keeps exercising app.js itself;
+// if the helper is renamed or removed the slice comes back empty and the assert fires.
+const seedHelper = source.slice(
+  source.indexOf('function seedKeyOf('),
+  source.indexOf('\nfunction ', source.indexOf('function seedKeyOf(') + 1)
+);
+assert.ok(seedHelper.startsWith('function seedKeyOf('), 'renderReview 依赖的种子键函数必须仍能从 app.js 切出');
+
 const calls = [];
 let keyHandler;
 const cards = new Map([2, 7, 13].map(index => [index, {
@@ -49,7 +59,7 @@ const context = vm.createContext({
   openViewer: index => calls.push(['viewer', index]),
   closeDrawer: () => {elements.drawer.hidden = true; calls.push(['close-drawer']);},
 });
-vm.runInContext(functions + keyboard, context);
+vm.runInContext(seedHelper + functions + keyboard, context);
 const readActive = () => vm.runInContext('activeIndex', context);
 const key = (name, options = {}) => {
   let prevented = false;
@@ -128,7 +138,9 @@ const redrawContext = vm.createContext({
   cardHtml: row => `<article id="card-${row.index}"></article>`,
   syncReviewPicks: () => {}, updateReviewJumpStatus: () => {},
 });
-vm.runInContext(renderSource, redrawContext);
+// renderReview reads the seed key through a helper defined elsewhere in app.js, so the
+// slice alone is not self-contained. Evaluate the real definition alongside it.
+vm.runInContext(seedHelper + renderSource, redrawContext);
 redrawContext.renderReview({results: [{index: 7, copied_to: 'image.png'}], review: {by_status: {}}});
 assert.ok(calls.some(row => row[0] === 'restored-focus' && row[1] === true));
 const restoredCount = calls.filter(row => row[0] === 'restored-focus').length;

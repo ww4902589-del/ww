@@ -69,8 +69,18 @@ class BodyReadIntegrityTests(unittest.TestCase):
     def test_cli_comfy_override_updates_interrogator_client(self):
         source = (SOURCE_ROOT / "comfybatch_v2_app.py").read_text(encoding="utf-8")
         override = source.split("if args.comfy_url:", 1)[1].split("if args.data_dir:", 1)[0]
-        self.assertIn("APP.runner = BatchRunner", override)
-        self.assertIn("APP.image_interrogator = ImageInterrogator(APP.runner.client)", override)
+        # Only the behaviour is pinned, not the constructor: stage D routes runner
+        # construction through Application._new_runner() so the resumable progress
+        # snapshot store is wired in. What this test must keep proving is that the CLI
+        # override rebuilds the runner *and then* rebuilds the interrogator from that
+        # new runner's client -- otherwise interrogation keeps talking to the address
+        # the user just overrode.
+        runner = re.search(r"APP\.runner = (?:BatchRunner\(|APP\._new_runner\()", override)
+        self.assertIsNotNone(runner, "CLI 覆盖 ComfyUI 地址后必须重建 runner")
+        interrogator = override.find(
+            "APP.image_interrogator = ImageInterrogator(APP.runner.client)")
+        self.assertNotEqual(-1, interrogator, "覆盖地址后必须按新 runner 的客户端重建反推器")
+        self.assertLess(runner.start(), interrogator, "反推器必须建在重建之后的 runner 上")
 
 
 class EveryRouteRespondsTests(unittest.TestCase):

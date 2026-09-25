@@ -1742,7 +1742,8 @@ class Handler(BaseHTTPRequestHandler):
                 # Read the version from one place; a hardcoded copy here drifted
                 # out of step the moment the version was bumped.
                 self._json({"ok": True, "instance_id": APP.instance_id, "app": "ComfyBatch",
-                            "version": APP_VERSION, "is_primary": APP.is_primary})
+                            "version": APP_VERSION, "is_primary": APP.is_primary,
+                            "instance_name": instance_name()})
             elif parsed.path == "/api/lease":
                 query = parse_qs(parsed.query)
                 self._json({"ok": True, "lease": APP.lease_status(query.get("client_id", [""])[0])})
@@ -2288,6 +2289,36 @@ def activate_and_show_existing(existing: dict[str, Any], *, open_browser: bool) 
     return True
 
 
+def show_existing_or_discover(
+    existing: dict[str, Any], host: str, port: int, *, open_browser: bool,
+) -> dict[str, Any]:
+    """Recover a running local instance when its record has gone missing."""
+    if existing and activate_and_show_existing(existing, open_browser=open_browser):
+        return existing
+    if host not in ("127.0.0.1", "localhost"):
+        return {}
+    opener = build_opener(ProxyHandler({}))
+    # The primary may have moved from the preferred port when that port was busy.
+    # Mirror choose_launch_port's 21-port range; keep a short timeout per probe.
+    for candidate_port in range(port, port + 21):
+        url = f"http://{host}:{candidate_port}/"
+        try:
+            with opener.open(url + "api/ping", timeout=0.25) as response:
+                info = json.loads(response.read().decode("utf-8"))
+            if not isinstance(info, dict) or not info.get("ok") or info.get("app") != "ComfyBatch":
+                continue
+            if info.get("is_primary") is not True or not info.get("instance_id"):
+                continue
+            if info.get("instance_name") != instance_name():
+                continue
+            discovered = {"url": url, "instance_id": str(info["instance_id"])}
+            if activate_and_show_existing(discovered, open_browser=open_browser):
+                return discovered
+        except (OSError, ValueError, TypeError):
+            continue
+    return {}
+
+
 def main() -> None:
     global APP
     parser = argparse.ArgumentParser(description="ComfyBatch V2")
@@ -2339,8 +2370,10 @@ def main() -> None:
         if args.force_new_instance:
             print("已按 --force-new-instance 跳过单实例检查。")
     else:
-        existing = read_instance_file()
-        if existing and activate_and_show_existing(existing, open_browser=not args.no_browser):
+        existing = show_existing_or_discover(
+            read_instance_file(), args.host, args.port, open_browser=not args.no_browser,
+        )
+        if existing:
             print(f"ComfyBatch 已在运行，已切换到已有窗口：{existing.get('url', '')}")
             return
         # Never leave the user with no way forward: explain both exits.

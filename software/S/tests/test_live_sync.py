@@ -17,7 +17,7 @@ import time
 import unittest
 import urllib.error
 import urllib.request
-from http.server import ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from unittest import mock
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
@@ -200,6 +200,7 @@ class LiveSyncRouteTests(unittest.TestCase):
         self.assertTrue(body["ok"])
         self.assertEqual(app_module.APP.instance_id, body["instance_id"])
         self.assertEqual("ComfyBatch", body["app"])
+        self.assertEqual(app_module.instance_name(), body["instance_name"])
 
     def test_lease_routes_arbitrate_two_pages(self):
         self.request("/api/lease/release", {"client_id": "page-a"})
@@ -401,19 +402,25 @@ class PresetSyncTests(unittest.TestCase):
 
 class InstanceFileTests(unittest.TestCase):
     def setUp(self):
+        import os
         import tempfile
 
         self._temp = tempfile.TemporaryDirectory()
-        self._previous = __import__("os").environ.get("COMFYBATCH_DATA_DIR")
-        __import__("os").environ["COMFYBATCH_DATA_DIR"] = self._temp.name
+        self._previous = {key: os.environ.get(key) for key in (
+            "COMFYBATCH_DATA_DIR", "LOCALAPPDATA", "COMFYBATCH_INSTANCE_NAME",
+        )}
+        os.environ["COMFYBATCH_DATA_DIR"] = self._temp.name
+        os.environ["LOCALAPPDATA"] = self._temp.name
+        os.environ.pop("COMFYBATCH_INSTANCE_NAME", None)
 
     def tearDown(self):
         import os
 
-        if self._previous is None:
-            os.environ.pop("COMFYBATCH_DATA_DIR", None)
-        else:
-            os.environ["COMFYBATCH_DATA_DIR"] = self._previous
+        for key, value in self._previous.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
         self._temp.cleanup()
 
     def test_round_trip(self):
@@ -423,6 +430,12 @@ class InstanceFileTests(unittest.TestCase):
         self.assertEqual("abc", payload["instance_id"])
         app_module.clear_instance_file()
         self.assertEqual({}, app_module.read_instance_file())
+
+    def test_instance_record_lives_inside_the_test_directory(self):
+        self.assertEqual(
+            pathlib.Path(self._temp.name) / "ComfyBatch-S" / "instance.json",
+            app_module.instance_record_path(),
+        )
 
     def test_activate_refuses_a_stale_or_foreign_file(self):
         """A crashed process's leftover file must not make us poke a stranger."""
@@ -449,6 +462,75 @@ class InstanceFileTests(unittest.TestCase):
         self.assertTrue(app_module.activate_and_show_existing(existing, open_browser=False))
 
         open_browser.assert_not_called()
+
+    def test_missing_record_discovers_running_local_service_and_opens_page(self):
+        activated = []
+
+        class LocalComfyBatch(BaseHTTPRequestHandler):
+            def log_message(self, *_args):
+                pass
+
+            def do_GET(self):
+                payload = {"ok": True, "app": "ComfyBatch", "instance_id": "already-running",
+                           "instance_name": "default", "is_primary": True}
+                body = json.dumps(payload).encode()
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def do_POST(self):
+                activated.append(self.path)
+                body = b'{"ok":true}'
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), LocalComfyBatch)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            with mock.patch.object(app_module.webbrowser, "open") as open_browser:
+                found = app_module.show_existing_or_discover(
+                    {}, "127.0.0.1", server.server_address[1], open_browser=True,
+                )
+            self.assertEqual("already-running", found["instance_id"])
+            self.assertEqual(["/api/activate"], activated)
+            open_browser.assert_called_once_with(f"http://127.0.0.1:{server.server_address[1]}/")
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
+
+    @mock.patch.object(app_module.webbrowser, "open")
+    def test_missing_record_does_not_open_a_foreign_or_remote_service(self, open_browser):
+        with mock.patch.object(app_module, "activate_and_show_existing") as activate:
+            self.assertEqual({}, app_module.show_existing_or_discover(
+                {}, "0.0.0.0", 8790, open_browser=True,
+            ))
+            activate.assert_not_called()
+        open_browser.assert_not_called()
+
+    def test_missing_record_finds_primary_on_fallback_port(self):
+        opener = mock.Mock()
+
+        def answer(url, *, timeout):
+            self.assertEqual(0.25, timeout)
+            response = mock.MagicMock()
+            payload = {"ok": True, "app": "ComfyBatch", "instance_id": "fallback",
+                       "instance_name": "default", "is_primary": True}
+            if url == "http://127.0.0.1:9000/api/ping":
+                payload["instance_name"] = "devtest"
+            response.__enter__.return_value.read.return_value = json.dumps(payload).encode()
+            return response
+
+        opener.open.side_effect = answer
+        with mock.patch.object(app_module, "build_opener", return_value=opener), \
+                mock.patch.object(app_module, "activate_and_show_existing", return_value=True) as activate:
+            found = app_module.show_existing_or_discover({}, "127.0.0.1", 9000, open_browser=True)
+        self.assertEqual("http://127.0.0.1:9001/", found["url"])
+        activate.assert_called_once_with(found, open_browser=True)
 
 
 class InstanceNamespaceTests(unittest.TestCase):

@@ -33,6 +33,7 @@
         <dt>工作流</dt><dd id="railWorkflow">未选择</dd>
         <dt>指纹</dt><dd id="railFingerprint">未读取</dd>
         <dt>分支</dt><dd id="railBranch">未选择</dd>
+        <dt>用途</dt><dd id="railPurpose">未指定</dd>
         <dt>采样</dt><dd id="railSamplers">尚未检查</dd>
         <dt>输入输出</dt><dd id="railIO">尚未检查</dd>
         <dt>模型</dt><dd id="railModel">未选择</dd>
@@ -150,6 +151,7 @@
         <div class="control-grid">
           <label>工作流<select id="workflow" onchange="renderWorkflowVariants()"></select></label>
           <label>执行分支<select id="workflowVariant" onchange="renderModels();renderConfigFeedback()"></select></label>
+          <label>使用目的<select id="purposeSelect" onchange="renderPurposeHint();renderConfigFeedback()"></select></label>
           <label class="model-control">生成模型<select id="model" onchange="renderLoraOptions();renderConfigFeedback()"></select></label>
           <label>风格应用
             <select id="styleApplication" onchange="renderConfigFeedback()">
@@ -165,6 +167,7 @@
           <label id="seedValueWrap" hidden>种子值<input id="seedValue" type="number" min="0" max="9007199254740991" placeholder="留空则自动用最近一次的种子"></label>
         </div>
         <div id="seedHint" class="help" hidden>固定种子下整批共用该种子（多采样器自动 +1）；提示词相同的任务会产出相同图片。</div>
+        <div id="purposeHint" class="help" hidden></div>
         <div class="preset-command-bar">
           <label>预设名称<input id="presetName" placeholder="输入名称后可另存"></label>
           <button class="secondary" onclick="savePreset(true)">另存新预设</button>

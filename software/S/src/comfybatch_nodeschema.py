@@ -1173,6 +1173,353 @@ def seed_plan(
 
 
 # --------------------------------------------------------------------------- #
+# 使用目的：这个工作流能不能干这件事？（第五层预检）
+# --------------------------------------------------------------------------- #
+
+#: The six purposes, declared once. ``summary`` is what the page shows beside the
+#: name, so choosing one tells the user what it will assert. They are divided by
+#: *generation stage* rather than by subject matter, because every stage of a
+#: pipeline is something the compiled graph can be checked for -- which is the
+#: only reason a preflight can say "no" with a reason instead of silently
+#: producing the wrong pictures.
+PURPOSES: tuple[dict[str, str], ...] = (
+    {"id": "txt2img", "name": "文生图", "summary": "从提示词直接生成图片"},
+    {"id": "img2img", "name": "图生图／参考图", "summary": "用一张输入图引导生成"},
+    {"id": "inpaint", "name": "局部重绘", "summary": "只在遮罩区域内改动"},
+    {"id": "refine", "name": "高清重绘（二采）", "summary": "在一采结果上再采一次"},
+    {"id": "upscale", "name": "放大超分", "summary": "把结果放大到更高分辨率再保存"},
+    {"id": "variants", "name": "批量变体", "summary": "同一提示词产出多张不同种子"},
+)
+
+PURPOSE_IDS: tuple[str, ...] = tuple(item["id"] for item in PURPOSES)
+
+PURPOSE_BY_ID: dict[str, dict[str, str]] = {item["id"]: item for item in PURPOSES}
+
+#: Node classes that write the finished picture out.
+SAVER_TYPES = frozenset({
+    "SaveImage", "PreviewImage", "SaveImageWithMetadata", "SaveImageWebsocket",
+})
+
+#: A node is treated as a sampler when it consumes a latent. Reading that off the
+#: node's own inputs beats listing class names: the item is stable across
+#: ComfyUI versions and across the hundred-odd sampler wrappers in this install,
+#: and it can never confuse a sampler with an upscaler (verified against the live
+#: ``object_info``: no upscaler declares ``latent_image``).
+SAMPLER_LATENT_INPUT = "latent_image"
+
+
+def _class_names(graph: dict[str, Any]) -> dict[str, str]:
+    return {
+        str(node_id): str((node or {}).get("class_type") or "")
+        for node_id, node in (graph or {}).items()
+    }
+
+
+def _node_inputs(graph: dict[str, Any], node_id: str) -> dict[str, Any]:
+    node = graph.get(str(node_id))
+    inputs = (node or {}).get("inputs") if isinstance(node, dict) else None
+    return inputs if isinstance(inputs, dict) else {}
+
+
+def _input_source(graph: dict[str, Any], node_id: str, name: str) -> str:
+    """The node feeding ``name`` on ``node_id``, or ``""`` for a literal value."""
+    value = _node_inputs(graph, node_id).get(name)
+    if isinstance(value, (list, tuple)) and len(value) == 2:
+        return str(value[0])
+    return ""
+
+
+def _upstream(graph: dict[str, Any], start: str, *, limit: int = 4000) -> set[str]:
+    """Every node id reachable going upstream from ``start``, excluding it."""
+    seen: set[str] = set()
+    stack = [str(start)] if str(start) in graph else []
+    while stack and len(seen) < limit:
+        node_id = stack.pop()
+        if node_id in seen:
+            continue
+        seen.add(node_id)
+        for value in _node_inputs(graph, node_id).values():
+            if isinstance(value, (list, tuple)) and len(value) == 2:
+                stack.append(str(value[0]))
+    seen.discard(str(start))
+    return seen
+
+
+def _is_image_loader(class_type: str) -> bool:
+    name = class_type.strip().lower()
+    return "loadimage" in name or "loadimages" in name or "loadimagepath" in name
+
+
+def _is_latent_encoder(class_type: str) -> bool:
+    return "vaeencode" in class_type.strip().lower()
+
+
+def _is_empty_latent(class_type: str) -> bool:
+    # ``EmptyLatentImage``, ``EmptySD3LatentImage``, ``EmptyChromaRadianceLatentImage``,
+    # ``Empty Latent (Image Saver)`` -- all from-scratch latents start with "Empty".
+    return class_type.strip().lower().startswith("empty")
+
+
+def _is_latent_upscaler(class_type: str) -> bool:
+    name = class_type.strip().lower()
+    if "latent" not in name:
+        return False
+    return "upscale" in name or ("scale" in name and "down" not in name)
+
+
+def _is_image_upscaler(class_type: str) -> bool:
+    """A node that enlarges the picture itself, in image space.
+
+    Two exclusions, both measured against this install's live ``object_info``
+    rather than guessed:
+
+    * ``latent`` -- latent-space scaling is the latent half of 高清重绘, and this
+      project's own docs keep 二采 and SeedVR 放大 apart.
+    * a plain ``scale`` without ``upscale`` -- matching on ``scale`` alone also
+      matches ``ImageScale``, ``ImageScaleBy``, ``ImageScaleToTotalPixels``,
+      ``RescaleCFG`` and ``NumberScaler``. Those resize or renumerate; counting
+      one as an upscaler would let 放大超分 through and hand back a resized
+      picture, which is the exact "reported success, wrong picture" failure this
+      layer exists to stop. Only names that say *upscale* (or SeedVR) count, and a
+      ``loader`` never does: ``UpscaleModelLoader`` contains "upscale" but only
+      names a file.
+    """
+    name = class_type.strip().lower()
+    if "loader" in name or "latent" in name:
+        return False
+    return "upscale" in name or "seedvr" in name
+
+
+def _is_inpaint_node(class_type: str) -> bool:
+    name = class_type.strip().lower()
+    return "inpaint" in name or name == "setlatentnoisemask"
+
+
+def purpose_facts(graph: dict[str, Any]) -> dict[str, Any]:
+    """The structural facts the six purposes are judged on.
+
+    Derived entirely from the compiled graph, so the answer describes what would
+    actually be submitted rather than what the workflow file appears to contain.
+    """
+    graph = graph or {}
+    classes = _class_names(graph)
+    samplers = [node_id for node_id, ctype in classes.items()
+                if SAMPLER_LATENT_INPUT in _node_inputs(graph, node_id)]
+    savers = [node_id for node_id, ctype in classes.items() if ctype in SAVER_TYPES]
+    latent_upscalers = [node_id for node_id, ctype in classes.items() if _is_latent_upscaler(ctype)]
+    upscalers = [node_id for node_id, ctype in classes.items() if _is_image_upscaler(ctype)]
+    loaders = [node_id for node_id, ctype in classes.items() if _is_image_loader(ctype)]
+    inpaint_nodes = [node_id for node_id, ctype in classes.items() if _is_inpaint_node(ctype)]
+
+    #: Nodes that can reach a save node, so "produces a picture" is a reachability
+    #: question rather than a guess about which branch is enabled.
+    reaching: set[str] = set()
+    for saver in savers:
+        reaching |= _upstream(graph, saver) | {saver}
+
+    latent_sources: list[str] = []
+    text_to_image: list[str] = []
+    image_branches: list[str] = []
+    inpaint_branches: list[str] = []
+    second_pass: list[str] = []
+    for sampler in samplers:
+        source = _input_source(graph, sampler, SAMPLER_LATENT_INPUT)
+        if not source:
+            continue
+        latent_sources.append(source)
+        closure = _upstream(graph, source) | {source}
+        if any(_is_empty_latent(classes.get(node_id, "")) for node_id in closure):
+            text_to_image.append(sampler)
+        if any(node_id in loaders for node_id in closure) and any(
+            _is_latent_encoder(classes.get(node_id, "")) for node_id in closure
+        ):
+            image_branches.append(sampler)
+        if any(node_id in inpaint_nodes for node_id in closure):
+            inpaint_branches.append(sampler)
+        if any(node_id in samplers for node_id in closure):
+            second_pass.append(sampler)
+
+    #: An upscaler counts only if the picture reaches it from a sampler and then
+    #: reaches a save node: an upscale branch that is not the one being saved is
+    #: not what the user asked for.
+    upscalers_before_save = [
+        node_id for node_id in upscalers
+        if node_id in reaching and set(samplers) & _upstream(graph, node_id)
+    ]
+
+    return {
+        "samplers": sorted(samplers),
+        "savers": sorted(savers),
+        "latent_sources": sorted(latent_sources),
+        "text_to_image": sorted(text_to_image),
+        "image_branches": sorted(image_branches),
+        "inpaint_branches": sorted(inpaint_branches),
+        "second_pass_samplers": sorted(second_pass),
+        "upscalers": sorted(upscalers),
+        "upscalers_before_save": sorted(upscalers_before_save),
+        "latent_upscalers": sorted(latent_upscalers),
+        "image_loaders": sorted(loaders),
+        "inpaint_nodes": sorted(inpaint_nodes),
+        "seed_count": len(graph_seeds(graph)),
+    }
+
+
+def _describe(graph: dict[str, Any], node_id: str) -> str:
+    ctype = _class_names(graph).get(node_id, "")
+    return f"节点 {node_id}" + (f"（{ctype}）" if ctype else "")
+
+
+def _joined(graph: dict[str, Any], node_ids: list[str], *, limit: int = 3) -> str:
+    shown = "、".join(_describe(graph, node_id) for node_id in node_ids[:limit])
+    return shown + ("…" if len(node_ids) > limit else "")
+
+
+def _requirement(key: str, label: str, met: bool, evidence: str = "", hint: str = "") -> dict[str, Any]:
+    return {"key": key, "label": label, "met": bool(met), "evidence": evidence if met else "", "hint": "" if met else hint}
+
+
+def _purpose_requirements(graph: dict[str, Any], purpose: str, facts: dict[str, Any]) -> list[dict[str, Any]]:
+    samplers = facts["samplers"]
+    saves_ok = bool(samplers and facts["savers"])
+    base = _requirement(
+        "sampler_to_save", "至少一个采样器的结果能通到保存节点", saves_ok,
+        f"{_joined(graph, samplers)} → {_joined(graph, facts['savers'])}",
+        "这个工作流没有「采样器 → 保存」的可用链路，无法出图",
+    )
+    if purpose == "txt2img":
+        met = bool(facts["text_to_image"])
+        return [base, _requirement(
+            "empty_latent_branch", "采样器的潜空间来自空潜空间节点，不需要输入图", met,
+            _joined(graph, facts["text_to_image"]) + " 的潜空间来自空潜空间节点",
+            "工作流的潜空间来自输入图而不是空潜空间，请改选「图生图／参考图」或换一个文生图分支",
+        )]
+    if purpose == "img2img":
+        met = bool(facts["image_branches"])
+        return [base, _requirement(
+            "image_branch", "有一张输入图经编码后进入采样器", met,
+            _joined(graph, facts["image_branches"]) + " 的潜空间来自编码后的输入图",
+            "工作流里没有「输入图 → 编码 → 采样器」的链路；请选带 LoadImage 的分支，或换支持图生图的工作流",
+        )]
+    if purpose == "inpaint":
+        met = bool(facts["inpaint_branches"])
+        return [base, _requirement(
+            "masked_branch", "有内补／遮罩节点进入采样器", met,
+            _joined(graph, facts["inpaint_branches"]) + " 的链路里有内补节点",
+            "工作流没有任何内补或遮罩节点，无法只在指定区域内改动",
+        )]
+    if purpose == "refine":
+        met = bool(facts["second_pass_samplers"])
+        return [base, _requirement(
+            "second_pass", "有一个采样器的潜空间来自另一个采样器", met,
+            _joined(graph, facts["second_pass_samplers"]) + " 是二次采样",
+            "工作流只有一个采样器，没有二采／高清重绘阶段",
+        )]
+    if purpose == "upscale":
+        met = bool(facts["upscalers_before_save"])
+        return [base, _requirement(
+            "upscale_branch", "有一条放大链路在采样之后、保存之前", met,
+            "放大链路：" + _joined(graph, facts["upscalers_before_save"]),
+            "保存的图片没有经过放大环节；请在 ComfyUI 里启用带放大器的保存分支，"
+            "或改选支持放大的工作流（本项目的放大模型参数也需要这条链路才有意义）",
+        )]
+    if purpose == "variants":
+        met = facts["seed_count"] > 0
+        return [base, _requirement(
+            "writable_seed", "有可以直接写入的具体种子", met,
+            f"提交图里有 {facts['seed_count']} 处可直接写入的具体种子",
+            "工作流里没有可写入的具体种子，固定不了也换不了，产出多张只会是同一张图",
+        )]
+    return [base]
+
+
+def purpose_catalog() -> list[dict[str, Any]]:
+    """The six purposes, for the page to render as options."""
+    return [dict(item) for item in PURPOSES]
+
+
+def _supported_from(graph: dict[str, Any], facts: dict[str, Any]) -> list[str]:
+    return [
+        purpose for purpose in PURPOSE_IDS
+        if all(item["met"] for item in _purpose_requirements(graph, purpose, facts))
+    ]
+
+
+def supported_purposes(graph: dict[str, Any]) -> list[str]:
+    """Which of the six this graph can actually serve.
+
+    Used to name the alternatives in a blocked preflight, so the message ends
+    with something to do rather than only what went wrong.
+    """
+    return _supported_from(graph, purpose_facts(graph))
+
+
+def purpose_plan(graph: dict[str, Any], purpose: str) -> dict[str, Any]:
+    """Whether ``graph`` can serve ``purpose``, and what is missing if it cannot.
+
+    An empty ``purpose`` asserts nothing and blocks nothing, so a batch that
+    never chose one behaves exactly as it did before this layer existed.
+    """
+    purpose = str(purpose or "")
+    if not purpose:
+        return {
+            "id": "", "name": "未指定", "summary": "",
+            "checked": False, "unknown": False, "ready": True,
+            "requirements": [], "detail": "", "supported": supported_purposes(graph),
+        }
+    entry = PURPOSE_BY_ID.get(purpose)
+    if entry is None:
+        return {
+            "id": purpose, "name": purpose, "summary": "",
+            "checked": True, "unknown": True, "ready": False, "requirements": [],
+            "detail": f"「{purpose}」不是已定义的使用目的，无法按它校验工作流。"
+                      f"可选：{'、'.join(PURPOSE_IDS)}。",
+            "supported": supported_purposes(graph),
+        }
+    facts = purpose_facts(graph)
+    requirements = _purpose_requirements(graph, purpose, facts)
+    unmet = [item for item in requirements if not item["met"]]
+    detail = ""
+    if unmet:
+        detail = (
+            f"使用目的「{entry['name']}」要求：{'；'.join(item['label'] for item in unmet)}。"
+            f"当前工作流不满足：" + "；".join(item["hint"] for item in unmet)
+        )
+    return {
+        "id": purpose, "name": entry["name"], "summary": entry["summary"],
+        "checked": True, "unknown": False, "ready": not unmet,
+        "requirements": requirements, "detail": detail,
+        "supported": _supported_from(graph, facts),
+    }
+
+
+def purpose_problems(plan: dict[str, Any]) -> list[Problem]:
+    """The blocking problems a purpose verdict implies. Empty when it passed."""
+    if not isinstance(plan, dict) or not plan.get("checked") or plan.get("ready"):
+        return []
+    if plan.get("unknown"):
+        return [Problem(
+            category=ErrorCategory.PURPOSE_UNSUPPORTED,
+            title="未知的使用目的",
+            detail=plan.get("detail") or "",
+            fixes=["在页面上从六种使用目的里重新选择一项", "取消使用目的，改为不做用途校验"],
+        )]
+    unmet = [item for item in plan.get("requirements") or [] if not item.get("met")]
+    fixes = [item["hint"] for item in unmet if item.get("hint")]
+    supported = [PURPOSE_BY_ID[item]["name"] for item in (plan.get("supported") or [])]
+    fixes.append(
+        "把使用目的改成这个工作流真正支持的用途（当前支持：" + ("、".join(supported) if supported else "无") + "）"
+    )
+    fixes.append("在 ComfyUI 里补齐缺失的阶段后点击「重新检查」；也可以取消使用目的，改为不做用途校验")
+    return [Problem(
+        category=ErrorCategory.PURPOSE_UNSUPPORTED,
+        title=f"工作流不支持所选用途：{plan.get('name') or ''}",
+        detail=plan.get("detail") or "",
+        fixes=fixes,
+        raw={"purpose": plan.get("id"), "unmet": [item["key"] for item in unmet]},
+    )]
+
+
+# --------------------------------------------------------------------------- #
 # Compiled graph audit (fourth preflight layer)
 # --------------------------------------------------------------------------- #
 
@@ -1225,6 +1572,7 @@ class CompiledGraphAudit:
         sources: dict[str, dict[str, str]] | None = None,
         workflow_fingerprint: str = "",
         branch: str = "",
+        purpose: str = "",
     ) -> dict[str, Any]:
         registry = registry or NodeSchemaRegistry.empty()
         sources = sources or {}
@@ -1334,6 +1682,14 @@ class CompiledGraphAudit:
             entry = by_node.setdefault(trace.node_id, {"class_type": trace.node_type, "inputs": {}})
             entry["inputs"][trace.name] = trace.to_dict()
 
+        # Fifth preflight layer: does this workflow do what the user declared it
+        # is for? Judged on the graph that would be submitted, so the answer is
+        # about reality rather than the workflow file's intent. Appended to the
+        # same problem list as the other layers on purpose: a batch that cannot
+        # serve the chosen purpose must stop, not finish with the wrong pictures.
+        purpose_verdict = purpose_plan(graph, purpose)
+        problems.extend(purpose_problems(purpose_verdict))
+
         return {
             "workflow_fingerprint": workflow_fingerprint,
             "branch": branch,
@@ -1343,6 +1699,7 @@ class CompiledGraphAudit:
             "overrides": overrides,
             "replacements": replacements,
             "injected": injected,
+            "purpose": purpose_verdict,
             "problems": [problem.to_dict() for problem in problems],
             "blocking": [problem.to_dict() for problem in problems if problem.workflow_level],
             "nodes": by_node,

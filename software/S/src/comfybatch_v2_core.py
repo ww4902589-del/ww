@@ -301,6 +301,12 @@ class BatchConfig:
     resource_overrides: dict[str, dict[str, str]] = field(default_factory=dict)
     #: Explicit seed to pin for this batch, when the user asks for one.
     seed: int | None = None
+    #: What this batch is for, one of :data:`comfybatch_nodeschema.PURPOSE_IDS`.
+    #: Empty means "no assertion": preflight checks the workflow as before and
+    #: never refuses it for its purpose. A value that is not a known purpose is
+    #: kept as-is rather than dropped, so a typo is refused instead of quietly
+    #: turning into "no assertion".
+    purpose: str = ""
 
     @classmethod
     def from_dict(cls, value: dict[str, Any]) -> "BatchConfig":
@@ -325,6 +331,9 @@ class BatchConfig:
             trial_first=bool(value.get("trial_first", False)),
             resource_overrides=dict(value.get("resource_overrides") or {}),
             seed=int(value["seed"]) if value.get("seed") not in (None, "") else None,
+            # Kept verbatim: an unrecognised purpose must reach preflight and be
+            # refused there, not be normalised away into "no assertion".
+            purpose=str(value.get("purpose") or "").strip(),
         )
 
 
@@ -1561,6 +1570,7 @@ class Krea2WorkflowAdapter:
             sources=self.last_sources,
             workflow_fingerprint=fingerprint,
             branch=branch,
+            purpose=str(getattr(config, "purpose", "") or ""),
         )
         result["binding_problems"] = [problem.to_dict() for problem in self.last_binding_problems]
         result["param_problems"] = [problem.to_dict() for problem in self.last_param_problems]

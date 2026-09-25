@@ -578,6 +578,7 @@ function renderInventory(){
   renderStyles();
   renderPresetOptions();
   renderImagePresetOptions();
+  renderPurposeOptions();
   renderBundle();
   renderConfigFeedback();
   const output=$('batchOutputDir');
@@ -672,6 +673,8 @@ function batchConfig(){
   return {
     workflow_path:$('workflow').value,
     workflow_variant:$('workflowVariant').value,
+    // 使用目的：预检据此校验工作流能否做这件事。空值＝不做断言。
+    purpose:$('purposeSelect')?$('purposeSelect').value:'',
     style_application:$('styleApplication').value,
     model:$('model').value,
     styles:selectedStyles,
@@ -712,6 +715,97 @@ function updateSeedHint(){
   catch(e){
   }
 }
+// ---- 使用目的：六种管线用途 -------------------------------------------- //
+// 选一个用途等于声明"这批要干什么"，预检据此校验工作流能不能做这件事；不选则
+// 不做任何断言，行为与以前完全一致。用途按管线阶段划分，因为只有阶段能从提交图
+// 里验证——"文生图/图生图/局部重绘/高清重绘/放大超分/批量变体"。
+// 这份清单只是兜底：随 /api/configure 回来的 purposes 才是判定的那份规则，页面
+// 照它渲染，服务端改了口径这里不会各说各话。
+const purposeFallback=[
+  {
+    id:'txt2img',name:'文生图',summary:'从提示词直接生成图片'},
+  {
+    id:'img2img',name:'图生图／参考图',summary:'用一张输入图引导生成'},
+  {
+    id:'inpaint',name:'局部重绘',summary:'只在遮罩区域内改动'},
+  {
+    id:'refine',name:'高清重绘（二采）',summary:'在一采结果上再采一次'},
+  {
+    id:'upscale',name:'放大超分',summary:'把结果放大到更高分辨率再保存'},
+  {
+    id:'variants',name:'批量变体',summary:'同一提示词产出多张不同种子'},
+];
+let purposeOptions=purposeFallback.slice();
+function purposeEntry(id){
+  return purposeOptions.find(x=>x.id===id)||null}
+function renderPurposeOptions(){
+  const select=$('purposeSelect');
+  if(!select)return;
+  const served=(inventory&&Array.isArray(inventory.purposes)?inventory.purposes:[])
+    .filter(x=>x&&x.id)
+    .map(x=>({
+      id:String(x.id),name:String(x.name||x.id),summary:String(x.summary||'')}));
+  if(served.length)purposeOptions=served;
+  const keep=select.value;
+  opts(select,[{
+    id:'',name:'未指定（不做用途校验）',summary:''},...purposeOptions],x=>x.name,x=>x.id);
+  select.value=purposeOptions.some(x=>x.id===keep)?keep:'';
+  renderPurposeHint()}
+// 真相栏与提示条读同一份判定，两处不可能各说各话。
+// 判定是对某一次编译做的，所以它只代表当时那个分支。切了分支但没重新检查时，
+// 旧结论说的是别的分支——这时候显示"待重新检查"，不拿旧结论冒充现在的选择。
+function purposeStaleFor(f){
+  if(!f||!f.checked)return false;
+  const now=($('workflowVariant')&&$('workflowVariant').value)||'';
+  return String(f.branchId||'')!==now}
+function purposeFactText(f){
+  const purpose=(f&&f.purpose)||{
+  }
+  ,chosen=purpose.id||($('purposeSelect')?$('purposeSelect').value:'');
+  if(!chosen)return '未指定';
+  const entry=purposeEntry(chosen),label=entry?entry.name:chosen;
+  if(purposeStaleFor(f))return `${label}（待重新检查）`;
+  if(!f||!f.checked)return `${label}（未检查）`;
+  if(purpose.unknown)return `${label}（未定义）`;
+  if(purpose.ready)return `${label} · 工作流支持`;
+  const unmet=(purpose.requirements||[]).filter(x=>!x.met).map(x=>x.label);
+  return `${label} · 工作流不支持`+(unmet.length?`（缺：${unmet.join('；')}）`:'')}
+function renderPurposeHint(){
+  const box=$('purposeHint');
+  if(!box)return;
+  const select=$('purposeSelect'),chosen=select?select.value:'',entry=purposeEntry(chosen);
+  if(!entry){
+    box.hidden=true;
+    box.textContent='';
+    box.className='help';
+    return}
+  const f=effectiveFacts(),purpose=f.purpose||{
+  }
+  ;
+  const unmet=(purpose.requirements||[]).filter(x=>!x.met).map(x=>x.label);
+  const supported=(purpose.supported||[]).map(x=>{
+    const e=purposeEntry(x);
+    return e?e.name:x});
+  box.hidden=false;
+  if(purposeStaleFor(f)){
+    box.className='help';
+    box.textContent=`使用目的：${entry.name}——当前选的是另一个分支，上次的判定不作数。`
+      +'点「实际检查」重新核对。';
+    return}
+  if(!f.checked||!purpose.id){
+    box.className='help';
+    box.textContent=`使用目的：${entry.name}——${entry.summary}。点「实际检查」核对这个工作流是否支持它。`;
+    return}
+  if(purpose.ready){
+    box.className='help';
+    box.textContent=`使用目的：${entry.name}——工作流支持，预检已按它校验通过。`;
+    return}
+  box.className='help purpose-unsupported';
+  box.textContent=`使用目的：${entry.name}——工作流不支持`
+    +(unmet.length?`：缺 ${unmet.join('；')}`:'')
+    +(supported.length?`。这个工作流支持：${supported.join('、')}`:'')
+    +'。可在 ComfyUI 里补齐缺失阶段后重新检查，或改选支持的用途，也可以改回「未指定」。'}
+
 function latestReusableSeed(){
   const rows=reviewState.results||[];
   let latest=null;
@@ -2325,6 +2419,11 @@ function effectiveFacts() {
     // 分支：优先用用户认得的中文名，同时保留配置真正发送的分支 id。
     branch: variant.name || audit.branch || '',
     branchId: variant.id || audit.branch || '',
+    // 使用目的的判定来自审计（只有它看过编译后的提交图）。尚未审计时为空对象，
+    // rail 与提示条据此显示"（未检查）"，不会把未核对说成通过。
+    purpose: audit.purpose || {
+    }
+    ,
     branchDetail: variant.id ? `${variant.sampler_count || 0} 次采样 · ${variant.upscale_count || 0} 个放大` : '',
     model: (eff.model && eff.model.name) || '',
     base, predicted, scaleNotes,
@@ -2408,6 +2507,7 @@ function renderRail() {
   ? (f.branchId && f.branchId !== f.branch ? `${f.branch}（${f.branchId}）` : f.branch)
   + (f.checked ? '' : '（未检查）')
   : mark(f.selected.branch));
+  setText('railPurpose', purposeFactText(f));
   // B1：采样链路与输入输出这两格能力事实常驻真相栏，任何阶段可见。与合并
   // 面板里的 facts 共用同一个 effectiveFacts()，两边不可能各说各话。
   setText('railSamplers', (f.samplers.length || f.upscales.length)

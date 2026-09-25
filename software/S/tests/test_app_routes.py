@@ -164,6 +164,25 @@ class EveryRouteRespondsTests(unittest.TestCase):
                 if path != "/":
                     self.assertIn("ok", body)
 
+    def test_inventory_carries_the_purpose_catalog(self):
+        """The page renders its 使用目的 options from the inventory.
+
+        A page-side list would drift the moment the judging rules change, and the
+        drift would be invisible: the selector would offer a purpose the server
+        no longer knows, and every batch would be blocked as "unknown purpose".
+        """
+        status, body = self.request("/api/inventory")
+        self.assertEqual(200, status)
+        purposes = (json.loads(body).get("inventory") or {}).get("purposes") or []
+        self.assertEqual(
+            ["txt2img", "img2img", "inpaint", "refine", "upscale", "variants"],
+            [item["id"] for item in purposes],
+        )
+        for item in purposes:
+            with self.subTest(purpose=item["id"]):
+                self.assertTrue(item["name"])
+                self.assertTrue(item["summary"])
+
     def test_unknown_route_is_a_clean_404(self):
         status, body = self.request("/api/does-not-exist")
         self.assertEqual(404, status)

@@ -35,7 +35,9 @@ from comfybatch_library import (
     LibraryUnavailable,
     int_or as library_int,
 )
-from comfybatch_nodeschema import NodeSchemaRegistry, active_registry, set_active_registry, structural_fingerprint
+from comfybatch_nodeschema import (
+    NodeSchemaRegistry, active_registry, purpose_catalog, set_active_registry, structural_fingerprint,
+)
 from comfybatch_hub import EditLease, InstanceLock, SSE_HEARTBEAT_SECONDS, StateHub
 from comfybatch_params import PARAMS, registry_payload, resolve as resolve_params
 from comfybatch_v2_core import (
@@ -1458,6 +1460,9 @@ class Application:
             "output_root": str(self.output_root),
             "style_lora_presets": list(self.style_lora_presets().values()),
             "image_presets": self.image_presets(),
+            #: The six purposes come from the server so the page cannot drift from
+            #: the rules that actually decide whether a workflow fits.
+            "purposes": purpose_catalog(),
         })
         try:
             info = self.runner.client.json("/system_stats", timeout=4)

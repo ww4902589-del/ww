@@ -361,3 +361,65 @@
 - GitHub 交付：Draft PR #13 已创建并附到本任务；Issue #2 已同步；改动新增行公开内容扫描 0 命中。
 - 独立审查：Standards 轨发现同名目录条目更新时旧建议仍可应用（MEDIUM），Spec 轨另发现混合媒介线索绕过过滤（MEDIUM）。已补目录字段指纹、混合媒介保守过滤与对应行为测试；两轨对 `6f90113` 复审通过，无剩余 HIGH/MEDIUM。
 - 待完成：按集成顺序更新基线并复测、合并、候选 SHA-256、桌面备份部署与 Edge 验收。完成全部闸门前保持 🟡。
+
+
+# 本轮新增：多实例与共享数据（方案 F，独立分支 `handoff/local-s-multi-instance`）
+
+> 用户约定：移除系统级单实例锁，允许多个 S 进程/窗口共用同一数据目录；用户知悉可能存在
+> 覆盖风险。本节的实现按该约定，并按要求先处理实例记录互相覆盖、端口竞争与共享 JSON
+> 临时文件冲突，再做正式部署。
+
+## 本次交付
+
+- **启动不再有进程级锁。** `comfybatch_hub.InstanceLock`（Windows 命名互斥体
+  `ComfyBatch-S-desktop`）与其唯一调用点、`instance_mutex_name()`、`INSTANCE_MUTEX_NAME`
+  均已删除。第二进程不再「发现已有实例就退出」，而是照常启动。
+- **端口靠绑定抢占**（新模块 `comfybatch_instances.bind_server`）：从首选端口起逐个 `bind`，
+  成功即拥有；全部被占则抛 `PortUnavailable`，错误信息里写明试过哪些端口并提示 `--port`。
+  探测与绑定之间的竞态因此不存在。
+- **Windows 上的独占绑定**（`ExclusiveThreadingHTTPServer`，`allow_reuse_address = False`）：
+  `http.server` 默认开 `SO_REUSEADDR`，在 Windows 上第二个进程可以绑上别人正在监听的端口
+  （绑定成功但收不到连接）。不关掉它，「绑定即检查」永远通过。这一条是集成测试
+  「占用端口必须让步给下一个」先失败后修复抓出来的。
+- **实例记录按 instance_id 分开**：`%LOCALAPPDATA%\ComfyBatch-S\instances\<id>.json`，
+  退出只删自己那条；仍在 `--data-dir` 之外（记录属于进程，不属于数据目录）。读取者顺带
+  回收进程已不存在的记录，但有宽限期，刚启动的实例不会被误删。新增 `GET /api/instances`。
+- **`/api/ping` 不再声称有主实例**：去掉 `is_primary`，增加 `pid`。`--force-new-instance`
+  保留但标注已废弃，传入只打印说明。
+- **共享写入**（新模块 `comfybatch_shared`）：唯一草稿名 + flush/fsync + 原子替换（7 处固定
+  `.tmp` 全部改掉），读—改—写整体在短时文件锁内；Windows 上「读者短暂占用导致替换失败」
+  的瞬时冲突在写入器里重试（原先只有进度快照自己重试）。
+- **设置文档的修订号冲突检测**：`SettingsStore.save` 在磁盘修订已前进时抛
+  `SettingsConflict`（ValueError 子类，路由层会如实报错），提示「已被另一个窗口修改」，
+  不再静默回滚对方改动。
+- **SQLite 并发配置**：每次连接 `busy_timeout = 30s` + `journal_mode = WAL` +
+  `synchronous = NORMAL`，两个进程同时读写不再互相阻塞到报错。
+- **启动失败在打包版可见**：两个 spec 都是 `console=False`，`print` 到不了任何人眼前；
+  `report_startup_failure` 在冻结版弹消息框（开发版仍只打印，避免阻塞脚本与测试）。
+- **文档**：README 第 11 条改写为「多实例」，`docs/06` 第一节重写为新的多实例契约
+  （旧的单实例实现作为历史保留说明）。
+
+## 测试与结果
+
+- 新增 `tests/test_multi_instance.py`（25 项）与 `tests/multi_instance_worker.py`。
+  其中**真实双进程**用例真的起第二个解释器：同目录不同端口都能启动、两个 URL 各自可访问、
+  `/api/instances` 列出双方、杀掉一个另一个继续可用且记录不被删、两侧各 25 次并发设置写入
+  后 revision = 50 且无 `.tmp`/`.lock` 残留、两侧各 20 条并发作品库写入后 40 条都在且库可读。
+  全部只用临时数据目录，并把 `LOCALAPPDATA` 也重定向，不碰用户真实配置。
+- 现有测试中钉住旧行为的部分（`InstanceLockTests`、实例文件与命名空间测试、
+  `choose_launch_port` 的 reuse 断言）已移除，替代项在新文件里，并额外钉住「互斥体不得回归」。
+- 全量：**700 项：通过 699，失败 0，跳过 1**（跳过项仍是未提供外部 XLSX 夹具）。
+  连续跑三轮结果一致；并发用例最初偶发失败（两个进程无退避互相饿死），
+  已加入退避与截止时间，并按「每次成功写入只推进一次 revision」断言不变量。
+- Python 编译通过；前端词法检查属性值内危险换行 0 处；`node --check` 全部 JS 通过。
+
+## 未做 / 明确不声称
+
+- **`EditLease` 仍是进程内租约**，不是跨进程保护（`hub.py` 文档已写明）。两个进程各有一个
+  租约对象，因此两个窗口可以同时显示「本页可编辑」。跨进程的写入安全由文件锁与修订号
+  承担；把编辑租约改成跨进程属于另一件事，本轮未做。
+- **同一个键的并发写入仍是「最后写者胜」**：修订号检测保证输的一方被拒绝并被告知，
+  不做自动合并。
+- **未做真实桌面双开验收**：双进程覆盖在自动化测试里用临时数据目录完成；桌面 S.exe
+  的双开验收放在 G 阶段发布闸门（备份、替换、Edge 验证两个进程并行）之后。
+- 未改动 `data_dir` 里已有用户数据；F 的测试不读写桌面真实数据目录。

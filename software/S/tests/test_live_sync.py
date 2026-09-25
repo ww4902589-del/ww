@@ -1,4 +1,8 @@
-"""Live sync: the SSE stream, the editing lease and the single-instance lock.
+"""Live sync: the SSE stream and the editing lease.
+
+The single-instance lock this file used to cover is gone: several instances may now share
+one data directory, so instance records are per instance and covered by
+``test_multi_instance.py``.
 
 These cover the three mechanisms that stop several open pages from corrupting
 each other. All three were real gaps: pages could hold different configs without
@@ -32,7 +36,7 @@ from fakes import (  # noqa: E402
 
 import comfybatch_hub  # noqa: E402
 import comfybatch_v2_app as app_module  # noqa: E402
-from comfybatch_hub import EditLease, InstanceLock, StateHub  # noqa: E402
+from comfybatch_hub import EditLease, StateHub  # noqa: E402
 from comfybatch_v2_app import Application, Handler, sse_frame  # noqa: E402
 
 
@@ -117,30 +121,6 @@ class EditLeaseTests(unittest.TestCase):
         lease = EditLease()
         lease.claim("page-a")
         self.assertFalse(lease.release("page-b"), "非持有者不能释放别人的租约")
-
-
-class InstanceLockTests(unittest.TestCase):
-    def test_acquire_release_round_trip(self):
-        lock = InstanceLock("ComfyBatch-test-lock-roundtrip")
-        self.assertTrue(lock.acquire())
-        self.assertTrue(lock.acquire(), "同一进程重复获取应当成功")
-        lock.release()
-
-    def test_a_second_process_cannot_acquire(self):
-        """Simulated with a separate ctypes handle on the same mutex name."""
-        first = InstanceLock("ComfyBatch-test-lock-exclusive")
-        self.assertTrue(first.acquire())
-        try:
-            import ctypes
-
-            kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
-            handle = kernel32.CreateMutexW(None, False, "ComfyBatch-test-lock-exclusive")
-            already = kernel32.GetLastError() == 183
-            if handle:
-                kernel32.CloseHandle(handle)
-            self.assertTrue(already, "同名互斥体应当报告已存在")
-        finally:
-            first.release()
 
 
 class SseFramingTests(unittest.TestCase):
@@ -398,202 +378,6 @@ class PresetSyncTests(unittest.TestCase):
         js = page_source()
         self.assertIn("typeof payload.presets_rev!=='undefined'", js,
                       "旧服务端下不得重拉或报错")
-
-
-class InstanceFileTests(unittest.TestCase):
-    def setUp(self):
-        import os
-        import tempfile
-
-        self._temp = tempfile.TemporaryDirectory()
-        self._previous = {key: os.environ.get(key) for key in (
-            "COMFYBATCH_DATA_DIR", "LOCALAPPDATA", "COMFYBATCH_INSTANCE_NAME",
-        )}
-        os.environ["COMFYBATCH_DATA_DIR"] = self._temp.name
-        os.environ["LOCALAPPDATA"] = self._temp.name
-        os.environ.pop("COMFYBATCH_INSTANCE_NAME", None)
-
-    def tearDown(self):
-        import os
-
-        for key, value in self._previous.items():
-            if value is None:
-                os.environ.pop(key, None)
-            else:
-                os.environ[key] = value
-        self._temp.cleanup()
-
-    def test_round_trip(self):
-        app_module.write_instance_file(port=8790, url="http://127.0.0.1:8790/", instance_id="abc")
-        payload = app_module.read_instance_file()
-        self.assertEqual(8790, payload["port"])
-        self.assertEqual("abc", payload["instance_id"])
-        app_module.clear_instance_file()
-        self.assertEqual({}, app_module.read_instance_file())
-
-    def test_instance_record_lives_inside_the_test_directory(self):
-        self.assertEqual(
-            pathlib.Path(self._temp.name) / "ComfyBatch-S" / "instance.json",
-            app_module.instance_record_path(),
-        )
-
-    def test_activate_refuses_a_stale_or_foreign_file(self):
-        """A crashed process's leftover file must not make us poke a stranger."""
-        app_module.write_instance_file(port=1, url="http://127.0.0.1:1/", instance_id="ghost")
-        self.assertFalse(app_module.activate_existing_instance(app_module.read_instance_file()))
-        self.assertFalse(app_module.activate_existing_instance({}))
-        self.assertFalse(app_module.activate_existing_instance({"url": "http://127.0.0.1:1/"}))
-
-    @mock.patch.object(app_module.webbrowser, "open")
-    @mock.patch.object(app_module, "activate_existing_instance", return_value=True)
-    def test_duplicate_launch_opens_the_existing_page(self, activate, open_browser):
-        existing = {"url": "http://127.0.0.1:8790/", "instance_id": "primary"}
-
-        self.assertTrue(app_module.activate_and_show_existing(existing, open_browser=True))
-
-        activate.assert_called_once_with(existing)
-        open_browser.assert_called_once_with(existing["url"])
-
-    @mock.patch.object(app_module.webbrowser, "open")
-    @mock.patch.object(app_module, "activate_existing_instance", return_value=True)
-    def test_no_browser_keeps_duplicate_launch_headless(self, _activate, open_browser):
-        existing = {"url": "http://127.0.0.1:8790/", "instance_id": "primary"}
-
-        self.assertTrue(app_module.activate_and_show_existing(existing, open_browser=False))
-
-        open_browser.assert_not_called()
-
-    def test_missing_record_discovers_running_local_service_and_opens_page(self):
-        activated = []
-
-        class LocalComfyBatch(BaseHTTPRequestHandler):
-            def log_message(self, *_args):
-                pass
-
-            def do_GET(self):
-                payload = {"ok": True, "app": "ComfyBatch", "instance_id": "already-running",
-                           "instance_name": "default", "is_primary": True}
-                body = json.dumps(payload).encode()
-                self.send_response(200)
-                self.send_header("Content-Length", str(len(body)))
-                self.end_headers()
-                self.wfile.write(body)
-
-            def do_POST(self):
-                activated.append(self.path)
-                body = b'{"ok":true}'
-                self.send_response(200)
-                self.send_header("Content-Length", str(len(body)))
-                self.end_headers()
-                self.wfile.write(body)
-
-        server = ThreadingHTTPServer(("127.0.0.1", 0), LocalComfyBatch)
-        thread = threading.Thread(target=server.serve_forever, daemon=True)
-        thread.start()
-        try:
-            with mock.patch.object(app_module.webbrowser, "open") as open_browser:
-                found = app_module.show_existing_or_discover(
-                    {}, "127.0.0.1", server.server_address[1], open_browser=True,
-                )
-            self.assertEqual("already-running", found["instance_id"])
-            self.assertEqual(["/api/activate"], activated)
-            open_browser.assert_called_once_with(f"http://127.0.0.1:{server.server_address[1]}/")
-        finally:
-            server.shutdown()
-            server.server_close()
-            thread.join(timeout=5)
-
-    @mock.patch.object(app_module.webbrowser, "open")
-    def test_missing_record_does_not_open_a_foreign_or_remote_service(self, open_browser):
-        with mock.patch.object(app_module, "activate_and_show_existing") as activate:
-            self.assertEqual({}, app_module.show_existing_or_discover(
-                {}, "0.0.0.0", 8790, open_browser=True,
-            ))
-            activate.assert_not_called()
-        open_browser.assert_not_called()
-
-    def test_missing_record_finds_primary_on_fallback_port(self):
-        opener = mock.Mock()
-
-        def answer(url, *, timeout):
-            self.assertEqual(0.25, timeout)
-            response = mock.MagicMock()
-            payload = {"ok": True, "app": "ComfyBatch", "instance_id": "fallback",
-                       "instance_name": "default", "is_primary": True}
-            if url == "http://127.0.0.1:9000/api/ping":
-                payload["instance_name"] = "devtest"
-            response.__enter__.return_value.read.return_value = json.dumps(payload).encode()
-            return response
-
-        opener.open.side_effect = answer
-        with mock.patch.object(app_module, "build_opener", return_value=opener), \
-                mock.patch.object(app_module, "activate_and_show_existing", return_value=True) as activate:
-            found = app_module.show_existing_or_discover({}, "127.0.0.1", 9000, open_browser=True)
-        self.assertEqual("http://127.0.0.1:9001/", found["url"])
-        activate.assert_called_once_with(found, open_browser=True)
-
-
-class InstanceNamespaceTests(unittest.TestCase):
-    """A different --data-dir must not be able to trap a launch.
-
-    Found on a real run: the mutex is per user, but the instance record lived in
-    the data directory. A launch with a different --data-dir was therefore blocked
-    by the mutex yet could not find the running instance -- and had no way
-    forward.
-    """
-
-    def setUp(self):
-        import os
-
-        self._previous = {key: os.environ.get(key) for key in
-                          ("COMFYBATCH_INSTANCE_NAME", "COMFYBATCH_DATA_DIR", "LOCALAPPDATA")}
-
-    def tearDown(self):
-        import os
-
-        for key, value in self._previous.items():
-            if value is None:
-                os.environ.pop(key, None)
-            else:
-                os.environ[key] = value
-
-    def test_the_record_is_independent_of_the_data_directory(self):
-        import os
-
-        first = None
-        for data_dir in ("C:/tmp/one", "C:/tmp/two"):
-            os.environ["COMFYBATCH_DATA_DIR"] = data_dir
-            path = app_module.instance_record_path()
-            first = first or path
-            self.assertEqual(first, path, "实例记录不能跟着 --data-dir 走")
-
-    def test_a_named_instance_gets_its_own_mutex_and_record(self):
-        import os
-
-        os.environ.pop("COMFYBATCH_INSTANCE_NAME", None)
-        default_mutex = app_module.instance_mutex_name()
-        default_record = app_module.instance_record_path()
-
-        os.environ["COMFYBATCH_INSTANCE_NAME"] = "devtest"
-        self.assertNotEqual(default_mutex, app_module.instance_mutex_name())
-        self.assertNotEqual(default_record, app_module.instance_record_path())
-        self.assertIn("devtest", app_module.instance_mutex_name())
-
-    def test_a_blank_name_falls_back_to_default(self):
-        import os
-
-        os.environ["COMFYBATCH_INSTANCE_NAME"] = "   "
-        self.assertEqual("default", app_module.instance_name())
-        self.assertEqual(app_module.INSTANCE_MUTEX_NAME, app_module.instance_mutex_name())
-
-    def test_the_launcher_offers_a_way_out_of_a_stale_lock(self):
-        from fakes import app_source
-
-        source = app_source()
-        self.assertIn("--force-new-instance", source)
-        self.assertIn("--instance-name", source)
-        self.assertIn("--force-new-instance 强制启动一个新实例", source,
-                      "无法联系已有实例时必须告诉用户怎么继续")
 
 
 class PageLiveSyncTests(unittest.TestCase):

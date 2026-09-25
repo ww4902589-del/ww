@@ -250,6 +250,24 @@ class ImageExtractionTests(unittest.TestCase):
         with self.assertRaisesRegex(ImageExtractionError, "不完整"):
             image_module._decode_gzip_bounded([compressed[:-4]], 1024)
 
+    def test_gzip_members_share_one_decoded_limit_and_preserve_later_html(self):
+        first = gzip.compress(b"<html><head>")
+        second = gzip.compress(b'<meta property="og:image" content="/cover.png">')
+        compressed = first + second
+        expected = b'<html><head><meta property="og:image" content="/cover.png">'
+
+        self.assertEqual(expected, image_module._decode_gzip_bounded(
+            [compressed[:len(first) + 2], compressed[len(first) + 2:]], len(expected)))
+        with self.assertRaisesRegex(ImageExtractionError, "解压后"):
+            image_module._decode_gzip_bounded([compressed], len(expected) - 1)
+
+    def test_gzip_rejects_trailing_garbage_and_truncated_second_member(self):
+        first = gzip.compress(b"<html>")
+        with self.assertRaisesRegex(ImageExtractionError, "损坏|不完整"):
+            image_module._decode_gzip_bounded([first + b"garbage"], 1024)
+        with self.assertRaisesRegex(ImageExtractionError, "不完整"):
+            image_module._decode_gzip_bounded([first, gzip.compress(b"later")[:-4]], 1024)
+
     def test_redirect_target_is_revalidated_before_any_second_connection(self):
         resolver_calls = []
         connections = []

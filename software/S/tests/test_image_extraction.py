@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-import json
+import gzip
 import io
+import json
 import pathlib
 import socket
 import tempfile
@@ -197,6 +198,75 @@ class ImageExtractionTests(unittest.TestCase):
         self.assertEqual(raw, response.body)
         self.assertEqual([("example.com", 443)], resolver_calls)
         self.assertEqual(("example.com", "93.184.216.34", 443), connection_calls[0][:3])
+
+    def test_gzip_page_still_yields_its_open_graph_image(self):
+        page = "https://example.com/gallery"
+        cover = "https://example.com/cover.png"
+        html = f'<meta property="og:image" content="{cover}">'.encode()
+        bodies = {"/gallery": (gzip.compress(html), "text/html", "gzip"),
+                  "/cover.png": (png_bytes((640, 360)), "image/png", None)}
+
+        class Response:
+            status = 200
+
+            def __init__(self, raw, content_type, encoding):
+                self.raw = io.BytesIO(raw)
+                self.headers = {"Content-Type": content_type, "Content-Length": str(len(raw)),
+                                "Content-Encoding": encoding}
+
+            def getheader(self, name):
+                return self.headers.get(name)
+
+            def read(self, amount):
+                return self.raw.read(amount)
+
+        class Connection:
+            def __init__(self, *_args):
+                self.target = ""
+
+            def request(self, _method, target, headers):
+                self.target = target
+
+            def getresponse(self):
+                return Response(*bodies[self.target])
+
+            def close(self):
+                pass
+
+        resolver = lambda host, port, **_kwargs: [
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", port)),
+        ]
+        with mock.patch.object(image_module, "_PinnedHTTPSConnection", Connection):
+            images = ImageExtractor(SafeUrlFetcher(resolver=resolver)).extract(page)
+
+        self.assertEqual(1, len(images))
+        self.assertEqual(cover, images[0].source_url)
+        self.assertEqual("open-graph", images[0].kind)
+
+    def test_gzip_page_cannot_expand_past_its_limit(self):
+        compressed = gzip.compress(b"a" * 129)
+        with self.assertRaisesRegex(ImageExtractionError, "解压后"):
+            image_module._decode_gzip_bounded([compressed], 128)
+        with self.assertRaisesRegex(ImageExtractionError, "不完整"):
+            image_module._decode_gzip_bounded([compressed[:-4]], 1024)
+
+    def test_gzip_members_share_one_decoded_limit_and_preserve_later_html(self):
+        first = gzip.compress(b"<html><head>")
+        second = gzip.compress(b'<meta property="og:image" content="/cover.png">')
+        compressed = first + second
+        expected = b'<html><head><meta property="og:image" content="/cover.png">'
+
+        self.assertEqual(expected, image_module._decode_gzip_bounded(
+            [compressed[:len(first) + 2], compressed[len(first) + 2:]], len(expected)))
+        with self.assertRaisesRegex(ImageExtractionError, "解压后"):
+            image_module._decode_gzip_bounded([compressed], len(expected) - 1)
+
+    def test_gzip_rejects_trailing_garbage_and_truncated_second_member(self):
+        first = gzip.compress(b"<html>")
+        with self.assertRaisesRegex(ImageExtractionError, "损坏|不完整"):
+            image_module._decode_gzip_bounded([first + b"garbage"], 1024)
+        with self.assertRaisesRegex(ImageExtractionError, "不完整"):
+            image_module._decode_gzip_bounded([first, gzip.compress(b"later")[:-4]], 1024)
 
     def test_redirect_target_is_revalidated_before_any_second_connection(self):
         resolver_calls = []

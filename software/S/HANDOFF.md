@@ -351,3 +351,13 @@
 - GitHub 交付：Draft PR #11 已创建并附到本任务，公开 Issue #2 已同步；改动新增行公开内容扫描 0 命中。
 - 独立审查：Standards 轨无 HIGH/MEDIUM；Spec 轨发现定期重绘丢失卡片焦点的 MEDIUM。已在 `31acd57` 按当前阶段和卡片存在性恢复焦点，并补实际 `renderReview` 函数的重绘回归测试。Standards / Spec 双轨最终只读复审均确认无遗留 HIGH/MEDIUM；模拟 DOM 测试之外的真实焦点、滚动和浮层效果留待 Edge 验收。
 - 待完成：按集成顺序更新基线并复测、合并 PR、候选 SHA-256、桌面备份部署与 Edge 验收。完成全部闸门之前保持 🟡。
+
+## 任务 #12：本地风格组合推荐（独立分支进行中）
+
+- 分支：`handoff/local-s-style-recommendation`，基点 `7adaa6e`（领取时的 `origin/main`），创建时相对基点无差异。
+- 范围：阶段 2 从本机已发现的 `inventory.styles` 为当前主风格推荐最多 3 个有共同线索、模板可用且媒介不冲突的搭配；应用仅增补 `selectedStyles`，沿用 4 风格上限，不读写 LoRA，不请求外部服务。详细规则与验收见 `docs/25-本地风格组合推荐_V2.21.md`。
+- 验证：新增 2 项（Node 运行时测试调用真实推荐与应用函数，核对 LoRA 不变、目录变化失效等）；全量 **513 项：512 通过、0 失败、1 跳过**。Python 测试文件编译、Node 语法、`tools/js_lexer.py app.js` 属性值内危险换行 0 处、`git -c core.whitespace=cr-at-eol diff --check` 通过。
+- 本任务不需要真实生图。若集成后验收需要生图，使用桌面 `01.docx`。
+- GitHub 交付：Draft PR #13 已创建并附到本任务；Issue #2 已同步；改动新增行公开内容扫描 0 命中。
+- 独立审查：Standards 轨发现同名目录条目更新时旧建议仍可应用（MEDIUM），Spec 轨另发现混合媒介线索绕过过滤（MEDIUM）。已补目录字段指纹、混合媒介保守过滤与对应行为测试；两轨对 `6f90113` 复审通过，无剩余 HIGH/MEDIUM。
+- 待完成：按集成顺序更新基线并复测、合并、候选 SHA-256、桌面备份部署与 Edge 验收。完成全部闸门前保持 🟡。

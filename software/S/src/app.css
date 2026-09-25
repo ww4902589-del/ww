@@ -2531,6 +2531,38 @@ details[open] > .compact-module-summary .compact-toggle::after {
   text-overflow:ellipsis;
   white-space:nowrap
 }
+.style-recommend-box {
+  margin-top:14px;
+  padding:12px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:var(--surface, #fff9fa)
+}
+.style-recommend-box > button {
+  width:100%
+}
+.style-recommendations {
+  margin-top:9px;
+  color:var(--muted);
+  font-size:12px
+}
+.style-recommend-row {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:8px;
+  padding:8px 0;
+  border-top:1px solid var(--line)
+}
+.style-recommend-row b,.style-recommend-row small {
+  display:block
+}
+.style-recommend-row b {
+  color:var(--ink)
+}
+.style-recommend-row button {
+  flex:none
+}
 .lora-column > label {
   margin:0 0 10px
 }

@@ -1,5 +1,12 @@
 """Live state fan-out and the single-writer editing lease.
 
+There is deliberately no process-wide lock in this module any more. It used to hold
+``InstanceLock``, a Windows named mutex that made the desktop app single-instance;
+several windows may now share one data directory, so launching a second process is a
+normal thing to do. What replaces it is per-file coordination in
+``comfybatch_shared`` plus per-process records in ``comfybatch_instances`` -- and
+neither of those can grow into a whole-program lock.
+
 Two problems this solves, both of which lose or corrupt work:
 
 1. **Pages drift.** The page used to poll ``/api/status`` and only adopt the
@@ -156,52 +163,3 @@ class EditLease:
                 return False
             self.holder = None
             return True
-
-
-class InstanceLock:
-    """Windows process-level single-instance lock.
-
-    Uses a named mutex so the check is atomic: two launches racing each other
-    cannot both believe they are first. On non-Windows platforms it degrades to
-    an in-process flag, which is enough for development.
-    """
-
-    def __init__(self, name: str = "ComfyBatch-S-desktop") -> None:
-        self.name = name
-        self._handle: Any = None
-        self._acquired = False
-
-    def acquire(self) -> bool:
-        """True when this process is the first instance."""
-        if self._acquired:
-            return True
-        try:
-            import ctypes
-
-            kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
-            # No "Global\\" prefix: the lock is per login session, which is what a
-            # desktop app wants (another user's session is a different app).
-            self._handle = kernel32.CreateMutexW(None, False, self.name)
-            already_exists = kernel32.GetLastError() == 183  # ERROR_ALREADY_EXISTS
-            if already_exists:
-                if self._handle:
-                    kernel32.CloseHandle(self._handle)
-                    self._handle = None
-                return False
-            self._acquired = True
-            return True
-        except Exception:  # noqa: BLE001 - non-Windows or no ctypes
-            self._acquired = True
-            return True
-
-    def release(self) -> None:
-        if not self._handle:
-            return
-        try:
-            import ctypes
-
-            ctypes.windll.kernel32.CloseHandle(self._handle)  # type: ignore[attr-defined]
-        except Exception:  # noqa: BLE001
-            pass
-        self._handle = None
-        self._acquired = False

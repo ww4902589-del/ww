@@ -24,6 +24,7 @@ from typing import Any
 from PIL import Image, ImageChops, ImageStat
 
 from comfybatch_params import apply_params, registry_payload
+from comfybatch_shared import FileLock, atomic_write_text, unique_temp_for
 from comfybatch_errors import (
     ErrorCategory,
     ComfyError,
@@ -2319,20 +2320,10 @@ class RunProgressStore:
         run_id = self.validate_run_id(run_id)
         self.root.mkdir(parents=True, exist_ok=True)
         target = self.path_for(run_id)
-        temporary = target.with_name(target.name + ".tmp")
-        temporary.write_text(json.dumps(document, ensure_ascii=False, indent=2), encoding="utf-8")
-        # On Windows a concurrent status reader can briefly prevent replacing
-        # the existing file. Retry that transient sharing violation; otherwise
-        # the page could show a segment boundary while its durable snapshot is
-        # still one item behind.
-        for attempt in range(20):
-            try:
-                temporary.replace(target)
-                break
-            except PermissionError:
-                if attempt == 19:
-                    raise
-                time.sleep(0.02)
+        # atomic_write_text uses a scratch name unique to this process, so a second
+        # S running against the same data directory can no longer be writing the
+        # very file this one is about to publish.
+        atomic_write_text(target, json.dumps(document, ensure_ascii=False, indent=2))
         return target
 
     def load(self, run_id: str) -> dict[str, Any] | None:
@@ -2532,7 +2523,8 @@ class BatchRunner:
                 #: says so rather than presenting a resumed run as a new one.
                 "resumed_from": int((resume or {}).get("next_index") or 1) if resume else 0,
             }
-            self._result_revision = 0
+            self._result_revision = 0
+
         self._cancel.clear()
         self._resume.set()
         self._next_segment.clear()
@@ -3389,7 +3381,7 @@ class ResultReviewStore:
             with Image.open(source) as image:
                 image = image.convert("RGB") if image.mode not in {"RGB", "L"} else image
                 image.thumbnail((size, size), Image.LANCZOS)
-                temporary = target.with_suffix(".tmp")
+                temporary = unique_temp_for(target)
                 image.save(temporary, "JPEG", quality=quality, optimize=True)
             temporary.replace(target)
         except (OSError, ValueError):
@@ -3432,9 +3424,10 @@ class ResultReviewStore:
         self.root.mkdir(parents=True, exist_ok=True)
         document = {**document, "run_id": run_id, "updated_at": _timestamp()}
         path = self.path_for(run_id)
-        temporary = path.with_suffix(".tmp")
-        temporary.write_text(json.dumps(document, ensure_ascii=False, indent=2), encoding="utf-8")
-        temporary.replace(path)
+        # Held under the shared lock for the whole write: this file is the merge base
+        # for ``ingest``, so a lost update here loses a review decision.
+        with FileLock(path):
+            atomic_write_text(path, json.dumps(document, ensure_ascii=False, indent=2))
 
     def ingest(self, run_id: str, results: list[dict[str, Any]]) -> dict[str, Any]:
         """Merge a run's results into the review document, preserving decisions.
@@ -3641,9 +3634,10 @@ class ResourceOverrideStore:
     def save(self, document: dict[str, Any]) -> None:
         self.root.mkdir(parents=True, exist_ok=True)
         document = {**document, "updated_at": _timestamp()}
-        temporary = self.path.with_suffix(".tmp")
-        temporary.write_text(json.dumps(document, ensure_ascii=False, indent=2), encoding="utf-8")
-        temporary.replace(self.path)
+        # Shared file, read-modify-write at every call site: take the lock so a second
+        # process cannot slip a change in between this write and its own read.
+        with FileLock(self.path):
+            atomic_write_text(self.path, json.dumps(document, ensure_ascii=False, indent=2))
 
     def remember(
         self,
@@ -3763,9 +3757,10 @@ class WorkflowParamsStore:
     def save(self, document: dict[str, Any]) -> None:
         self.root.mkdir(parents=True, exist_ok=True)
         document = {**document, "updated_at": _timestamp()}
-        temporary = self.path.with_suffix(".tmp")
-        temporary.write_text(json.dumps(document, ensure_ascii=False, indent=2), encoding="utf-8")
-        temporary.replace(self.path)
+        # Shared file, read-modify-write at every call site: take the lock so a second
+        # process cannot slip a change in between this write and its own read.
+        with FileLock(self.path):
+            atomic_write_text(self.path, json.dumps(document, ensure_ascii=False, indent=2))
 
     def for_fingerprint(self, fingerprint: str) -> dict[str, Any]:
         if not fingerprint:

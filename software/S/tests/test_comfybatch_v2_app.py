@@ -13,7 +13,7 @@ from fakes import ConnectedClient, page_source, ui_workflow, write_workflow
 
 from PIL import Image
 
-from comfybatch_v2_app import Application, choose_launch_port, parse_prompt_indexes
+from comfybatch_v2_app import Application, parse_prompt_indexes
 from comfybatch_v2_core import BatchConfig, PromptBundleParser
 
 
@@ -269,21 +269,6 @@ class ApplicationPreflightTests(unittest.TestCase):
             profile = restarted.lora_profiles()["new-style.safetensors"]
             self.assertEqual("厚涂插画风格", profile["display_name"])
             self.assertEqual(["htl7q9vx"], profile["trigger_words"])
-
-    def test_reuses_healthy_instance_or_falls_back_from_occupied_port(self):
-        reused = choose_launch_port(
-            "127.0.0.1", 8790,
-            probe=lambda port: port == 8790,
-            available=lambda port: False,
-        )
-        self.assertEqual(("reuse", 8790), reused)
-
-        fallback = choose_launch_port(
-            "127.0.0.1", 8790,
-            probe=lambda port: False,
-            available=lambda port: port == 8791,
-        )
-        self.assertEqual(("start", 8791), fallback)
 
     def test_persists_updates_and_deletes_style_lora_presets(self):
         with tempfile.TemporaryDirectory() as temp:

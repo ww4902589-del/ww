@@ -38,7 +38,15 @@ from comfybatch_library import (
 from comfybatch_nodeschema import (
     NodeSchemaRegistry, active_registry, purpose_catalog, set_active_registry, structural_fingerprint,
 )
-from comfybatch_hub import EditLease, InstanceLock, SSE_HEARTBEAT_SECONDS, StateHub
+from comfybatch_hub import EditLease, SSE_HEARTBEAT_SECONDS, StateHub
+from comfybatch_instances import (
+    InstanceRecord,
+    InstanceRegistry,
+    PortUnavailable,
+    bind_server,
+    record_path as instance_record_path,
+)
+from comfybatch_shared import FileLock, atomic_write_text
 from comfybatch_params import PARAMS, registry_payload, resolve as resolve_params
 from comfybatch_v2_core import (
     ACTIVE_STATUSES,
@@ -115,9 +123,6 @@ def sse_frame(event: str, payload: str) -> bytes:
     """Format one Server-Sent Event. Framing lives here so it is written once."""
     return f"event: {event}\ndata: {payload}\n\n".encode("utf-8")
 
-
-#: Name of the Windows mutex that keeps the desktop app single-instance.
-INSTANCE_MUTEX_NAME = "ComfyBatch-S-desktop"
 
 #: Routes that mutate observable state, so they need the editing lease and must
 #: notify open pages. Listed here once instead of being checked per branch.
@@ -294,6 +299,10 @@ class SettingsStore:
         self.legacy = [pathlib.Path(p) for p in (legacy or []) if pathlib.Path(p) != self.primary]
         #: Retained for callers that only want to know whether a recovery copy exists.
         self.paths = [p for p in [self.primary, self.backup] if p is not None]
+        #: The revision this store last read or wrote. ``save`` refuses a write whose
+        #: starting point is no longer the file's -- that is what turns "another window
+        #: changed this while I was open" from a silent rollback into a message.
+        self._loaded_revision: int | None = None
 
     # ------------------------------------------------------------- reading
 
@@ -333,10 +342,16 @@ class SettingsStore:
 
     def load(self) -> dict:
         candidates = self._candidates()
+        self._loaded_revision = self._primary_revision()
         if not candidates:
             return {}
 
         winner_path, winner = max(candidates, key=lambda item: self._rank(item[1], item[0]))
+        # Track the revision of the file this store will *write*, not of the winning
+        # candidate: the winner can legitimately be a read-only copy elsewhere (the
+        # install-directory migration source), and comparing against that made every
+        # first save look like someone else's change.
+        self._loaded_revision = self._primary_revision()
 
         document: dict = {
             key: value for key, value in winner.items()
@@ -375,44 +390,64 @@ class SettingsStore:
 
     # ------------------------------------------------------------- writing
 
+    def _primary_revision(self) -> int:
+        """The revision recorded in the authoritative file, or 0 when it is not there."""
+        payload = self._read(self.primary) or {}
+        try:
+            return int(payload.get("revision") or 0)
+        except (TypeError, ValueError):
+            return 0
+
     def save(self, value: dict) -> None:
         """Write the authoritative file, keeping the previous revision as backup.
 
-        The primary write failure is propagated: silently continuing was how the
-        stale mirror got created in the first place.
+        Refuses to write when the file has moved on since this store last read or
+        wrote it: the document is written whole, so carrying on would silently roll
+        back another window's change. ``SettingsConflict`` is a ``ValueError``, which
+        the route layer already turns into a visible failure for the page.
+
+        The whole read-compute-write runs under the shared file lock. Without it two
+        processes each read the same revision, each write ``revision + 1``, and one of
+        the two changes is simply gone -- and gone from the backup too, because the
+        backup mirrors the same body. That is precisely the stale-mirror failure this
+        store exists to prevent, so the lock is not optional here.
+
+        The primary write failure is still propagated: silently continuing was how
+        the stale mirror got created in the first place.
         """
-        existing = self._read(self.primary) or {}
-        try:
-            previous_revision = int(existing.get("revision") or 0)
-        except (TypeError, ValueError):
-            previous_revision = 0
-
-        payload = {
-            **value,
-            "schema_version": SCHEMA_VERSION,
-            "revision": previous_revision + 1,
-            "updated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-        }
-        body = json.dumps(payload, ensure_ascii=False, indent=2)
-
-        self.primary.parent.mkdir(parents=True, exist_ok=True)
-        # The authoritative write must succeed; letting it fail silently is what
-        # created stale mirrors in the first place.
-        self._write_atomic(self.primary, body)
-        if self.backup is not None:
-            # Same content, so a recovery loses nothing. Best-effort: a broken
-            # recovery copy must not fail the write the user asked for.
+        with FileLock(self.primary):
+            existing = self._read(self.primary) or {}
             try:
-                self._write_atomic(self.backup, body)
-            except OSError:
-                pass
+                previous_revision = int(existing.get("revision") or 0)
+            except (TypeError, ValueError):
+                previous_revision = 0
+            if (self._loaded_revision is not None
+                    and previous_revision != self._loaded_revision):
+                raise SettingsConflict(
+                    "设置已被另一个窗口修改（磁盘修订 %d，本窗口基于 %d）。请刷新页面后再试，"
+                    "以免覆盖对方刚做的改动。" % (previous_revision, self._loaded_revision)
+                )
 
-    @staticmethod
-    def _write_atomic(path: pathlib.Path, body: str) -> None:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        temporary = path.with_suffix(path.suffix + ".tmp")
-        temporary.write_text(body, encoding="utf-8")
-        temporary.replace(path)
+            payload = {
+                **value,
+                "schema_version": SCHEMA_VERSION,
+                "revision": previous_revision + 1,
+                "updated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+            }
+            body = json.dumps(payload, ensure_ascii=False, indent=2)
+
+            self.primary.parent.mkdir(parents=True, exist_ok=True)
+            # The authoritative write must succeed; letting it fail silently is what
+            # created stale mirrors in the first place.
+            atomic_write_text(self.primary, body)
+            self._loaded_revision = previous_revision + 1
+            if self.backup is not None:
+                # Same content, so a recovery loses nothing. Best-effort: a broken
+                # recovery copy must not fail the write the user asked for.
+                try:
+                    atomic_write_text(self.backup, body)
+                except OSError:
+                    pass
 
     # ---------------------------------------------------------- tombstones
 
@@ -425,36 +460,6 @@ class SettingsStore:
                 if isinstance(stored, dict):
                     merged.setdefault(tombstone_key, {}).update(stored)
         return merged
-
-
-def is_comfybatch_server(host: str, port: int, timeout: float = 0.7) -> bool:
-    try:
-        opener = build_opener(ProxyHandler({}))
-        with opener.open(f"http://{host}:{port}/", timeout=timeout) as response:
-            body = response.read(8192).decode("utf-8", errors="ignore")
-        return response.status == 200 and "ComfyBatch" in body
-    except Exception:
-        return False
-
-
-def is_port_available(host: str, port: int) -> bool:
-    try:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
-            probe.bind((host, port))
-        return True
-    except OSError:
-        return False
-
-
-def choose_launch_port(host: str, preferred: int, probe=None, available=None) -> tuple[str, int]:
-    server_probe = probe or (lambda port: is_comfybatch_server(host, port))
-    port_probe = available or (lambda port: is_port_available(host, port))
-    if server_probe(preferred):
-        return "reuse", preferred
-    for port in range(preferred, preferred + 21):
-        if port_probe(port):
-            return "start", port
-    raise OSError(f"端口 {preferred} 至 {preferred + 20} 均不可用")
 
 
 def parse_prompt_indexes(expression: str, total: int) -> list[int]:
@@ -541,8 +546,6 @@ class Application:
         self.hub = StateHub()
         #: Single-writer guard so two pages cannot overwrite each other's config.
         self.lease = EditLease()
-        #: Set by main() when this process won the single-instance race.
-        self.is_primary = True
         self._stream_slots = threading.Semaphore(MAX_EVENT_STREAMS)
         #: Run id recovered from the review store on startup, so a reopened
         #: program still shows the previous session's images and decisions.
@@ -957,7 +960,6 @@ class Application:
         status = self.runner.status()
         return {
             "instance_id": self.instance_id,
-            "is_primary": self.is_primary,
             "lease": self.lease_status(client_id),
             "status": status,
             # 和 ``/api/status`` 一样带上未跑完的批次：页面主要靠推送渲染，
@@ -1877,7 +1879,6 @@ class Handler(BaseHTTPRequestHandler):
                     "lease": APP.lease_status(query.get("client_id", [""])[0]),
                     "activated_at": APP.hub.activated_at,
                     "instance_id": APP.instance_id,
-                    "is_primary": APP.is_primary,
                 })
             elif parsed.path == "/api/results":
                 self._json({"ok": True, "review": APP.results_payload()})
@@ -1917,11 +1918,18 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"ok": True, "inspect": APP.inspect_payload()})
             elif parsed.path == "/api/events":
                 self._stream_events(parsed)
+            elif parsed.path == "/api/instances":
+                # Several instances may share this data directory; the page can
+                # list them instead of assuming there is only one.
+                self._json({"ok": True, "instances": running_instances(),
+                            "this_instance_id": APP.instance_id})
             elif parsed.path == "/api/ping":
                 # Read the version from one place; a hardcoded copy here drifted
                 # out of step the moment the version was bumped.
+                # Several instances may run at once, so nothing here claims to be
+                # "the" instance: a caller identifies one by instance_id.
                 self._json({"ok": True, "instance_id": APP.instance_id, "app": "ComfyBatch",
-                            "version": APP_VERSION, "is_primary": APP.is_primary,
+                            "version": APP_VERSION, "pid": os.getpid(),
                             "instance_name": instance_name()})
             elif parsed.path == "/api/lease":
                 query = parse_qs(parsed.query)
@@ -2393,62 +2401,62 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def instance_name() -> str:
-    """Namespace for the single-instance lock.
+    """Human-facing name for this launch.
 
-    Always "default" for the shipped program. A different name lets a developer
-    run a second build side by side without fighting over the same lock, which is
-    also how the test suite stays independent.
+    Always "default" for the shipped program. ``--instance-name`` lets a developer run a
+    second build side by side and keeps the test suite independent. Unlike before it no
+    longer namespaces a lock -- there is no lock -- it is simply reported by ``/api/ping``
+    and kept in the instance record.
     """
     return os.environ.get("COMFYBATCH_INSTANCE_NAME", "default").strip() or "default"
 
 
-def instance_mutex_name() -> str:
-    name = instance_name()
-    return INSTANCE_MUTEX_NAME if name == "default" else f"{INSTANCE_MUTEX_NAME}-{name}"
+def instance_registry() -> InstanceRegistry:
+    """The registry of running instances for this user.
 
-
-def instance_record_path() -> pathlib.Path:
-    """Where the running instance records how to reach it.
-
-    Deliberately **not** inside ``--data-dir``: the mutex is per user regardless of
-    which data directory a launch uses, so the record has to live somewhere that
-    every launch can find. Keeping it in the data directory meant a launch with a
-    different ``--data-dir`` was blocked by the mutex yet could not locate the
-    running instance, leaving no way forward.
+    Constructed per call on purpose: it resolves ``LOCALAPPDATA`` when it is *used*, not
+    when it is created, so a test that redirects ``LOCALAPPDATA`` is honoured without any
+    import-order trap.
     """
-    local_data = pathlib.Path(os.environ.get("LOCALAPPDATA") or pathlib.Path.home() / "AppData" / "Local")
-    name = instance_name()
-    filename = "instance.json" if name == "default" else f"instance-{name}.json"
-    return local_data / "ComfyBatch-S" / filename
+    return InstanceRegistry()
 
 
-def write_instance_file(*, port: int, url: str, instance_id: str) -> None:
-    try:
-        path = instance_record_path()
-        path.parent.mkdir(parents=True, exist_ok=True)
-        temporary = path.with_suffix(".tmp")
-        temporary.write_text(json.dumps({
-            "pid": os.getpid(), "port": port, "url": url,
-            "instance_id": instance_id, "started_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-        }, ensure_ascii=False, indent=2), encoding="utf-8")
-        temporary.replace(path)
-    except OSError:
-        pass
+def write_instance_file(*, port: int, url: str, instance_id: str) -> pathlib.Path:
+    """Register this process under its own instance id.
+
+    One file per instance, so this never writes over a record that describes another
+    running process -- which the previous single ``instance.json`` did by construction.
+    """
+    record = InstanceRecord(
+        instance_id=instance_id,
+        pid=os.getpid(),
+        port=port,
+        url=url,
+        instance_name=instance_name(),
+        started_at=time.time(),
+    )
+    return instance_registry().register(record)
 
 
-def clear_instance_file() -> None:
-    try:
-        instance_record_path().unlink(missing_ok=True)
-    except OSError:
-        pass
+def clear_instance_file(instance_id: str) -> bool:
+    """Remove **this** instance's record, and nothing else.
+
+    The old single-file version could not honour that: whichever process exited last
+    deleted the record describing the process still running. That is the defect this
+    signature makes impossible to reintroduce by accident.
+    """
+    return instance_registry().unregister(instance_id)
 
 
-def read_instance_file() -> dict[str, Any]:
-    try:
-        payload = json.loads(instance_record_path().read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return {}
-    return payload if isinstance(payload, dict) else {}
+def running_instances() -> list[dict[str, Any]]:
+    """Every live instance for this user, newest first.
+
+    Dead records are pruned here rather than by a timer: whoever looks is the cheapest
+    place to notice, and the registry keeps a grace period so a sibling that is still
+    starting up cannot have its record removed under it.
+    """
+    records = instance_registry().records(prune=True)
+    return [record.to_dict() for record in records if record.alive]
 
 
 def activate_existing_instance(existing: dict[str, Any]) -> bool:
@@ -2478,45 +2486,44 @@ def activate_existing_instance(existing: dict[str, Any]) -> bool:
         return False
 
 
-def activate_and_show_existing(existing: dict[str, Any], *, open_browser: bool) -> bool:
-    """Activate the primary instance and make its page visible when requested."""
-    if not activate_existing_instance(existing):
-        return False
-    if open_browser:
-        url = str(existing.get("url") or "")
-        if url:
-            webbrowser.open(url)
-    return True
+class SettingsConflict(ValueError):
+    """The settings file changed since this window read it."""
 
 
-def show_existing_or_discover(
-    existing: dict[str, Any], host: str, port: int, *, open_browser: bool,
-) -> dict[str, Any]:
-    """Recover a running local instance when its record has gone missing."""
-    if existing and activate_and_show_existing(existing, open_browser=open_browser):
-        return existing
-    if host not in ("127.0.0.1", "localhost"):
-        return {}
-    opener = build_opener(ProxyHandler({}))
-    # The primary may have moved from the preferred port when that port was busy.
-    # Mirror choose_launch_port's 21-port range; keep a short timeout per probe.
-    for candidate_port in range(port, port + 21):
-        url = f"http://{host}:{candidate_port}/"
-        try:
-            with opener.open(url + "api/ping", timeout=0.25) as response:
-                info = json.loads(response.read().decode("utf-8"))
-            if not isinstance(info, dict) or not info.get("ok") or info.get("app") != "ComfyBatch":
-                continue
-            if info.get("is_primary") is not True or not info.get("instance_id"):
-                continue
-            if info.get("instance_name") != instance_name():
-                continue
-            discovered = {"url": url, "instance_id": str(info["instance_id"])}
-            if activate_and_show_existing(discovered, open_browser=open_browser):
-                return discovered
-        except (OSError, ValueError, TypeError):
-            continue
-    return {}
+class ExclusiveThreadingHTTPServer(ThreadingHTTPServer):
+    """A server that refuses to share its port.
+
+    ``http.server`` sets ``allow_reuse_address = 1``, and on Windows that lets a
+    second process bind an address another process is already listening on -- the
+    second bind succeeds and then receives nothing. That would make ":func:`bind_server`
+    claiming the port by binding it" a check that always passes, so two instances
+    could both announce the same URL. Turning the option off makes the operating
+    system enforce what the design assumes.
+    """
+
+    allow_reuse_address = False
+
+
+def report_startup_failure(message: str) -> None:
+    """Make a fatal startup failure visible in the packaged build.
+
+    Both PyInstaller specs build with ``console=False``, so every ``print`` in ``main()``
+    goes nowhere when the user double-clicks S.exe. Exiting silently -- which is what the
+    old code did when it lost the port it wanted -- leaves the user with no window and no
+    explanation. The packaged build therefore gets a modal dialog; a console build keeps
+    the plain text, because a dialog there would block a script or a test run.
+    """
+    print(message)
+    if not getattr(sys, "frozen", False):
+        return
+    try:
+        import ctypes
+
+        ctypes.windll.user32.MessageBoxW(  # type: ignore[attr-defined]
+            None, message, "ComfyBatch 启动失败", 0x10
+        )
+    except Exception:  # noqa: BLE001 - a missing dialog must not mask the real error
+        pass
 
 
 def main() -> None:
@@ -2535,12 +2542,12 @@ def main() -> None:
     parser.add_argument(
         "--instance-name",
         default="",
-        help="单实例锁的命名空间。默认 default；开发时用别的名字可与正式实例并行运行。",
+        help="给这次启动起个名字，只用于在实例记录与 /api/ping 里区分；不再影响加锁。",
     )
     parser.add_argument(
         "--force-new-instance",
         action="store_true",
-        help="即使检测到已有实例也强制启动一个新的（已有实例无响应时使用）。",
+        help="已废弃：现在每次启动都会新开一个实例。保留仅为兼容旧脚本，传入时只会打印一条提示。",
     )
     args = parser.parse_args()
     try:
@@ -2567,42 +2574,32 @@ def main() -> None:
     if missing:
         raise SystemExit("缺少前端文件：" + "、".join(missing))
 
-    # Single instance: a named mutex makes the check atomic, so two launches
-    # racing each other cannot both believe they are first. The loser does not
-    # start a second backend -- it asks the running one to come forward.
-    lock = InstanceLock(instance_mutex_name())
-    if args.force_new_instance or lock.acquire():
-        if args.force_new_instance:
-            print("已按 --force-new-instance 跳过单实例检查。")
-    else:
-        existing = show_existing_or_discover(
-            read_instance_file(), args.host, args.port, open_browser=not args.no_browser,
-        )
-        if existing:
-            print(f"ComfyBatch 已在运行，已切换到已有窗口：{existing.get('url', '')}")
-            return
-        # Never leave the user with no way forward: explain both exits.
-        print("检测到已有实例，但它没有响应，无法切换过去。")
-        print("如果确认那个进程已经不在了，可以任选其一：")
-        print("  1) 关闭残留的 S.exe 进程后重试")
-        print("  2) 加 --force-new-instance 强制启动一个新实例")
-        print(f"     （实例记录：{instance_record_path()}）")
-        return
+    # No process-wide lock: several instances may run at once, sharing one data
+    # directory. The port is claimed by *binding* it (see bind_server), so two launches
+    # racing for the same port cannot both think they own it, and each process registers
+    # its own instance record under its own id.
+    if args.force_new_instance:
+        print("提示：现在每次启动都会新开一个实例，--force-new-instance 已不再需要；"
+              "保留该选项只为兼容旧脚本。")
 
-    APP.is_primary = True
     server = None
     try:
-        action, port = choose_launch_port(bind_host, args.port)
-        url = f"http://{bind_host}:{port}/"
-        if action == "reuse":
-            # A server on our port answered but the mutex was free: a leftover
-            # process from a crashed run. Adopt it rather than double-binding.
-            if not args.no_browser:
-                webbrowser.open(url)
+        try:
+            server, port = bind_server(
+                bind_host, args.port,
+                lambda host, candidate: ExclusiveThreadingHTTPServer((host, candidate), Handler),
+            )
+        except PortUnavailable as exc:
+            # Both packaged specs build with console=False, so a print would reach nobody
+            # when S.exe is double-clicked; report_startup_failure shows a dialog there.
+            report_startup_failure(str(exc))
             return
-        server = ThreadingHTTPServer((bind_host, port), Handler)
+        url = f"http://{bind_host}:{port}/"
         write_instance_file(port=port, url=url, instance_id=APP.instance_id)
         print(f"ComfyBatch V{APP_VERSION} 已启动：{url}")
+        if port != args.port:
+            print(f"（首选端口 {args.port} 已被占用，本次改用 {port}。）")
+        print(f"实例记录：{instance_record_path(APP.instance_id)}")
         if not args.no_browser:
             threading.Timer(0.8, lambda: webbrowser.open(url)).start()
         try:
@@ -2610,10 +2607,9 @@ def main() -> None:
         except KeyboardInterrupt:
             pass
     finally:
-        clear_instance_file()
+        clear_instance_file(APP.instance_id)
         if server is not None:
             server.server_close()
-        lock.release()
 
 
 if __name__ == "__main__":

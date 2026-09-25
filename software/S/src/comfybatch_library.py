@@ -46,6 +46,11 @@ except Exception:  # noqa: BLE001 - a missing Pillow only costs image dimensions
 #: Bumped when the table layout changes; ``meta`` records what a file is.
 SCHEMA_VERSION = 1
 
+#: How long SQLite waits for a lock another process holds before reporting the
+#: database busy. Several S processes may now have the same library open, and a
+#: writer can legitimately hold the lock for as long as one batch sync takes.
+SQLITE_BUSY_TIMEOUT_SECONDS = 30.0
+
 #: 每个 SQLite 文件开头的 16 个字节。用来区分"这不是数据库"和"数据库暂时打不开"。
 SQLITE_MAGIC = b"SQLite format 3\x00"
 
@@ -167,8 +172,22 @@ class LibraryStore:
     # ------------------------------------------------------------- schema
 
     def _connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(str(self.path), timeout=10.0)
+        connection = sqlite3.connect(str(self.path), timeout=SQLITE_BUSY_TIMEOUT_SECONDS)
         connection.row_factory = sqlite3.Row
+        # Two processes may now have this database open, so ask SQLite for the
+        # behaviour that makes that work instead of relying on the connect timeout:
+        # WAL lets a reader and a writer proceed together (the default rollback
+        # journal blocks one against the other, which turns a long batch sync into a
+        # wall of "database is locked"), and an explicit busy timeout turns a
+        # momentary lock into a short wait instead of an immediate error.
+        try:
+            connection.execute("PRAGMA busy_timeout = %d" % int(SQLITE_BUSY_TIMEOUT_SECONDS * 1000))
+            connection.execute("PRAGMA journal_mode = WAL")
+            connection.execute("PRAGMA synchronous = NORMAL")
+        except sqlite3.Error:
+            # A read-only or unusual location still works; these pragmas are a
+            # concurrency optimisation, not a correctness requirement.
+            pass
         return connection
 
     @contextlib.contextmanager

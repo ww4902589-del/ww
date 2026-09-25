@@ -1,4 +1,13 @@
-# S 重复启动无窗口修复与发布记录（PR #14）
+# 当前分支交接：压缩网页图片提取修复
+
+分支 `handoff/local-s-gzip-pages` 从已合并 PR #15 的 `main` 建立；只改图片提取模块、对应测试和本交接记录。桌面正式包尚未替换。
+
+- 触发：同一候选包在隔离实例中成功导入 `https://www.python.org/static/community_logos/python-logo-master-v3-TM.png` 图片直链，但 `https://www.python.org/community/logos/` 网页提示“没有找到可读取的封面或图片”。该站响应 `Content-Encoding: gzip`，原实现将压缩字节直接交给 HTML 解析器。
+- 修复：对 gzip 响应按原页面/图片字节上限流式解压；超限、损坏与截断分别报错，不放宽 URL 公网校验、跳转和总下载预算。
+- 回归：压缩网页 Open Graph 图片测试先失败后通过；额外测试钉住解压膨胀与截断。原网页实网重试提取 6 张图片；图片提取专项 14 项全过；全量 **517 项：516 通过、0 失败、1 跳过**；Python 编译与 `git diff --check` 通过。
+- 发布边界：本修复尚未审查、建 PR、合并、重建或部署到桌面。B 站直连预检受到本机证书吊销查询失败影响，未作为本修复通过项。
+
+# 既有交接记录：S 重复启动无窗口修复与发布记录（PR #14）
 
 源码分支 `handoff/local-s-startup` 从 `origin/main` 的 `7adaa6e` 建立，与下方已合并的紧凑审图记录无关；源码改动仅涉及 `src/comfybatch_v2_app.py` 与 `tests/test_live_sync.py`，不覆盖其他 Agent 工作区。
 

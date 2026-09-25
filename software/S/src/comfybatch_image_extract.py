@@ -18,6 +18,7 @@ import re
 import socket
 import ssl
 import time
+import zlib
 from typing import Any, Callable
 from urllib.parse import urljoin, urlparse, urlunparse
 
@@ -166,6 +167,30 @@ class _PinnedHTTPSConnection(http.client.HTTPSConnection):
         self.sock = self._context.wrap_socket(raw, server_hostname=self.host)
 
 
+def _decode_gzip_bounded(chunks: list[bytes], limit: int) -> bytes:
+    """Decode a gzip response without allowing a compressed page to exceed its cap."""
+    decoder = zlib.decompressobj(16 + zlib.MAX_WBITS)
+    decoded: list[bytes] = []
+    total = 0
+    try:
+        for chunk in chunks:
+            part = decoder.decompress(chunk, limit + 1 - total)
+            total += len(part)
+            if total > limit:
+                raise ImageExtractionError("链接解压后内容超过大小限制")
+            decoded.append(part)
+        tail = decoder.flush(limit + 1 - total)
+        total += len(tail)
+        if total > limit:
+            raise ImageExtractionError("链接解压后内容超过大小限制")
+        if not decoder.eof:
+            raise ImageExtractionError("网页压缩内容不完整")
+        decoded.append(tail)
+    except zlib.error as exc:
+        raise ImageExtractionError("网页压缩内容损坏") from exc
+    return b"".join(decoded)
+
+
 class SafeUrlFetcher:
     """Production adapter for public HTTP(S) resources.
 
@@ -264,7 +289,14 @@ class SafeUrlFetcher:
                     total += len(chunk)
                     if total > effective_max:
                         raise ImageExtractionError(f"链接内容超过 {effective_max // (1024 * 1024)}MB 限制")
-                return FetchResponse(current, content_type, b"".join(chunks))
+                encoding = str(response.getheader("Content-Encoding") or "").strip().lower()
+                if encoding == "gzip":
+                    body = _decode_gzip_bounded(chunks, effective_max)
+                elif encoding in {"", "identity"}:
+                    body = b"".join(chunks)
+                else:
+                    raise ImageExtractionError("网站使用不支持的内容压缩格式")
+                return FetchResponse(current, content_type, body)
             except (ExtractionBudgetExceeded, ImageExtractionError):
                 raise
             except (OSError, http.client.HTTPException, ssl.SSLError, ValueError) as exc:

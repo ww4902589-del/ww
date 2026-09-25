@@ -24,6 +24,11 @@ const seedHelper = source.slice(
   source.indexOf('\nfunction ', source.indexOf('function seedKeyOf(') + 1)
 );
 assert.ok(seedHelper.startsWith('function seedKeyOf('), 'renderReview 依赖的种子键函数必须仍能从 app.js 切出');
+// Guard the end bound too: renaming the *next* declaration (say to `const x=` or
+// `async function`) would otherwise let the slice swallow it silently, because the
+// start assertion would still pass.
+assert.ok(seedHelper.trimEnd().endsWith('}'), '种子键切片必须在一个完整函数处结束');
+assert.ok(!seedHelper.slice(0, -2).includes('\nfunction '), '种子键切片不得把后面的函数一起切进来');
 
 const calls = [];
 let keyHandler;

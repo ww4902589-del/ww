@@ -215,8 +215,14 @@ class DeletedPresetUiTests(unittest.TestCase):
         from fakes import js_source
 
         js = js_source()
-        self.assertIn("已删除预设", js)
+        # The list renders the stored name; a deleted preset is never labelled as
+        # deleted, because the deletion record is a tombstone, not an item. The
+        # only place the phrase belongs is the success message after a delete --
+        # asserting its mere presence, as this used to, would pass just as well if
+        # a "已删除预设" label came back.
         self.assertIn("label=p?.name||''", js)
+        self.assertNotIn(">已删除预设", js)
+        self.assertIn("notify(`已删除预设", js)
 
 
 class PackagingTests(unittest.TestCase):

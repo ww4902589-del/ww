@@ -1,6 +1,7 @@
 """Runtime checks for task #11's review navigation."""
 
 from pathlib import Path
+import shutil
 import subprocess
 import unittest
 
@@ -16,6 +17,7 @@ class ReviewNavigationTests(unittest.TestCase):
         self.assertIn('id="reviewJumpStatus"', html)
         self.assertIn('aria-live="polite"', html)
 
+    @unittest.skipUnless(shutil.which("node"), "Node.js is optional")
     def test_navigation_uses_real_page_functions(self):
         script = Path(__file__).with_name("review_navigation_behavior.js")
         result = subprocess.run(

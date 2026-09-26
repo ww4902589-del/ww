@@ -95,6 +95,13 @@ function notify(message,type='success'){
   row.textContent=message;
   host.appendChild(row);
   setTimeout(()=>row.remove(),3200)}
+function publishAgentStatus(action,state,message){
+  const status=$('agentActionStatus');
+  if(!status)return;
+  status.dataset.agentAction=action;
+  status.dataset.agentState=state;
+  status.textContent=message;
+}
 function setBusy(button,busy,label='处理中'){
   if(!button)return;
   if(busy){
@@ -1807,6 +1814,7 @@ function applyLease(lease){
     held:false,mine:false,holder:null}
   ;
   document.body.classList.toggle('readonly',isReadOnly());
+  document.body.dataset.agentLease=leaseState.held?(leaseState.mine?'mine':'read-only'):'free';
   renderLeaseBanner();
 }
 
@@ -1834,7 +1842,7 @@ function renderLeaseBanner(){
   banner.innerHTML=`另一个页面正在编辑（${
   esc(holder)}
   ），本页为只读，避免两边保存不同配置互相覆盖。`
-  +`<button class="secondary lease-ok" onclick="takeOverLease(this)">接管编辑</button>`;
+  +`<button id="takeOverLeaseButton" class="secondary lease-ok" data-agent-action="take-over-edit" aria-label="接管当前页面的编辑租约" onclick="takeOverLease(this)">接管编辑</button>`;
 }
 
 async function takeOverLease(btn){
@@ -1848,9 +1856,11 @@ async function takeOverLease(btn){
     applyLease(v.lease||{
     }
     );
+    publishAgentStatus('take-over-edit','succeeded','已接管编辑');
     notify('已接管编辑','success');
   }
   catch(e){
+    publishAgentStatus('take-over-edit','failed',e.message);
     notify(e.message,'error')}
   finally{
     setBusy(btn,false)}
@@ -1897,12 +1907,15 @@ function staleNotice(v){
 
 async function preflightAction(button){
   if(typeof isReadOnly==='function'&&isReadOnly()){
+    publishAgentStatus('preflight','blocked','本页只读，不能检查；请先接管编辑。');
     notify('本页为只读（另一个页面正在编辑）。要在这里操作请点顶部的「接管编辑」。','error');
     renderLeaseBanner();
     return}
   setBusy(button,true,'正在检查');
+  publishAgentStatus('preflight','running','正在检查实际生效配置');
   try{
     const result=await preflight();
+    publishAgentStatus('preflight',result.ready?'succeeded':'blocked',result.ready?'实际配置检查通过':'实际配置不能生成');
     notify(result.ready?'实际配置检查通过':'实际配置不能生成',result.ready?'success':'error');
     return result}
   catch(e){
@@ -1954,6 +1967,7 @@ async function preflightAction(button){
     esc(w)}
     </div>`).join('')
     +staleNotice(payload);
+    publishAgentStatus('preflight','failed',e.message);
     notify(e.message,'error');
     openDrawer('inspect').catch(()=>{
     }
@@ -1964,13 +1978,15 @@ async function preflightAction(button){
 }
 async function startBatch(button){
   if(typeof isReadOnly==='function'&&isReadOnly()){
+    publishAgentStatus('start-batch','blocked','本页只读，不能启动；请先接管编辑。');
     notify('本页为只读（另一个页面正在编辑）。要在这里操作请点顶部的「接管编辑」。','error');
     renderLeaseBanner();
     return}
-  if(!comfyConnected)return notify('ComfyUI 未启动，无法提交任务','error');
-  if(!bundle||!bundle.items.length)return notify('请先导入提示词合集','error');
-  if($('seedMode').value==='fixed'&&!Number($('seedValue').value)&&!lastSeedValue())return notify('固定种子需要填写种子值，或先点一次「用最近一次」','error');
+  if(!comfyConnected){publishAgentStatus('start-batch','blocked','ComfyUI 未启动');return notify('ComfyUI 未启动，无法提交任务','error')}
+  if(!bundle||!bundle.items.length){publishAgentStatus('start-batch','blocked','尚未导入任务');return notify('请先导入提示词合集','error')}
+  if($('seedMode').value==='fixed'&&!Number($('seedValue').value)&&!lastSeedValue()){publishAgentStatus('start-batch','blocked','固定种子未填写');return notify('固定种子需要填写种子值，或先点一次「用最近一次」','error')}
   setBusy(button,true,'正在提交');
+  publishAgentStatus('start-batch','running','正在预检并提交批次');
   try{
     await syncBundle();
     const body=batchConfig();
@@ -1979,6 +1995,7 @@ async function startBatch(button){
       method:'POST',body:JSON.stringify(body)}
     );
     goStep(3);
+    publishAgentStatus('start-batch','succeeded','批次已提交到 ComfyUI');
     notify('批次已提交到 ComfyUI');
     poll(true)}
   catch(e){
@@ -1987,6 +2004,7 @@ async function startBatch(button){
     <div>${
     esc(e.message)}
     </div>`;
+    publishAgentStatus('start-batch','failed',e.message);
     notify(e.message,'error')}
   finally{
     setBusy(button,false)}

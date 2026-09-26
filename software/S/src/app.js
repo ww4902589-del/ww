@@ -790,6 +790,42 @@ $('extractImageUrl').addEventListener('click',async()=>{const url=$('imageUrl').
       $('drawingStatus').textContent='PNG 已导出；也可以建立图片任务。';
     }catch(error){notify(error.message,'error')}
   });
+  function backgroundDimensions(bytes){
+    const four=(at)=>String.fromCharCode(...bytes.subarray(at,at+4));
+    if(bytes.length>=24&&bytes[0]===137&&four(1)==='PNG\r'){
+      const view=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength);
+      return [view.getUint32(16),view.getUint32(20)];
+    }
+    if(bytes.length>=4&&bytes[0]===255&&bytes[1]===216){
+      let at=2;
+      while(at+4<=bytes.length){
+        if(bytes[at++]!==255)return null;
+        while(bytes[at]===255)at++;
+        const marker=bytes[at++];
+        if(marker===217||marker===218)return null;
+        if(marker===1||(marker>=208&&marker<=215))continue;
+        if(at+2>bytes.length)return null;
+        const length=(bytes[at]<<8)|bytes[at+1];
+        if(length<2||at+length>bytes.length)return null;
+        if((marker>=192&&marker<=207)&&![196,200,204].includes(marker)){
+          if(length<7)return null;
+          return [(bytes[at+5]<<8)|bytes[at+6],(bytes[at+3]<<8)|bytes[at+4]];
+        }
+        at+=length;
+      }
+    }
+    if(bytes.length>=30&&four(0)==='RIFF'&&four(8)==='WEBP'){
+      const kind=four(12);
+      if(kind==='VP8X')return [1+bytes[24]+(bytes[25]<<8)+(bytes[26]<<16),
+        1+bytes[27]+(bytes[28]<<8)+(bytes[29]<<16)];
+      if(kind==='VP8 '&&bytes[23]===157&&bytes[24]===1&&bytes[25]===42)
+        return [((bytes[27]<<8)|bytes[26])&16383,((bytes[29]<<8)|bytes[28])&16383];
+      if(kind==='VP8L'&&bytes[20]===47)
+        return [1+(((bytes[22]&63)<<8)|bytes[21]),
+          1+(((bytes[24]&15)<<10)|(bytes[23]<<2)|((bytes[22]&192)>>6))];
+    }
+    return null;
+  }
   $('drawingBackground').addEventListener('change',async()=>{
     const input=$('drawingBackground'),file=input.files[0];
     if(!file)return;
@@ -800,6 +836,12 @@ $('extractImageUrl').addEventListener('click',async()=>{const url=$('imageUrl').
     }
     const url=URL.createObjectURL(file);
     try{
+      const dimensions=backgroundDimensions(new Uint8Array(await file.arrayBuffer()));
+      if(!dimensions)throw new Error('无法识别背景图片尺寸');
+      const [sourceWidth,sourceHeight]=dimensions;
+      if(!sourceWidth||!sourceHeight||sourceWidth>8192||sourceHeight>8192||
+          sourceWidth*sourceHeight>16_000_000)
+        throw new Error('背景图片尺寸过大；最长边限 8192 像素、总像素限 1600 万');
       const image=new Image();
       await new Promise((resolve,reject)=>{
         image.onload=resolve;

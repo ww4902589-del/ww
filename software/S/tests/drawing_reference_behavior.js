@@ -21,6 +21,31 @@ const calls = [];
 const drawCalls = [];
 const elements = {};
 let canvasInk = false;
+function pngHeader(width, height) {
+  const bytes = Buffer.alloc(24);
+  Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).copy(bytes);
+  bytes.writeUInt32BE(width, 16);
+  bytes.writeUInt32BE(height, 20);
+  return bytes;
+}
+function jpegHeader(width, height) {
+  const bytes = Buffer.from([255,216,255,192,0,17,8,0,0,0,0,0,0,0,0,0,0,0,0,0,0]);
+  bytes.writeUInt16BE(height, 7);
+  bytes.writeUInt16BE(width, 9);
+  return bytes;
+}
+function webpHeader(width, height) {
+  const bytes = Buffer.alloc(30);
+  bytes.write('RIFF', 0);
+  bytes.write('WEBP', 8);
+  bytes.write('VP8X', 12);
+  bytes.writeUIntLE(width - 1, 24, 3);
+  bytes.writeUIntLE(height - 1, 27, 3);
+  return bytes;
+}
+function backgroundFile(name, bytes) {
+  return {name, size: bytes.length, arrayBuffer: async () => Uint8Array.from(bytes).buffer};
+}
 function element(id, value = '') {
   return elements[id] = {
     value, disabled: false, textContent: '', files: [],
@@ -153,7 +178,16 @@ async function fire(id, event, detail = {}) {
   await fire('drawingExport', 'click');
   assert.equal(calls.filter(row => row[0] === 'download').length, 1, '有内容时可以下载 PNG');
   await fire('drawingClear', 'click');
-  elements.drawingBackground.files = [{name: 'scene.png', type: 'image/png', size: 128}];
+  for (const [name, bytes] of [
+    ['oversized.png', pngHeader(10000, 10000)],
+    ['oversized.jpg', jpegHeader(10000, 10000)],
+    ['oversized.webp', webpHeader(10000, 10000)],
+  ]) {
+    elements.drawingBackground.files = [backgroundFile(name, bytes)];
+    await fire('drawingBackground', 'change');
+  }
+  assert.equal(drawCalls.filter(row => row[0] === 'background').length, 0, '小文件但一亿像素的背景必须在解码前拒绝');
+  elements.drawingBackground.files = [backgroundFile('scene.png', pngHeader(320, 200))];
   await fire('drawingBackground', 'change');
   assert.ok(drawCalls.some(row => row[0] === 'background' && row[1] === 0 && row[2] === 0 && row[3] === 640 && row[4] === 400), '同宽高比背景应完整铺入画布');
   await fire('drawingImport', 'click');

@@ -102,6 +102,14 @@ function publishAgentStatus(action,state,message){
   status.dataset.agentState=state;
   status.textContent=message;
 }
+function isPreflightBlocked(error){
+  const payload=error&&error.payload;
+  if(!payload)return false;
+  return !!((payload.preflight_errors||[]).length||(payload.blocking||[]).length
+    ||(payload.preflight&&((payload.preflight.blocking||[]).length))
+    ||(payload.preflight&&payload.preflight.ready===false)
+    ||(payload.report&&payload.report.ready===false));
+}
 function setBusy(button,busy,label='处理中'){
   if(!button)return;
   if(busy){
@@ -1847,6 +1855,7 @@ function renderLeaseBanner(){
 
 async function takeOverLease(btn){
   setBusy(btn,true,'接管中');
+  publishAgentStatus('take-over-edit','running','正在接管编辑');
   try{
     const v=await api('/api/lease/claim',{
       method:'POST',body:JSON.stringify({
@@ -1967,7 +1976,7 @@ async function preflightAction(button){
     esc(w)}
     </div>`).join('')
     +staleNotice(payload);
-    publishAgentStatus('preflight','failed',e.message);
+    publishAgentStatus('preflight',isPreflightBlocked(e)?'blocked':'failed',e.message);
     notify(e.message,'error');
     openDrawer('inspect').catch(()=>{
     }
@@ -2004,7 +2013,7 @@ async function startBatch(button){
     <div>${
     esc(e.message)}
     </div>`;
-    publishAgentStatus('start-batch','failed',e.message);
+    publishAgentStatus('start-batch',isPreflightBlocked(e)?'blocked':'failed',e.message);
     notify(e.message,'error')}
   finally{
     setBusy(button,false)}

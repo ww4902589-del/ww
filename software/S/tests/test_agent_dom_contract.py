@@ -50,6 +50,7 @@ class AgentDomContractTests(unittest.TestCase):
             "extractImageUrl": "extract-images",
             "drawingImport": "import-drawing",
             "workflow": "select-workflow",
+            "purposeSelect": "select-purpose",
             "model": "select-model",
             "preflightButton": "preflight",
             "preflightQuickButton": "preflight",

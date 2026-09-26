@@ -101,6 +101,22 @@
       </div>
       <button id="extractImageUrl" class="secondary">提取链接图片</button>
       <button id="mappingButton" class="secondary" onclick="openMappingDialog()" disabled>打开 Excel 字段映射窗口</button>
+      <details class="drawing-panel">
+        <summary>绘画参考：在本机画布绘制并建立图片任务</summary>
+        <div class="drawing-tools">
+          <label>工具<select id="drawingTool"><option value="brush">画笔</option><option value="eraser">橡皮</option><option value="line">直线</option><option value="rect">矩形</option><option value="ellipse">椭圆</option></select></label>
+          <label>颜色<input id="drawingColor" type="color" value="#222222"></label>
+          <label>粗细<input id="drawingSize" type="range" min="1" max="48" value="5"></label>
+          <label>导入背景<input id="drawingBackground" type="file" accept=".png,.jpg,.jpeg,.webp"></label>
+          <button id="drawingUndo" class="secondary" type="button">撤销</button>
+          <button id="drawingRedo" class="secondary" type="button">重做</button>
+          <button id="drawingClear" class="secondary" type="button">清空</button>
+          <button id="drawingExport" class="secondary" type="button">导出 PNG</button>
+          <button id="drawingImport" type="button">建立绘画参考任务</button>
+        </div>
+        <canvas id="drawingCanvas" width="640" height="400" aria-label="绘画参考画布" tabindex="0"></canvas>
+        <div id="drawingStatus" class="help" role="status" aria-live="polite">画布为空；绘制或导入背景后可建立任务。</div>
+      </details>
       <div class="help">文档支持 JSON、TXT、Word 与 Excel；图片支持 PNG、JPG 和 WEBP。链接提取优先网页封面或 B 站视频封面，最多导入 12 张公开图片；图片会安全复制到 ComfyUI 输入目录，原文件不被修改。</div>
       <div id="bundleInfo" class="help">尚未导入</div>
       </div>

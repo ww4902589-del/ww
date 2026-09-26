@@ -644,6 +644,246 @@ async function fileBase64(file){
   return btoa(binary)}
 $('imageFiles').addEventListener('change',async e=>{const files=[...e.target.files];if(!files.length)return;const input=e.target;input.disabled=true;notify(`正在导入 ${files.length} 张图片`,'info');try{const rows=[];for(let i=0;i<files.length;i++){rows.push({filename:files[i].name,base64:await fileBase64(files[i])});$('bundleInfo').textContent=`正在读取图片 ${i+1}/${files.length}`};const v=await api('/api/import-images',{method:'POST',body:JSON.stringify({mode:$('imageMode').value,files:rows})});bundle=v.bundle;importMapping=null;$('mappingButton').disabled=true;bundle.items.forEach(x=>x.count=1);selectedPromptIndexes.clear();renderBundle();notify(`已建立 ${bundle.items.length} 个图片任务`);precheckAfterImport()}catch(err){notify(err.message,'error')}finally{input.disabled=false}});
 $('extractImageUrl').addEventListener('click',async()=>{const url=$('imageUrl').value.trim();if(!url){notify('请先粘贴网页、视频或图片链接','error');return}const button=$('extractImageUrl');setBusy(button,true,'正在提取');$('bundleInfo').textContent='正在读取公开网页图片';try{const v=await api('/api/extract-images',{method:'POST',body:JSON.stringify({url,mode:$('imageMode').value})});bundle=v.bundle;importMapping=null;$('mappingButton').disabled=true;bundle.items.forEach(x=>x.count=1);selectedPromptIndexes.clear();renderBundle();const covers=(v.extracted||[]).filter(x=>x.kind==='bilibili-cover').length;notify(`已提取 ${bundle.items.length} 张图片${covers?'（含 B 站封面）':''}`);precheckAfterImport()}catch(err){notify(err.message,'error')}finally{setBusy(button,false)}});
+/* ---- 绘画参考画布 ------------------------------------------------------ */
+(()=>{
+  const canvas=$('drawingCanvas'),ctx=canvas.getContext('2d');
+  let dirty=false,point=null,shapeBase=null;
+  const undoStack=[],redoStack=[];
+  ctx.fillStyle='#ffffff';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  function snapshot(){return {pixels:ctx.getImageData(0,0,canvas.width,canvas.height),dirty};}
+  function hasVisibleContent(){
+    const data=ctx.getImageData(0,0,canvas.width,canvas.height).data;
+    for(let index=0;index<data.length;index+=4){
+      if(data[index]!==255||data[index+1]!==255||data[index+2]!==255)return true;
+    }
+    return false;
+  }
+  function contentReady(){
+    if(dirty&&!hasVisibleContent()){
+      dirty=false;
+      $('drawingStatus').textContent='画布为空；绘制或导入背景后可建立任务。';
+    }
+    return dirty;
+  }
+  function saveUndo(){
+    undoStack.push(snapshot());
+    if(undoStack.length>20)undoStack.shift();
+    redoStack.length=0;
+  }
+  function restore(state){
+    ctx.putImageData(state.pixels,0,0);
+    dirty=state.dirty;
+    $('drawingStatus').textContent=dirty?'画布已有内容，可以建立图片任务。':'画布为空；绘制或导入背景后可建立任务。';
+  }
+  function location(event){
+    const box=canvas.getBoundingClientRect();
+    return {x:(event.clientX-box.left)*canvas.width/box.width,
+      y:(event.clientY-box.top)*canvas.height/box.height};
+  }
+  function drawShape(start,end,tool){
+    ctx.beginPath();
+    if(tool==='line'){
+      ctx.moveTo(start.x,start.y);
+      ctx.lineTo(end.x,end.y);
+    }else if(tool==='rect'){
+      ctx.rect(start.x,start.y,end.x-start.x,end.y-start.y);
+    }else if(tool==='ellipse'){
+      const cx=(start.x+end.x)/2,cy=(start.y+end.y)/2;
+      ctx.ellipse(cx,cy,Math.max(0.5,Math.abs(end.x-start.x)/2),
+        Math.max(0.5,Math.abs(end.y-start.y)/2),0,0,Math.PI*2);
+    }
+    ctx.stroke();
+  }
+  canvas.addEventListener('pointerdown',event=>{
+    event.preventDefault();
+    const at=location(event);
+    saveUndo();
+    point=at;
+    ctx.strokeStyle=$('drawingTool').value==='eraser'?'#ffffff':$('drawingColor').value;
+    ctx.lineWidth=Number($('drawingSize').value)||5;
+    ctx.lineCap='round';
+    ctx.lineJoin='round';
+    if(!['brush','eraser'].includes($('drawingTool').value)){
+      shapeBase=ctx.getImageData(0,0,canvas.width,canvas.height);
+      canvas.setPointerCapture(event.pointerId);
+      return;
+    }
+    ctx.beginPath();
+    ctx.moveTo(at.x,at.y);
+    ctx.lineTo(at.x,at.y);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(at.x,at.y,ctx.lineWidth/2,0,Math.PI*2);
+    ctx.fillStyle=ctx.strokeStyle;
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(at.x,at.y);
+    if($('drawingTool').value!=='eraser')dirty=true;
+    if(dirty)$('drawingStatus').textContent='画布已有内容，可以建立图片任务。';
+    canvas.setPointerCapture(event.pointerId);
+  });
+  canvas.addEventListener('pointermove',event=>{
+    if(!point)return;
+    const at=location(event);
+    if(shapeBase){
+      ctx.putImageData(shapeBase,0,0);
+      drawShape(point,at,$('drawingTool').value);
+      return;
+    }
+    ctx.lineTo(at.x,at.y);
+    ctx.stroke();
+    point=at;
+  });
+  canvas.addEventListener('pointerup',event=>{
+    if(!point)return;
+    if(shapeBase){
+      const at=location(event);
+      ctx.putImageData(shapeBase,0,0);
+      if(Math.hypot(at.x-point.x,at.y-point.y)>1){
+        drawShape(point,at,$('drawingTool').value);
+        dirty=true;
+        $('drawingStatus').textContent='画布已有内容，可以建立图片任务。';
+      }
+      shapeBase=null;
+    }
+    point=null;
+    canvas.releasePointerCapture(event.pointerId);
+  });
+  canvas.addEventListener('pointercancel',()=>{
+    if(shapeBase)ctx.putImageData(shapeBase,0,0);
+    shapeBase=null;
+    point=null;
+  });
+  $('drawingUndo').addEventListener('click',()=>{
+    if(!undoStack.length)return;
+    redoStack.push(snapshot());
+    restore(undoStack.pop());
+  });
+  $('drawingRedo').addEventListener('click',()=>{
+    if(!redoStack.length)return;
+    undoStack.push(snapshot());
+    restore(redoStack.pop());
+  });
+  $('drawingClear').addEventListener('click',()=>{
+    if(!dirty)return;
+    saveUndo();
+    ctx.fillStyle='#ffffff';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    dirty=false;
+    $('drawingStatus').textContent='画布为空；绘制或导入背景后可建立任务。';
+  });
+  async function pngBlob(){
+    const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+    if(!blob)throw new Error('无法导出画布 PNG');
+    return blob;
+  }
+  $('drawingExport').addEventListener('click',async()=>{
+    if(!contentReady()){notify('画布还是空白，请先绘制或导入背景','error');return;}
+    try{
+      const url=URL.createObjectURL(await pngBlob());
+      const link=document.createElement('a');
+      link.href=url;
+      link.download='绘画参考.png';
+      link.click();
+      setTimeout(()=>URL.revokeObjectURL(url),1000);
+      $('drawingStatus').textContent='PNG 已导出；也可以建立图片任务。';
+    }catch(error){notify(error.message,'error')}
+  });
+  function backgroundDimensions(bytes){
+    const four=(at)=>String.fromCharCode(...bytes.subarray(at,at+4));
+    if(bytes.length>=24&&bytes[0]===137&&four(1)==='PNG\r'){
+      const view=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength);
+      return [view.getUint32(16),view.getUint32(20)];
+    }
+    if(bytes.length>=4&&bytes[0]===255&&bytes[1]===216){
+      let at=2;
+      while(at+4<=bytes.length){
+        if(bytes[at++]!==255)return null;
+        while(bytes[at]===255)at++;
+        const marker=bytes[at++];
+        if(marker===217||marker===218)return null;
+        if(marker===1||(marker>=208&&marker<=215))continue;
+        if(at+2>bytes.length)return null;
+        const length=(bytes[at]<<8)|bytes[at+1];
+        if(length<2||at+length>bytes.length)return null;
+        if((marker>=192&&marker<=207)&&![196,200,204].includes(marker)){
+          if(length<7)return null;
+          return [(bytes[at+5]<<8)|bytes[at+6],(bytes[at+3]<<8)|bytes[at+4]];
+        }
+        at+=length;
+      }
+    }
+    if(bytes.length>=30&&four(0)==='RIFF'&&four(8)==='WEBP'){
+      const kind=four(12);
+      if(kind==='VP8X')return [1+bytes[24]+(bytes[25]<<8)+(bytes[26]<<16),
+        1+bytes[27]+(bytes[28]<<8)+(bytes[29]<<16)];
+      if(kind==='VP8 '&&bytes[23]===157&&bytes[24]===1&&bytes[25]===42)
+        return [((bytes[27]<<8)|bytes[26])&16383,((bytes[29]<<8)|bytes[28])&16383];
+      if(kind==='VP8L'&&bytes[20]===47)
+        return [1+(((bytes[22]&63)<<8)|bytes[21]),
+          1+(((bytes[24]&15)<<10)|(bytes[23]<<2)|((bytes[22]&192)>>6))];
+    }
+    return null;
+  }
+  $('drawingBackground').addEventListener('change',async()=>{
+    const input=$('drawingBackground'),file=input.files[0];
+    if(!file)return;
+    if(!/\.(png|jpe?g|webp)$/i.test(file.name)||file.size>20*1024*1024){
+      notify('背景只支持 20MB 以内的 PNG、JPEG 或 WEBP','error');
+      input.value='';
+      return;
+    }
+    const url=URL.createObjectURL(file);
+    try{
+      const dimensions=backgroundDimensions(new Uint8Array(await file.arrayBuffer()));
+      if(!dimensions)throw new Error('无法识别背景图片尺寸');
+      const [sourceWidth,sourceHeight]=dimensions;
+      if(!sourceWidth||!sourceHeight||sourceWidth>8192||sourceHeight>8192||
+          sourceWidth*sourceHeight>16_000_000)
+        throw new Error('背景图片尺寸过大；最长边限 8192 像素、总像素限 1600 万');
+      const image=new Image();
+      await new Promise((resolve,reject)=>{
+        image.onload=resolve;
+        image.onerror=()=>reject(new Error('背景图片无法读取'));
+        image.src=url;
+      });
+      const width=image.naturalWidth||image.width,height=image.naturalHeight||image.height;
+      if(!width||!height)throw new Error('背景图片没有有效尺寸');
+      saveUndo();
+      ctx.fillStyle='#ffffff';
+      ctx.fillRect(0,0,canvas.width,canvas.height);
+      const scale=Math.min(canvas.width/width,canvas.height/height);
+      const targetWidth=width*scale,targetHeight=height*scale;
+      ctx.drawImage(image,(canvas.width-targetWidth)/2,(canvas.height-targetHeight)/2,
+        targetWidth,targetHeight);
+      dirty=true;
+      $('drawingStatus').textContent='背景已加入画布，可以继续绘制或建立图片任务。';
+    }catch(error){notify(error.message,'error')}
+    finally{URL.revokeObjectURL(url);input.value=''}
+  });
+  $('drawingImport').addEventListener('click',async()=>{
+    if(!contentReady()){notify('画布还是空白，请先绘制或导入背景','error');return;}
+    const button=$('drawingImport');
+    setBusy(button,true,'正在建立任务');
+    try{
+      const blob=await pngBlob();
+      const v=await api('/api/import-images',{method:'POST',body:JSON.stringify({
+        mode:$('imageMode').value,files:[{filename:'绘画参考.png',base64:await fileBase64(blob)}]})});
+      bundle=v.bundle;
+      importMapping=null;
+      $('mappingButton').disabled=true;
+      bundle.items.forEach(item=>item.count=1);
+      selectedPromptIndexes.clear();
+      renderBundle();
+      $('drawingStatus').textContent='绘画参考已建立为图片任务；请核对工作流预检。';
+      notify('已建立绘画参考图片任务');
+      precheckAfterImport();
+    }catch(error){notify(error.message,'error')}
+    finally{setBusy(button,false)}
+  });
+})();
+/* ---- 字段映射 ---------------------------------------------------------- */
 function mappingOptions(el,allowBlank=false){
   const rows=importMapping?.headers||[];
   el.innerHTML=(allowBlank?'<option value="">不使用此列</option>':'')+rows.map(x=>`<option value="${

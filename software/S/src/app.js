@@ -652,6 +652,20 @@ $('extractImageUrl').addEventListener('click',async()=>{const url=$('imageUrl').
   ctx.fillStyle='#ffffff';
   ctx.fillRect(0,0,canvas.width,canvas.height);
   function snapshot(){return {pixels:ctx.getImageData(0,0,canvas.width,canvas.height),dirty};}
+  function hasVisibleContent(){
+    const data=ctx.getImageData(0,0,canvas.width,canvas.height).data;
+    for(let index=0;index<data.length;index+=4){
+      if(data[index]!==255||data[index+1]!==255||data[index+2]!==255)return true;
+    }
+    return false;
+  }
+  function contentReady(){
+    if(dirty&&!hasVisibleContent()){
+      dirty=false;
+      $('drawingStatus').textContent='画布为空；绘制或导入背景后可建立任务。';
+    }
+    return dirty;
+  }
   function saveUndo(){
     undoStack.push(snapshot());
     if(undoStack.length>20)undoStack.shift();
@@ -765,7 +779,7 @@ $('extractImageUrl').addEventListener('click',async()=>{const url=$('imageUrl').
     return blob;
   }
   $('drawingExport').addEventListener('click',async()=>{
-    if(!dirty){notify('画布还是空白，请先绘制或导入背景','error');return;}
+    if(!contentReady()){notify('画布还是空白，请先绘制或导入背景','error');return;}
     try{
       const url=URL.createObjectURL(await pngBlob());
       const link=document.createElement('a');
@@ -807,16 +821,13 @@ $('extractImageUrl').addEventListener('click',async()=>{const url=$('imageUrl').
     finally{URL.revokeObjectURL(url);input.value=''}
   });
   $('drawingImport').addEventListener('click',async()=>{
-    if(!dirty){notify('画布还是空白，请先绘制或导入背景','error');return;}
+    if(!contentReady()){notify('画布还是空白，请先绘制或导入背景','error');return;}
     const button=$('drawingImport');
     setBusy(button,true,'正在建立任务');
     try{
       const blob=await pngBlob();
-      const bytes=new Uint8Array(await blob.arrayBuffer());
-      let binary='';
-      for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));
       const v=await api('/api/import-images',{method:'POST',body:JSON.stringify({
-        mode:$('imageMode').value,files:[{filename:'绘画参考.png',base64:btoa(binary)}]})});
+        mode:$('imageMode').value,files:[{filename:'绘画参考.png',base64:await fileBase64(blob)}]})});
       bundle=v.bundle;
       importMapping=null;
       $('mappingButton').disabled=true;

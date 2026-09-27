@@ -92,6 +92,7 @@ vm.runInContext([
   assert.equal(requests.join(','), '/api/preflight');
   await context.startBatch(button);
   assert.equal(elements.agentActionStatus.dataset.agentState, 'succeeded');
+  assert.equal(elements.agentActionStatus.textContent, '本地批次已启动，等待 ComfyUI 接收任务');
   assert.equal(requests.join(','), '/api/preflight,/api/preflight,/api/start', '人工与 Agent 共用预检后启动路径');
 
   preflightReady = false;

@@ -2004,8 +2004,8 @@ async function startBatch(button){
       method:'POST',body:JSON.stringify(body)}
     );
     goStep(3);
-    publishAgentStatus('start-batch','succeeded','批次已提交到 ComfyUI');
-    notify('批次已提交到 ComfyUI');
+    publishAgentStatus('start-batch','succeeded','本地批次已启动，等待 ComfyUI 接收任务');
+    notify('本地批次已启动，等待 ComfyUI 接收任务');
     poll(true)}
   catch(e){
     $('effective').className='effective bad';

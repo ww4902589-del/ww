@@ -37,7 +37,7 @@ class AgentDomContractTests(unittest.TestCase):
         source = pathlib.Path(__file__).resolve().parents[1] / "src" / "app.js"
         result = subprocess.run(
             ["node", str(script), str(source)], capture_output=True,
-            text=True, timeout=15, check=False,
+            text=True, encoding="utf-8", timeout=15, check=False,
         )
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
 

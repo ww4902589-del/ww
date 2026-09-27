@@ -6,7 +6,7 @@
 
 关键控件保留原 `id` 与人可见文案，新增可访问名称和稳定的 `data-agent-action`：提示词/图片导入、链接图片提取、绘画参考建任务、工作流/用途/模型选择、实际预检（含页脚快速入口）、启动批次、全部通过。只读页的「接管编辑」由 `#takeOverLeaseButton` 标识。页面 `<body data-agent-lease>` 初值为 `unknown`；收到租约快照后变为 `free`、`mine` 或 `read-only`。
 
-`#agentActionStatus` 是持久状态区域，带 `role=status`、`aria-live=polite`、`data-agent-action` 和 `data-agent-state`；第一段覆盖接管编辑、实际预检、启动批次的 `running`、`succeeded`、`blocked`、`failed`。状态由原人工事件处理函数发布；旧 toast 仍用于短暂人工提示。预检失败不得进入 `/api/start`，只读页不得请求预检或提交。
+`#agentActionStatus` 是持久状态区域，带 `role=status`、`aria-live=polite`、`data-agent-action` 和 `data-agent-state`；第一段覆盖接管编辑、实际预检、启动批次的 `running`、`succeeded`、`blocked`、`failed`。状态由原人工事件处理函数发布；旧 toast 仍用于短暂人工提示。`start-batch/succeeded` 仅指 `/api/start` 已接受并启动本地后台批次，**不代表 ComfyUI 已接收任务或生成成功**；后续执行结果以运行状态与结果页为准。预检失败不得进入 `/api/start`，只读页不得请求预检或提交。
 
 ## 验收与未完成
 

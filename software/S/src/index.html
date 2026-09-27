@@ -5,7 +5,7 @@
 <title>ComfyBatch V2.21</title>
 <link rel="stylesheet" href="/app.css">
 </head>
-<body>
+<body data-agent-lease="unknown">
 <main>
 <div id="toasts" class="toast-stack" aria-live="polite"></div>
 
@@ -17,6 +17,7 @@
   </div>
   <div class="top-status"><div id="connection" class="status">正在检查</div></div>
 </div>
+<output id="agentActionStatus" class="agent-action-status" role="status" aria-live="polite" aria-label="操作状态" data-agent-action="none" data-agent-state="idle">等待操作</output>
 
 <div class="workspace">
   <aside class="step-nav">
@@ -88,8 +89,8 @@
 
       <div class="intake-card">
       <div class="fields intake-fields">
-        <label>提示词文件<input id="bundleFile" type="file" accept=".json,.csv,.txt,.md,.docx,.xlsx"></label>
-        <label>图片合集<input id="imageFiles" type="file" multiple accept=".png,.jpg,.jpeg,.webp"></label>
+        <label>提示词文件<input id="bundleFile" type="file" accept=".json,.csv,.txt,.md,.docx,.xlsx" data-agent-action="import-prompts" aria-label="导入提示词文件"></label>
+        <label>图片合集<input id="imageFiles" type="file" multiple accept=".png,.jpg,.jpeg,.webp" data-agent-action="import-images" aria-label="导入图片合集"></label>
         <label>图片处理模式
           <select id="imageMode">
             <option value="faithful_upscale">保真像素放大</option>
@@ -99,7 +100,7 @@
         </label>
         <label>网页或 B 站链接<input id="imageUrl" type="url" placeholder="粘贴页面、视频或图片链接"></label>
       </div>
-      <button id="extractImageUrl" class="secondary">提取链接图片</button>
+      <button id="extractImageUrl" class="secondary" data-agent-action="extract-images" aria-label="提取网页或 B 站链接图片">提取链接图片</button>
       <button id="mappingButton" class="secondary" onclick="openMappingDialog()" disabled>打开 Excel 字段映射窗口</button>
       <details class="drawing-panel">
         <summary>绘画参考：在本机画布绘制并建立图片任务</summary>
@@ -112,7 +113,7 @@
           <button id="drawingRedo" class="secondary" type="button">重做</button>
           <button id="drawingClear" class="secondary" type="button">清空</button>
           <button id="drawingExport" class="secondary" type="button">导出 PNG</button>
-          <button id="drawingImport" type="button">建立绘画参考任务</button>
+          <button id="drawingImport" type="button" data-agent-action="import-drawing" aria-label="将绘画参考建立为图片任务">建立绘画参考任务</button>
         </div>
         <canvas id="drawingCanvas" width="640" height="400" aria-label="绘画参考画布" tabindex="0"></canvas>
         <div id="drawingStatus" class="help" role="status" aria-live="polite">画布为空；绘制或导入背景后可建立任务。</div>
@@ -166,10 +167,10 @@
           <span class="deck-status">所有选项均写入本次真实提交</span>
         </div>
         <div class="control-grid">
-          <label>工作流<select id="workflow" onchange="renderWorkflowVariants()"></select></label>
+          <label>工作流<select id="workflow" onchange="renderWorkflowVariants()" data-agent-action="select-workflow" aria-label="选择工作流"></select></label>
           <label>执行分支<select id="workflowVariant" onchange="renderModels();renderConfigFeedback()"></select></label>
-          <label>使用目的<select id="purposeSelect" onchange="renderPurposeHint();renderConfigFeedback()"></select></label>
-          <label class="model-control">生成模型<select id="model" onchange="renderLoraOptions();renderConfigFeedback()"></select></label>
+          <label>使用目的<select id="purposeSelect" onchange="renderPurposeHint();renderConfigFeedback()" data-agent-action="select-purpose" aria-label="选择使用目的"></select></label>
+          <label class="model-control">生成模型<select id="model" onchange="renderLoraOptions();renderConfigFeedback()" data-agent-action="select-model" aria-label="选择生成模型"></select></label>
           <label>风格应用
             <select id="styleApplication" onchange="renderConfigFeedback()">
               <option value="native" selected>工作流原生组合器</option>
@@ -295,7 +296,7 @@
       </div>
 
       <div id="configFeedback" class="feedback"><b>当前配置反馈</b>正在读取可用模型、风格、LoRA 与图像规格。</div>
-      <button id="preflightButton" class="secondary" onclick="preflightAction(this)">检查实际生效配置</button>
+      <button id="preflightButton" class="secondary" onclick="preflightAction(this)" data-agent-action="preflight" aria-label="检查实际生效配置">检查实际生效配置</button>
       <div id="effective" class="effective"><b>实际生效检查：</b>尚未检查。</div>
 
       <div class="output-destination">
@@ -363,7 +364,7 @@
         <label class="review-jump">跳转编号<input id="reviewJumpIndex" type="number" min="1" step="1" inputmode="numeric" onkeydown="reviewJumpKey(event)" aria-describedby="reviewJumpStatus"></label>
         <button class="secondary" id="reviewJumpButton" onclick="jumpToReview()">定位</button>
         <span id="reviewJumpStatus" class="help" role="status" aria-live="polite"></span>
-        <button class="secondary" id="confirmAllButton" onclick="confirmAllPending(this)">全部通过</button>
+        <button class="secondary" id="confirmAllButton" onclick="confirmAllPending(this)" data-agent-action="confirm-all" aria-label="将待确认的成图全部标记为通过">全部通过</button>
         <button class="secondary" id="selectAllPendingButton" onclick="selectAllPending()">全选待审</button>
         <button class="secondary" id="redoSelectedButton" onclick="openRejectBatchDialog()">打回选中</button>
         <label>显示密度<select id="reviewDensity" onchange="setReviewDensity(this.value)">
@@ -417,8 +418,8 @@
   <div class="sticky-actions">
     <button id="backStep" class="secondary" onclick="changeStep(-1)">上一步</button>
     <button id="nextStep" class="secondary" onclick="changeStep(1)">下一步</button>
-    <button class="secondary" onclick="goStep(3);preflightAction($('preflightButton'))">实际检查</button>
-    <button id="start" onclick="startBatch(this)">启动真实批次</button>
+    <button id="preflightQuickButton" class="secondary" onclick="goStep(3);preflightAction($('preflightButton'))" data-agent-action="preflight" aria-label="进入检查阶段并检查实际生效配置">实际检查</button>
+    <button id="start" onclick="startBatch(this)" data-agent-action="start-batch" aria-label="预检后启动真实批次">启动真实批次</button>
   </div>
   </div>
 

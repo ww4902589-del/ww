@@ -180,6 +180,7 @@ class LiveSyncRouteTests(unittest.TestCase):
         self.assertTrue(body["ok"])
         self.assertEqual(app_module.APP.instance_id, body["instance_id"])
         self.assertEqual("ComfyBatch", body["app"])
+        self.assertEqual("2.22", body["version"])
         self.assertEqual(app_module.instance_name(), body["instance_name"])
 
     def test_lease_routes_arbitrate_two_pages(self):

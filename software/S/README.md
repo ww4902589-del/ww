@@ -1,16 +1,19 @@
-# S / ComfyBatch（目录 S-v2.14，程序版本 V2.21）
+# S / ComfyBatch（目录 S-v2.14，源码候选 V2.22）
 
 本目录是基于《S-研发计划与调整记录》与《S-研发资料包-2026-09-14-v1》对软件 **S**
 （ComfyBatch V2）做的一轮升级。基线为 V2.13；目录名沿用了建立工作副本时的 V2.14，
-而程序版本 `APP_VERSION` 已更新到 **V2.21**（页面标题与 `/api/ping` 都由它驱动，
-测试 `test_server_and_page_versions_agree` 盯着两者一致）。
-V2.20 候选包保留在 `build\dist-v220-release\S.exe`。**桌面运行的 `S.exe` 已更新为含
+而本分支的程序版本 `APP_VERSION` 已更新到 **V2.22**。`/api/ping` 读取该常量；页面与
+图片提取 User-Agent 是静态镜像值，由 `test_v222_release_identifiers_agree` 检查一致。
+截至 2026-09-28 00:45，此版本调整尚未合并、重建或部署；桌面上先前复制的候选仍报告 V2.21，不能据此认定桌面正在可用。正式发布状态以 `HANDOFF.md` 与 GitHub Issue #2 的最新记录为准。
+
+以下为历史发布记录：V2.20 候选包曾保留在 `build\dist-v220-release\S.exe`。**当时桌面运行的 `S.exe` 已更新为含
 本地作品库（第 17 条）与紧凑审图／信息浮层（第 18 条）的候选**（2026-09-24 部署；
 `APP_VERSION` 按 V2.21 文档的决定保持 2.20 不动）：源码取自 PR #9 合并提交
 `f1fd5de`，SHA-256
 `45678ECF2EADE99E58EE2A001EBACDDDA67EC04D3F4E332B3320F1E5973C9F60`。
-历史回退件：桌面 `S.exe.v221r1-backup-20260924`（含作品库版，PR #8 的 `9c309ef`，
-SHA-256 `4515FF0E…`）、`S.exe.v220-backup-20260924`（V2.20）。
+历史回退件曾包括桌面 `S.exe.v221r1-backup-20260924`（含作品库版，PR #8 的 `9c309ef`，
+SHA-256 `4515FF0E…`）、`S.exe.v220-backup-20260924`（V2.20）；旧 EXE 已有 Defender 隔离记录，
+**不得恢复、运行或信任这些历史文件**。
 
 V2.21 新增完全在本机 ComfyUI 内运行的图片提示词反推：优先使用
 `easy imageInterrogator → H3ShowText`，失败或缺失时回退

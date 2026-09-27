@@ -107,7 +107,7 @@ ENTITY_KEYS = frozenset(TOMBSTONE_MAPS)
 TOMBSTONE_KEYS = frozenset(TOMBSTONE_MAPS.values())
 #: Bumped when the document shape changes, so an upgrade can migrate explicitly.
 SCHEMA_VERSION = 2
-#: The one place the product version is written down.
+#: Server version source; static page and fetcher identifiers are checked by tests.
 APP_VERSION = "2.22"
 #: Shipped preset library. Populated once the loader below is defined, so the
 #: module can be read top to bottom.

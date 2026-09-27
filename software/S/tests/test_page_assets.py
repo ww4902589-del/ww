@@ -727,6 +727,7 @@ class AppModuleWiringTests(unittest.TestCase):
         self.assertEqual("2.22", declared.group(1))
         page = html_source()
         self.assertIn("ComfyBatch V2.22", page)
+        self.assertIn("<h1>S · ComfyBatch V2.22</h1>", page)
         extractor = (SOURCE_ROOT / "comfybatch_image_extract.py").read_text(encoding="utf-8")
         self.assertIn('"User-Agent": "ComfyBatch/2.22 image-extractor"', extractor)
 

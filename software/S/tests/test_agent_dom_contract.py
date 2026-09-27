@@ -32,6 +32,16 @@ class Elements(HTMLParser):
 
 class AgentDomContractTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which("node"), "Node.js is optional")
+    def test_confirm_all_reports_lease_consent_and_result(self):
+        script = pathlib.Path(__file__).with_name("agent_confirm_feedback_behavior.js")
+        source = pathlib.Path(__file__).resolve().parents[1] / "src" / "app.js"
+        result = subprocess.run(
+            ["node", str(script), str(source)], capture_output=True,
+            text=True, encoding="utf-8", timeout=15, check=False,
+        )
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js is optional")
     def test_visible_action_status_tracks_lease_preflight_and_start(self):
         script = pathlib.Path(__file__).with_name("agent_contract_behavior.js")
         source = pathlib.Path(__file__).resolve().parents[1] / "src" / "app.js"

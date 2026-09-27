@@ -2515,18 +2515,30 @@ function reviewNote(index){
 }
 
 async function confirmAllPending(btn){
+  if(typeof isReadOnly==='function'&&isReadOnly()){
+    publishAgentStatus('confirm-all','blocked','本页只读，不能批量通过；请先接管编辑。');
+    notify('本页为只读（另一个页面正在编辑）。要在这里操作请点顶部的「接管编辑」。','error');
+    renderLeaseBanner();
+    return}
   const pending=(reviewState.results||[]).filter(x=>x.copied_to&&(x.review_status||'待确认')==='待确认').map(x=>x.index);
   if(!pending.length){
+    publishAgentStatus('confirm-all','blocked','没有待确认的成图');
     notify('没有待确认的成图','error');
     return}
-  if(pending.length>5&&!confirm(`确定一次性把 ${pending.length} 张全部标记为已通过？`))return;
+  if(pending.length>5&&!confirm(`确定一次性把 ${pending.length} 张全部标记为已通过？`)){
+    publishAgentStatus('confirm-all','blocked','已取消批量通过');
+    return}
   setBusy(btn,true);
+  publishAgentStatus('confirm-all','running',`正在标记 ${pending.length} 张成图`);
   try{
     const v=await api('/api/review/confirm',{method:'POST',body:JSON.stringify({indexes:pending,status:'已通过'})});
     renderReview(v.review);
+    publishAgentStatus('confirm-all','succeeded',`已通过 ${pending.length} 张成图`);
     notify(`已通过 ${pending.length} 张`,'success');
   }
   catch(e){
+    if(e.payload&&e.payload.lease)applyLease(e.payload.lease);
+    publishAgentStatus('confirm-all',e.payload&&e.payload.lease?'blocked':'failed',e.message);
     notify(e.message,'error')}
   finally{
     setBusy(btn,false)}

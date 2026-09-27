@@ -718,6 +718,18 @@ class AppModuleWiringTests(unittest.TestCase):
         self.assertIsNotNone(page)
         self.assertEqual(declared.group(1), page.group(1), "前后端版本号必须一致")
 
+    def test_v222_release_identifiers_agree(self):
+        """The recovery release must not advertise an older API or extractor."""
+        from fakes import SOURCE_ROOT
+
+        declared = re.search(r'APP_VERSION = "([\d.]+)"', app_source())
+        self.assertIsNotNone(declared)
+        self.assertEqual("2.22", declared.group(1))
+        page = html_source()
+        self.assertIn("ComfyBatch V2.22", page)
+        extractor = (SOURCE_ROOT / "comfybatch_image_extract.py").read_text(encoding="utf-8")
+        self.assertIn('"User-Agent": "ComfyBatch/2.22 image-extractor"', extractor)
+
 
 class ReviewCompactWallTests(unittest.TestCase):
     """任务 #10：缩略图墙密度档与半透明信息浮层。

@@ -1,0 +1,100 @@
+:root { color-scheme: dark; }
+* { box-sizing: border-box; }
+html, body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: #020817;
+}
+body { font-family: "Microsoft YaHei", "Noto Sans CJK SC", sans-serif; }
+#wallpaper {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+  cursor: default;
+}
+#title {
+  --title-shift: 0px;
+  --title-glow: 0.5;
+  position: fixed;
+  z-index: 10;
+  right: 3.4vw;
+  bottom: 4.2vh;
+  min-width: clamp(230px, 19vw, 430px);
+  color: rgba(244, 249, 255, 0.94);
+  text-align: center;
+  transform: translate3d(var(--title-shift), 0, 0);
+  filter: drop-shadow(0 0 calc(7px + 9px * var(--title-glow)) rgba(112, 190, 255, 0.44));
+  transition: opacity 500ms ease, transform 250ms ease-out, filter 250ms ease-out;
+  pointer-events: none;
+}
+.title-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(9px, 0.8vw, 18px);
+}
+.title-main {
+  position: relative;
+  display: inline-block;
+  padding-left: 0.34em;
+  font-family: "STKaiti", "KaiTi", "FangSong", serif;
+  font-size: clamp(20px, 1.7vw, 38px);
+  font-weight: 400;
+  letter-spacing: 0.34em;
+  line-height: 1.1;
+  background: linear-gradient(112deg, #d8ecff 4%, #ffffff 38%, #d7c8ff 62%, #a8ddff 96%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 0 18px rgba(155, 211, 255, 0.34);
+}
+.title-main::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  color: transparent;
+  -webkit-text-stroke: 0.45px rgba(240, 248, 255, 0.58);
+  filter: blur(0.15px);
+}
+.title-gem {
+  width: clamp(7px, 0.55vw, 12px);
+  aspect-ratio: 1;
+  border: 1px solid rgba(205, 232, 255, 0.82);
+  transform: rotate(45deg);
+  background: linear-gradient(135deg, rgba(255,255,255,0.75), rgba(114,176,255,0.10));
+  box-shadow: inset 0 0 5px rgba(255,255,255,0.45), 0 0 10px rgba(130,190,255,0.55);
+}
+.title-gem.mirrored { transform: rotate(225deg); }
+.title-sub {
+  display: block;
+  margin-top: 0.72em;
+  padding-left: 0.28em;
+  color: rgba(198, 221, 248, 0.72);
+  font-family: "Segoe UI", sans-serif;
+  font-size: clamp(7px, 0.52vw, 12px);
+  font-weight: 300;
+  letter-spacing: 0.44em;
+}
+.title-rule {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 1px;
+  margin-top: 0.9em;
+  background: linear-gradient(90deg, transparent, rgba(150,199,255,0.28) 16%, rgba(235,245,255,0.85) 50%, rgba(185,153,255,0.30) 84%, transparent);
+}
+.title-rule b {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  border: 1px solid rgba(235, 246, 255, 0.88);
+  background: #b9dbff;
+  transform: translate(-50%, -50%) rotate(45deg);
+  box-shadow: 0 0 11px rgba(150, 205, 255, 0.86);
+}
+#title.hidden { opacity: 0; }
+#title.canvas-rendered { display: none; }

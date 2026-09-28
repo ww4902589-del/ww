@@ -175,6 +175,7 @@
             <select id="styleApplication" onchange="renderConfigFeedback()">
               <option value="native" selected>工作流原生组合器</option>
               <option value="prompt">提示词融合</option>
+              <option value="none">无风格（原始提示词）</option>
             </select>
           </label>
           <label>风格／LoRA 预设<select id="presetPicker" onchange="loadPreset(true)"></select></label>
@@ -241,6 +242,7 @@
             </div>
             <div id="stylePreview" class="style-preview"></div>
             <button class="secondary add-selection" onclick="addStyle()">加入风格组合</button>
+            <button class="secondary" id="plainCombinationButton" data-agent-action="plain-combination" onclick="usePlainCombination()">无风格＋无 LoRA</button>
             <div id="styles" class="selection-list"></div>
             <div class="style-recommend-box">
               <div class="subsection-title"><b>本地风格搭配建议</b><span>仅使用风格库，不包含 LoRA</span></div>

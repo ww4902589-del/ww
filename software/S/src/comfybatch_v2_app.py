@@ -1245,8 +1245,6 @@ class Application:
                     "strength": max(-2.0, min(2.0, float(item.get("strength", 1)))),
                     "use_triggers": bool(item.get("use_triggers", True)),
                 })
-        if not styles and not loras:
-            raise ValueError("预设至少需要一个风格或 LoRA")
         with self.lock:
             presets = self._settings.setdefault("style_lora_presets", {})
             duplicate = next((item for key, item in presets.items() if key != preset_id and item.get("name") == name), None)
@@ -1395,6 +1393,12 @@ class Application:
                 generation = dict(metadata.get("generation") or {})
                 generation["styles"] = self._resolve_styles(list(preset.get("styles") or []), inventory)
                 generation["loras"] = self._resolve_loras(list(preset.get("loras") or []))
+                generation["style_library"] = ""
+                generation["style_name"] = ""
+                if not generation["styles"]:
+                    generation["style_application"] = "none"
+                else:
+                    generation.pop("style_application", None)
                 metadata["generation"] = generation
                 metadata["style_lora_preset_name"] = preset["name"]
             else:
@@ -1607,7 +1611,7 @@ class Application:
             (str(item.get("library") or ""), str(item.get("name") or "")): item
             for item in inventory.get("styles", [])
         }
-        requested = config.styles or ([{"catalog": config.style_library, "name": config.style_name}] if config.style_name else [])
+        requested = [] if config.style_application == "none" else (config.styles or ([{"catalog": config.style_library, "name": config.style_name}] if config.style_name else []))
         resolved: list[dict] = []
         for item in requested:
             key = (str(item.get("catalog") or ""), str(item.get("name") or ""))
@@ -1704,10 +1708,13 @@ class Application:
                 ), None)
                 if isinstance(first_generation, dict):
                     capability_config.model = str(first_generation.get("model") or capability_config.model)
-                    capability_config.style_library = str(first_generation.get("style_library") or capability_config.style_library)
-                    capability_config.style_name = str(first_generation.get("style_name") or capability_config.style_name)
+                    capability_config.style_library = str(first_generation.get("style_library", capability_config.style_library))
+                    capability_config.style_name = str(first_generation.get("style_name", capability_config.style_name))
+                    capability_config.style_application = str(first_generation.get("style_application", capability_config.style_application))
                     if isinstance(first_generation.get("styles"), list):
                         capability_config.styles = copy.deepcopy(first_generation["styles"])
+                        if capability_config.styles and capability_config.style_application == "none":
+                            capability_config.style_application = "native"
                     if isinstance(first_generation.get("loras"), list):
                         capability_config.loras = copy.deepcopy(first_generation["loras"])
                     capability_config.aspect_ratio = str(first_generation.get("aspect_ratio") or capability_config.aspect_ratio)

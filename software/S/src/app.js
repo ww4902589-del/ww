@@ -266,7 +266,7 @@ async function savePreset(asNew){
   if(!name)return alert('请输入预设名称');
   if(!asNew&&!id)return alert('请先选择要更新的预设');
   try{
-    const v=await api('/api/save-style-lora-preset',{method:'POST',body:JSON.stringify({id,name,styles:selectedStyles,loras:selectedLoras})});
+    const v=await api('/api/save-style-lora-preset',{method:'POST',body:JSON.stringify({id,name,styles:$('styleApplication')?.value==='none'?[]:selectedStyles,loras:selectedLoras})});
     inventory.style_lora_presets=v.presets;
     activePresetId=v.preset.id;
     renderPresetOptions();
@@ -306,6 +306,8 @@ function loadPreset(fromSelection=false){
   $('presetName').value=x.name;
   selectedStyles=(x.styles||[]).map(enrichPresetStyle);
   selectedLoras=(x.loras||[]).map(enrichPresetLora);
+  if(!selectedStyles.length){$('styleApplication').value='none';$('styleName').value=''}
+  else if($('styleApplication').value==='none')$('styleApplication').value='native';
   renderStyleBasket();
   renderLoras()}
 async function deletePreset(button){
@@ -434,6 +436,18 @@ function renderStyles(){
   const lib=$('styleLibrary').value;
   opts($('styleName'),inventory.styles.filter(x=>x.library===lib),x=>x.display_name||x.name_cn||x.name,x=>x.name);
   renderStylePreview()}
+function usePlainCombination(){
+  selectedStyles=[];
+  selectedLoras=[];
+  activePresetId='';
+  $('styleApplication').value='none';
+  $('presetPicker').value='';
+  $('styleName').value='';
+  renderStyleBasket();
+  renderLoras();
+  renderConfigFeedback();
+  notify('已切换为无风格＋无 LoRA；任务级预设仍可单独覆盖。');
+}
 function renderStylePreview(){
   const x=styleSource(),url=styleThumbnailUrl(x);
   $('stylePreview').innerHTML=x?`${url?`<img src="${
@@ -452,6 +466,7 @@ function addStyle(){
   }
   ;
   selectedStyles.push({...source,catalog,name});
+  if($('styleApplication').value==='none')$('styleApplication').value='native';
   renderStyleBasket()}
 function renderStyleBasket(){
   $('styles').innerHTML=selectedStyles.map((x,i)=>{const url=styleThumbnailUrl(x);return `<div class="chip chip-with-thumb">${url?`<img class="style-thumb" src="${
@@ -1050,7 +1065,7 @@ function taskPresetSummaries(){
 function renderConfigFeedback(){
   const el=$('configFeedback');
   if(!el)return;
-  const chosen=selectedStyles.length?selectedStyles.map(x=>x.display_name||x.name_cn||x.name).join(' + '):(styleSource()?.display_name||styleSource()?.name_cn||styleSource()?.name||'未选择');
+  const chosen=$('styleApplication').value==='none'?'无风格':(selectedStyles.length?selectedStyles.map(x=>x.display_name||x.name_cn||x.name).join(' + '):(styleSource()?.display_name||styleSource()?.name_cn||styleSource()?.name||'未选择'));
   const loras=selectedLoras.length?selectedLoras.map(x=>`${x.display_name||x.name} ×${Number(x.strength||1).toFixed(2)}`).join('，'):'未添加';
   const image=currentImagePreset(),active=presetById(activePresetId),exact=active&&presetSignature(active.styles,active.loras)===presetSignature(selectedStyles,selectedLoras);
   const globalLabel=active?`${active.name}${exact?'':'（已临时修改）'}`:'自定义全局配置';
@@ -1059,7 +1074,7 @@ function renderConfigFeedback(){
   <div>执行分支：${esc(variant?.name||'当前已启用分支')} · ${variant?.sampler_count||0}次采样${variant?.upscale_count?` · ${variant.upscale_count}个放大步骤`:''}</div>
   <div>模型：${esc($('model')?.value||'未选择')}</div>
   <div>全局设定：${esc(globalLabel)}</div>
-  <div>全局风格：${esc(chosen)} · ${selectedStyles.length?`已加入 ${selectedStyles.length} 个组合风格`:'使用当前具体风格'} · ${$('styleApplication')?.value==='native'?'原生组合器':'提示词融合'}</div>
+  <div>全局风格：${esc(chosen)} · ${$('styleApplication').value==='none'?'不应用风格':(selectedStyles.length?`已加入 ${selectedStyles.length} 个组合风格`:'使用当前具体风格')} · ${$('styleApplication')?.value==='none'?'原始提示词':($('styleApplication')?.value==='native'?'原生组合器':'提示词融合')}</div>
   <div>全局 LoRA：${esc(loras)}</div>
   <div>任务级设定（优先覆盖全局）：${taskText}</div>
   <div>全局图像规格：${esc(image?.name||'自定义')} · 实际比例 ${esc($('aspect')?.value||'未选择')} · ${Number(image?.megapixels||1.2).toFixed(1)} MP</div>`}
@@ -1178,9 +1193,9 @@ function batchConfig(){
     purpose:$('purposeSelect')?$('purposeSelect').value:'',
     style_application:$('styleApplication').value,
     model:$('model').value,
-    styles:selectedStyles,
+    styles:$('styleApplication').value==='none'?[]:selectedStyles,
     style_library:$('styleLibrary').value,
-    style_name:selectedStyles.length?'':$('styleName').value,
+    style_name:$('styleApplication').value==='none'||selectedStyles.length?'':$('styleName').value,
     loras:selectedLoras,
     aspect_ratio:$('aspect').value,
     megapixels:Number(image?.megapixels||1.2),

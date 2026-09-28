@@ -756,7 +756,7 @@ class PromptCompiler:
         source = str(prompt).strip()
         if config.single_subject_guard:
             source = cls._remove_visual_negation_cues(source)
-        if config.style_application != "native":
+        if config.style_application not in {"native", "none"}:
             source = cls.apply_style_templates(source, config.styles)
         pieces = [source]
         triggers: list[str] = []
@@ -779,7 +779,7 @@ class PromptCompiler:
     @staticmethod
     def compile_negative(task_negative: str, config: BatchConfig) -> str:
         values: list[str] = []
-        sources = [task_negative, config.negative_prompt, *(style.get("negative_prompt") for style in config.styles)]
+        sources = [task_negative, config.negative_prompt, *(style.get("negative_prompt") for style in (config.styles if config.style_application != "none" else []))]
         for source in sources:
             for part in re.split(r"[,，;；\n]+", str(source or "")):
                 text = part.strip()
@@ -1433,7 +1433,7 @@ class Krea2WorkflowAdapter:
                 f"直接负面引导；若原作依赖该节点（如归一化负面以关闭负面引导），出图效果会随之改变"
             )
 
-        selected_styles = config.styles or ([{"catalog": config.style_library, "name": config.style_name}] if config.style_name else [])
+        selected_styles = [] if config.style_application == "none" else (config.styles or ([{"catalog": config.style_library, "name": config.style_name}] if config.style_name else []))
         usable_styles = [item for item in selected_styles if str(item.get("prompt") or "").strip()]
         native_styles = config.style_application == "native"
         # docs/15 §6.2 方案A：capabilities 与 build 共用同一份锚点评估，
@@ -1575,6 +1575,8 @@ class Krea2WorkflowAdapter:
             self.last_negative_skipped = {}
             self.last_style_injection = {}
             graph = self._convert_ui_graph(prompt_text, config, output_prefix, task_negative, source_image)
+        if config.style_application == "none":
+            self._bypass_plain_resources(graph, bypass_loras=not config.loras)
         self._inject_loras(graph, config.loras, self.last_sources)
         if config.seed is not None:
             apply_seed(graph, int(config.seed))
@@ -1682,8 +1684,12 @@ class Krea2WorkflowAdapter:
             image_ids = self._node_ids(graph, "LoadImage")
             if image_ids:
                 graph[image_ids[0]].setdefault("inputs", {})["image"] = source_image
+        if config.style_application == "none":
+            self._bypass_plain_resources(graph, bypass_loras=not config.loras)
         self._apply_prompt(graph, prompt_text, PromptCompiler.compile_negative(task_negative, config))
-        if config.styles and config.style_application == "native":
+        if config.style_application == "none":
+            pass  # Already rewired before prompt text is merged.
+        elif config.styles and config.style_application == "native":
             if not self._apply_native_styles(graph, prompt_text, config.styles)["injected"]:
                 # docs/15 §6.2 方案A 回退档：白名单锚点不满足 → 风格模板编译进
                 # 提示词，并绕开作者的风格组合器（与"提示词融合"同语义，避免双重风格）。
@@ -1796,8 +1802,12 @@ class Krea2WorkflowAdapter:
                             reachable.add(source_id)
                             pending.append(source_id)
             graph = {node_id: node for node_id, node in graph.items() if node_id in reachable}
+        if config.style_application == "none":
+            self._bypass_plain_resources(graph, bypass_loras=not config.loras)
         self._apply_prompt(graph, prompt_text, PromptCompiler.compile_negative(task_negative, config))
-        if config.styles and config.style_application == "native":
+        if config.style_application == "none":
+            pass  # Already rewired before prompt text is merged.
+        elif config.styles and config.style_application == "native":
             if not self._apply_native_styles(graph, prompt_text, config.styles)["injected"]:
                 # docs/15 §6.2 方案A 回退档：白名单锚点不满足 → 编译进提示词
                 # 并绕开作者的风格组合器（与"提示词融合"同语义）。
@@ -2163,6 +2173,28 @@ class Krea2WorkflowAdapter:
                 for name, value in list((node.get("inputs") or {}).items()):
                     if value == [style_id, 0]:
                         node["inputs"][name] = copy.deepcopy(source)
+
+    @staticmethod
+    def _bypass_plain_resources(graph: dict[str, Any], bypass_loras: bool = True) -> None:
+        """Explicit plain mode rewires known resources, never just clears labels."""
+        roles = {"easy stylesSelector": {0: "positive", 1: "negative"}}
+        if bypass_loras:
+            roles.update({"LoraLoader": {0: "model", 1: "clip"}, "LoraLoaderModelOnly": {0: "model"}})
+        for resource_id in list(graph):
+            node = graph.get(resource_id)
+            ports = roles.get(node.get("class_type")) if node else None
+            if not ports:
+                continue
+            for target_id, target in graph.items():
+                if target_id == resource_id:
+                    continue
+                for name, value in list(target.get("inputs", {}).items()):
+                    if isinstance(value, list) and len(value) == 2 and str(value[0]) == resource_id:
+                        port = ports.get(value[1])
+                        if port not in node.get("inputs", {}):
+                            raise ValueError("无风格组合无法安全绕过节点：" + resource_id)
+                        target["inputs"][name] = copy.deepcopy(node["inputs"][port])
+            del graph[resource_id]
 
     def _inject_loras(self, graph: dict[str, Any], loras: list[dict[str, Any]], sources: dict[str, dict[str, str]] | None = None) -> None:
         if not loras:
@@ -3101,10 +3133,13 @@ class BatchRunner:
                     generation = item.metadata.get("generation") if isinstance(item.metadata, dict) else None
                     if isinstance(generation, dict):
                         item_config.model = str(generation.get("model") or item_config.model)
-                        item_config.style_library = str(generation.get("style_library") or item_config.style_library)
-                        item_config.style_name = str(generation.get("style_name") or item_config.style_name)
+                        item_config.style_library = str(generation.get("style_library", item_config.style_library))
+                        item_config.style_name = str(generation.get("style_name", item_config.style_name))
+                        item_config.style_application = str(generation.get("style_application", item_config.style_application))
                         if isinstance(generation.get("styles"), list):
                             item_config.styles = copy.deepcopy(generation["styles"])
+                            if item_config.styles and item_config.style_application == "none":
+                                item_config.style_application = "native"
                         item_config.aspect_ratio = str(generation.get("aspect_ratio") or item_config.aspect_ratio)
                         item_config.megapixels = max(0.25, min(4.0, float(generation.get("megapixels") or item_config.megapixels)))
                         if isinstance(generation.get("loras"), list):

@@ -1684,9 +1684,11 @@ class Krea2WorkflowAdapter:
             image_ids = self._node_ids(graph, "LoadImage")
             if image_ids:
                 graph[image_ids[0]].setdefault("inputs", {})["image"] = source_image
-        self._apply_prompt(graph, prompt_text, PromptCompiler.compile_negative(task_negative, config))
         if config.style_application == "none":
             self._bypass_plain_resources(graph, bypass_loras=not config.loras)
+        self._apply_prompt(graph, prompt_text, PromptCompiler.compile_negative(task_negative, config))
+        if config.style_application == "none":
+            pass  # Already rewired before prompt text is merged.
         elif config.styles and config.style_application == "native":
             if not self._apply_native_styles(graph, prompt_text, config.styles)["injected"]:
                 # docs/15 §6.2 方案A 回退档：白名单锚点不满足 → 风格模板编译进
@@ -1800,9 +1802,11 @@ class Krea2WorkflowAdapter:
                             reachable.add(source_id)
                             pending.append(source_id)
             graph = {node_id: node for node_id, node in graph.items() if node_id in reachable}
-        self._apply_prompt(graph, prompt_text, PromptCompiler.compile_negative(task_negative, config))
         if config.style_application == "none":
             self._bypass_plain_resources(graph, bypass_loras=not config.loras)
+        self._apply_prompt(graph, prompt_text, PromptCompiler.compile_negative(task_negative, config))
+        if config.style_application == "none":
+            pass  # Already rewired before prompt text is merged.
         elif config.styles and config.style_application == "native":
             if not self._apply_native_styles(graph, prompt_text, config.styles)["injected"]:
                 # docs/15 §6.2 方案A 回退档：白名单锚点不满足 → 编译进提示词

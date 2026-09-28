@@ -13,21 +13,24 @@ class PlainCombinationTests(unittest.TestCase):
         graph = {
             '1': {'class_type': 'CheckpointLoaderSimple', 'inputs': {'ckpt_name': 'old'}},
             '2': {'class_type': 'PrimitiveStringMultiline', 'inputs': {'value': 'old'}},
-            '3': {'class_type': 'easy stylesSelector', 'inputs': {'positive': ['2', 0], 'negative': '', 'styles': 'old', 'select_styles': 'old'}},
+            '3': {'class_type': 'easy stylesSelector', 'inputs': {'positive': ['2', 0], 'negative': 'author-negative', 'styles': 'old', 'select_styles': 'old'}},
             '4': {'class_type': 'LoraLoader', 'inputs': {'model': ['1', 0], 'clip': ['1', 1], 'lora_name': 'old'}},
             '5': {'class_type': 'CLIPTextEncode', 'inputs': {'text': ['3', 0], 'clip': ['4', 1]}},
-            '6': {'class_type': 'CLIPTextEncode', 'inputs': {'text': '', 'clip': ['4', 1]}},
+            '6': {'class_type': 'CLIPTextEncode', 'inputs': {'text': ['3', 1], 'clip': ['4', 1]}},
             '7': {'class_type': 'EmptyLatentImage', 'inputs': {'width': 512, 'height': 512, 'batch_size': 1}},
             '8': {'class_type': 'KSampler', 'inputs': {'model': ['4', 0], 'positive': ['5', 0], 'negative': ['6', 0], 'latent_image': ['7', 0]}},
             '9': {'class_type': 'VAEDecode', 'inputs': {'samples': ['8', 0], 'vae': ['1', 2]}},
             '10': {'class_type': 'SaveImage', 'inputs': {'images': ['9', 0], 'filename_prefix': 'old'}},
         }
         config = BatchConfig('flow.json', 'model', style_application='none', single_subject_guard=False)
-        result = Krea2WorkflowAdapter(graph).build('a cat', config, 'test')
+        result = Krea2WorkflowAdapter(graph).build('a cat', config, 'test', task_negative='user-negative')
         self.assertEqual('a cat', result['2']['inputs']['value'])
         self.assertNotIn('3', result)
         self.assertNotIn('4', result)
         self.assertEqual(['1', 0], result['8']['inputs']['model'])
+        self.assertIn('user-negative', result['6']['inputs']['text'])
+        self.assertIn('author-negative', result['6']['inputs']['text'])
+        self.assertNotIn("['3'", result['6']['inputs']['text'])
 
     @unittest.skipUnless(shutil.which('node'), 'Node required for page behavior')
     def test_page_submits_plain_combination_even_with_selected_dropdown_style(self):

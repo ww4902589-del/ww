@@ -6,9 +6,18 @@ import shutil
 
 from comfybatch_v2_app import Application
 from comfybatch_v2_core import BatchConfig, Krea2WorkflowAdapter, PromptBundleParser, PromptCompiler
+from fakes import ui_workflow
 
 
 class PlainCombinationTests(unittest.TestCase):
+    def test_ui_workflow_build_bypasses_style_and_preserves_user_negative(self):
+        config = BatchConfig('flow.json', 'model', style_application='none', single_subject_guard=False)
+        adapter = Krea2WorkflowAdapter(ui_workflow())
+        graph = adapter.build('a cat', config, 'test', task_negative='user-negative')
+        self.assertFalse(any(node['class_type'] == 'easy stylesSelector' for node in graph.values()))
+        self.assertTrue(any(node.get('inputs', {}).get('text') == 'user-negative' for node in graph.values()))
+        self.assertEqual('a cat', graph['50']['inputs']['value'])
+
     def test_actual_api_build_has_raw_prompt_and_no_style_or_lora_nodes(self):
         graph = {
             '1': {'class_type': 'CheckpointLoaderSimple', 'inputs': {'ckpt_name': 'old'}},

@@ -126,6 +126,12 @@ function mgPreview(index){
 function mgMarksKey(doc){
   return JSON.stringify({sets:(doc?.sets||[]).map(s=>({id:s.id,name:s.name,paths:[...(s.paths||[])],note:s.note||{},color:s.color})),active:doc?.active||''});
 }
+function mgMarksEqual(local,remote){
+  const normalized=cloneDoc(remote), colors=new Map((local?.sets||[]).map(s=>[s.id,s.color]));
+  // Existing setColor assigns absent colors during rendering, without a user edit.
+  (normalized.sets||[]).forEach(s=>{if(s.color==null)s.color=colors.get(s.id);});
+  return mgMarksKey(local)===mgMarksKey(normalized);
+}
 async function mgMark(kind){
   if(MG.busy||!MG.picked.size)return;
   const n=MG.picked.size;
@@ -136,7 +142,7 @@ async function mgMark(kind){
   MG.busy=true;
   const uids=[...MG.picked.values()].map(im=>im.uid);
   const ops=[{set:sid,name,uids}];
-  if(kind!=='set')ops.unshift({set:kind==='keep'?'verdict-reject':'verdict-keep',uids,remove:true});
+  if(kind!=='set')ops.unshift({set:kind==='keep'?'verdict-reject':'verdict-keep',name:kind==='keep'?'淘汰':'保留',uids,remove:true});
   // Share the gallery's write queue; acknowledged snapshots include these deltas.
   mkQueue=mkQueue.then(async()=>{
     if(mkBlocked||!mkBase)throw Error('收藏尚未同步完成，请重连后再标记');
@@ -145,7 +151,7 @@ async function mgMark(kind){
     // Rebase unsent gallery edits on the newly acknowledged marks.
     const serial=mkEdit,local=cloneDoc(marksDoc()),base=cloneDoc(mkBase);
     const r=await fetch('/api/marks');const m=await r.json();if(!r.ok)throw Error('标记已保存，读取失败，请刷新');
-    if(serial===mkEdit&&mgMarksKey(local)===mgMarksKey(base)){
+    if(serial===mkEdit&&mgMarksEqual(local,base)){
       mkBase=cloneDoc(m);mkAck=cloneDoc(m);acceptMarks(m);refreshMarks();
     }
     mgRender();toast(`已标记 ${n} 张`);
@@ -166,11 +172,11 @@ function mgDialog(message,input=false){
 }
 setInterval(async()=>{
   if(!useServer||mgMarksPoll||MG.busy||mkBlocked||!mkBase)return;
-  if(mgMarksKey(marksDoc())!==mgMarksKey(mkBase))return;
+  if(!mgMarksEqual(marksDoc(),mkBase)||!mgMarksEqual(mkBase,mkAck))return;
   mgMarksPoll=true;const serial=mkEdit,baseline=mgMarksKey(mkBase);
   try{
     const r=await fetch('/api/marks');const m=await r.json();if(!r.ok)return;
-    if(!MG.busy&&serial===mkEdit&&baseline===mgMarksKey(mkBase)&&baseline===mgMarksKey(marksDoc())){
+    if(!MG.busy&&serial===mkEdit&&baseline===mgMarksKey(mkBase)&&mgMarksEqual(marksDoc(),mkBase)){
       mkBase=cloneDoc(m);mkAck=cloneDoc(m);acceptMarks(m);refreshMarks();mgRender();
     }
   }catch(e){}finally{mgMarksPoll=false;}

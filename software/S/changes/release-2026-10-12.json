@@ -1,0 +1,56 @@
+{
+  "date": "2026-10-12",
+  "application": "S / ComfyBatch",
+  "version": "2.42",
+  "image_management_plan": "V2.1",
+  "local_source_commit": "7f6e8bd66a2f42b2eb0fcdd4bf3a688bc52c69d4",
+  "github_code_commit": "8e86c21a0620ea7eaac9ce8d98cad160e43f8b4a",
+  "previous_delivery_commit": "0d36ef51adae0ea30e35c0e1a83e539cddd555a7",
+  "github_code_path": "software/S/code",
+  "github_records_path": "software/S/changes",
+  "executable_sha256": "2ED2BEDCC8BAB2291501549A636186E1970005BB7ECA1390555FE529E3FF2A87",
+  "executable_rebuilt": false,
+  "code_files": 131,
+  "archive": {
+    "file": "S-历史归档-20261012.zip",
+    "sha256": "6290139E5C0150F843274164837531C8AA805E22E688609851EDFC697FF5A599",
+    "snapshot_files": 11635,
+    "unique_objects": 3194,
+    "removed_archived_files": 9836
+  },
+  "before": {
+    "exe_files": 69,
+    "unique_exe_contents": 36,
+    "core_locations": 77,
+    "unique_core_contents": 12
+  },
+  "after": {
+    "exe_files": 1,
+    "core_locations": 1
+  },
+  "validation": {
+    "full_regression_before_consolidation": {
+      "total": 636,
+      "passed": 635,
+      "failed": 0,
+      "skipped": 1,
+      "reason": "external optional XLSX fixture"
+    },
+    "current_node_checks": "related browser and content dedup passed",
+    "current_runtime_ast_modules": 16,
+    "archive_objects": "all 3194 hashes verified",
+    "images": "preserved",
+    "current_appdata": "preserved",
+    "desktop_executable": "same hash before and after",
+    "restore": {
+      "RecoveryContentVerified": true,
+      "ExistingDestinationRejected": true,
+      "JunctionRejected": true,
+      "RedirectTargetUntouched": true
+    },
+    "image_files_checked": 236,
+    "image_hash_mismatches": 0
+  },
+  "pull_request": 25,
+  "merged": false
+}

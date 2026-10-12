@@ -1,0 +1,32 @@
+{
+ "status": 400,
+ "raw": "{\"error\": {\"type\": \"prompt_outputs_failed_validation\", \"message\": \"Prompt outputs failed validation\", \"details\": \"\", \"extra_info\": {}}, \"node_errors\": {\"4\": {\"errors\": [{\"type\": \"value_not_in_list\", \"message\": \"Value not in list\", \"details\": \"sampler_name: 'definitely_not_a_sampler' not in (list of length 44)\", \"extra_info\": {\"input_name\": \"sampler_name\", \"input_config\": null, \"received_value\": \"definitely_not_a_sampler\"}}], \"dependent_outputs\": [\"6\"], \"class_type\": \"KSampler\"}}}",
+ "body": {
+  "error": {
+   "type": "prompt_outputs_failed_validation",
+   "message": "Prompt outputs failed validation",
+   "details": "",
+   "extra_info": {}
+  },
+  "node_errors": {
+   "4": {
+    "errors": [
+     {
+      "type": "value_not_in_list",
+      "message": "Value not in list",
+      "details": "sampler_name: 'definitely_not_a_sampler' not in (list of length 44)",
+      "extra_info": {
+       "input_name": "sampler_name",
+       "input_config": null,
+       "received_value": "definitely_not_a_sampler"
+      }
+     }
+    ],
+    "dependent_outputs": [
+     "6"
+    ],
+    "class_type": "KSampler"
+   }
+  }
+ }
+}

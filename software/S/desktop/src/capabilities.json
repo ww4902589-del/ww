@@ -1,0 +1,173 @@
+{
+  "_readme": [
+    "S / ComfyBatch 的机读能力清单。这份文件的唯一目的是：让下一个（人或 AI）",
+    "在动手加功能之前，先看清哪些能力**已经实现、在哪里实现**，从而不再写出",
+    "第二份重复实现。",
+    "",
+    "使用约定：新增能力时，往 capabilities 里加一条，填 implementation 为真实",
+    "文件:行号锚点（不是推测）。改动了某项能力的实现位置，必须同步更新这里 ——",
+    "锚点过期比没有锚点更糟，因为它会把人引到错误的地方。",
+    "",
+    "这个文件由 /api/capabilities 原样返回，页面「能力清单」面板也读它。"
+  ],
+  "product": "ComfyBatch V2",
+  "app_version": "2.41",
+  "routes": [
+    "/api/capabilities"
+  ],
+  "capabilities": [
+    {
+      "id": "llm_refine",
+      "name": "可选 LLM 精修提示词",
+      "status": "implemented",
+      "summary": "启用后，在批次开跑前把整份提示词的 (title, prompt, negative_prompt) 交给一个兼容 OpenAI /chat/completions 的接口，用返回的数组整体替换。默认关闭，关闭时零 token 消耗。",
+      "implementation": {
+        "class": "comfybatch_v2_core.OpenAICompatibleAdapter",
+        "method": "refine",
+        "file": "src/comfybatch_v2_core.py",
+        "anchor": "class OpenAICompatibleAdapter",
+        "called_from": "comfybatch_v2_core.BatchRunner._run（items = OpenAICompatibleAdapter().refine(bundle.items, config.llm)）"
+      },
+      "config_shape": {
+        "llm": {
+          "enabled": "bool，关闭时 refine 直接原样返回，不发任何请求",
+          "base_url": "兼容接口根地址，代码会自动拼 /chat/completions",
+          "model": "模型名",
+          "api_key": "可选；只放进 Authorization 头，写报告时会被清空",
+          "temperature": "float，默认 0.2",
+          "instruction": "system 提示词；留空时用内置的「保持原意、只返回 JSON 数组」"
+        }
+      },
+      "guards": [
+        "返回数组长度必须与输入条数一致，否则整批报错停止（不会静默错位）。",
+        "返回内容若被 ``` 围栏包住会自动剥掉。",
+        "每条的 metadata 会打上 llm_refined: true，便于事后追溯哪几条被改过。",
+        "API Key 在写出的运行报告里被清空（BatchRunner._run 末尾）。"
+      ],
+      "do_not_reimplement": [
+        "不要再写一个「LLM 调用器」「提示词改写器」「文本润色」——本能力已覆盖。",
+        "不要在启动器或批处理里另接一套 LLM；启动器不参与精修（见 comfybatch_launcher）。",
+        "不要在前端另做一次 LLM 请求；唯一入口是提交载荷里的 llm 对象。"
+      ],
+      "ui": {
+        "page": "index.html 「检查与运行」→「高级生成保护与可选 LLM 精修」",
+        "toggle": "toggleLLM() → #llmFields",
+        "submit_payload": "app.js batchConfig().llm"
+      }
+    },
+    {
+      "id": "batch_launcher",
+      "name": "按画幅分批启动器",
+      "status": "implemented",
+      "summary": "把一份合集按每条任务的图像规格（aspect_ratio）拆成若干组，依次提交给 ComfyUI；组间独立，一组失败不影响下一组。断点续跑判据是输出目录里已存在的 PNG 编号。",
+      "implementation": {
+        "module": "src/comfybatch_launcher.py",
+        "classes": ["BatchLauncher", "GroupPlan"],
+        "functions": ["plan_groups", "done_numbers", "subset_bundle", "resolve_subset", "aspect_ratio_key", "canonical_aspect_ratios"],
+        "wired_in": "comfybatch_v2_app.Application.launcher / launcher_payload / launcher_preview / launcher_start"
+      },
+      "routes": {
+        "POST /api/launcher/preview": "只算分组，不提交",
+        "POST /api/launcher/start": "开始分批",
+        "POST /api/launcher/cancel": "停止分批（当前组收尾后不再提交后续组）",
+        "GET /api/status": "返回体含 launcher 字段，随轮询刷新进度"
+      },
+      "invariants": [
+        "画幅标签一律从 comfybatch_v2_app.IMAGE_PRESETS 派生（canonical_aspect_ratios），不写字面量 —— 避免和 ComfyUI ResolutionSelector 的候选串不一致。",
+        "同一时刻全程序只有一个分批任务（BatchLauncher.busy）。",
+        "「已经出过图」只按磁盘上的 PNG 判断，不依赖任何内存状态，所以进程被杀后重来仍正确。",
+        "分组时保留合集原有次序，不重排。"
+      ],
+      "do_not_reimplement": [
+        "不要再写外部守护脚本（如 guard_*.py）+ 独立 .bat 来轮询分组 —— 已内置。",
+        "不要再写第二份「画幅 → 子目录」映射表；分组由任务元数据决定，不靠目录名。",
+        "不要在启动器里重复预检/编译工作流；提交一律走 BatchRunner.start。"
+      ],
+      "ui": {
+        "page": "index.html 「检查与运行」→「批量启动器」",
+        "functions": ["launcherPreview", "launcherStart", "launcherCancel", "renderLauncher"]
+      }
+    },
+    {
+      "id": "batch_runner",
+      "name": "单批次执行器",
+      "status": "implemented",
+      "summary": "真正提交与轮询 ComfyUI 的地方：编译工作流、逐条提交、轮询历史、重试、写报告。",
+      "implementation": {
+        "class": "comfybatch_v2_core.BatchRunner",
+        "key_methods": ["start", "pause", "resume", "cancel", "status", "redo", "redo_many", "_run"],
+        "file": "src/comfybatch_v2_core.py"
+      },
+      "do_not_reimplement": [
+        "不要另写 ComfyUI 客户端提交逻辑；所有提交都要经过这里，否则审计与报告会分裂。"
+      ]
+    },
+    {
+      "id": "aspect_ratio_override",
+      "name": "任务级图像规格覆盖",
+      "status": "implemented",
+      "summary": "每条任务可带独立画幅与像素预算，覆盖批次级设置。",
+      "implementation": {
+        "file": "src/comfybatch_v2_core.py",
+        "anchor": "item_config.aspect_ratio = str(generation.get(\"aspect_ratio\")",
+        "applied_at": "BatchRunner._run 内按任务元数据覆盖批次级画幅与像素预算",
+        "assign_route": "POST /api/assign-image-preset → Application.assign_image_preset"
+      }
+    },
+    {
+      "id": "aspect_ratio_labels",
+      "name": "画幅标签（唯一权威）",
+      "status": "implemented",
+      "summary": "可用的画幅标签清单，必须与 ComfyUI ResolutionSelector 逐字节一致。",
+      "implementation": {
+        "file": "src/comfybatch_v2_app.py",
+        "anchor": "IMAGE_PRESETS",
+        "test": "tests/test_image_presets.py"
+      },
+      "do_not_reimplement": [
+        "不要在别处再写一份画幅清单；用 IMAGE_PRESETS 或 canonical_aspect_ratios()。"
+      ]
+    },
+    {
+      "id": "preset_recycle_bin",
+      "name": "预设回收站（删除后可恢复）",
+      "status": "implemented",
+      "summary": "删除预设时写一条墓碑；墓碑连同预设正文一起保存，所以可以从回收站整条恢复。恢复出来的名字由后端强制加「[恢复] 」前缀，任何入口恢复的预设都一眼可辨。",
+      "implementation": {
+        "file": "src/comfybatch_v2_app.py",
+        "anchor": "def restore_deleted_style_lora_preset",
+        "related": [
+          "Application.delete_style_lora_preset（墓碑写正文）",
+          "Application.clear_deleted_style_lora_presets（清空回收站）",
+          "Application._restored_name（唯一化 + 强制前缀）",
+          "SettingsStore.load（实体取赢家、墓碑跨文件求并集后再剔实体）"
+        ]
+      },
+      "routes": {
+        "GET /api/deleted-presets": "列出回收站（含 deleted_at / name / preset 正文与否）",
+        "POST /api/restore-deleted-preset": "按 id 从回收站恢复一条（强制加前缀）",
+        "POST /api/clear-deleted-presets": "清空回收站，返回丢弃条数"
+      },
+      "invariants": [
+        "墓碑条目在 {deleted_at, name} 之外必须带 preset 正文；没有正文的记录一律拒绝恢复。",
+        "恢复在同一次写入里既写回实体、又删掉墓碑 —— 只做一半会留下「墓碑压着实体」或「实体没有墓碑」的半删除状态。",
+        "「[恢复] 」前缀只由后端 Application._restored_name 加，前端不得自己拼名字。",
+        "墓碑按预设 id 生效且不过期；清空回收站会一并丢掉这些防复活记录，所以它只能是用户的显式动作。"
+      ],
+      "do_not_reimplement": [
+        "不要再写一条「恢复默认预设」式的批量复活路径来顺带恢复用户自建预设；出厂模板走 /api/restore-default-presets，用户自建走回收站。",
+        "不要在页面上拼恢复后的名字或前缀。"
+      ],
+      "ui": {
+        "page": "index.html 「生成配置」→ 预设栏「恢复已删除…」",
+        "dialogs": ["#trashDialog"],
+        "functions": ["openTrashDialog", "renderTrash", "restoreDeletedPreset", "clearDeletedPresets"]
+      }
+    }
+  ],
+  "non_goals": [
+    "S 不负责启动/管理 ComfyUI 进程本身。",
+    "S 不做图像生成；它只是本地控制台。",
+    "不启用 LLM 时，S 不发起任何外部网络请求。"
+  ]
+}

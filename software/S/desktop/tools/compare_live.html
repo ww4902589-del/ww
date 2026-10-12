@@ -1,0 +1,645 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>风格对比 · 动态</title>
+<style>
+:root{--bg:#f5f6f8;--panel:#fff;--ink:#1b1f24;--ink2:#5a6370;--ink3:#8b95a3;
+--line:#e3e7ed;--brand:#c8442f;--accent:#2f6fb5;--ok:#3c8c5a}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font:14px/1.6 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif}
+#top{background:var(--panel);border-bottom:1px solid var(--line);padding:12px 20px;
+position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+#top h1{font-size:17px;font-weight:700;letter-spacing:-.3px}
+#top .lab{color:var(--brand);font-weight:600}
+#top .meta{color:var(--ink3);font-size:12px}
+#top .sp{flex:1}
+/* 标记状态条：图鉴里标的★在这里只读复现 —— 颜色 + 夹名，与图鉴同一套色号，
+   这样「图鉴里标成红的那些」在对比页还是红的，不用重新认一遍。 */
+#mkbar{display:flex;align-items:center;gap:7px;flex-wrap:wrap;font-size:12px}
+#mkbar:empty{display:none}
+#mkbar .mkcnt{color:var(--ink2);font-size:12px}
+#mkbar .mkcnt b{color:var(--ink)}
+#mkbar .stg{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);
+background:var(--panel);border-radius:20px;padding:1px 9px 1px 6px;font-size:11.5px;
+color:var(--ink2);cursor:default}
+#mkbar .stg i{width:8px;height:8px;border-radius:50%;display:block;flex:none}
+#mkbar button.cur{background:var(--ink);border-color:var(--ink);color:#fff}
+button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--panel);
+color:var(--ink);padding:5px 12px;border-radius:7px}
+button:hover{border-color:var(--accent);color:var(--accent)}
+button.pri{background:var(--accent);border-color:var(--accent);color:#fff}
+#wrap{max-width:1560px;margin:0 auto;padding:16px 20px 60px}
+.hint{color:var(--ink3);font-size:12.5px;margin:8px 2px 14px}
+/* 网格规格与图鉴一致：一行 6 张 × 8 行 = 一页 48 张；方图裁切、gap 11px 同款。
+   窄屏降为 4 列/2 列，避免卡片挤成指甲盖。 */
+.grid{display:grid;grid-template-columns:repeat(6,1fr);gap:11px}
+@media(max-width:1100px){.grid{grid-template-columns:repeat(4,1fr)}}
+@media(max-width:760px){.grid{grid-template-columns:repeat(2,1fr)}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;
+display:flex;flex-direction:column;min-width:0;position:relative}
+.card.marked{border-color:#e6bfb7}
+/* 淘汰 / 保留 角标：卡片左上角的圆形按钮，26px —— 与图鉴的 .mk 同规格。
+   位置和大小不能改：这两个按钮在对比页是**主要动作**，整页几十张图连续
+   过一遍时靠肌肉记忆点，尺寸一变就点空。 */
+.mk{position:absolute;top:6px;left:6px;z-index:3;width:26px;height:26px;border-radius:50%;
+border:none;cursor:pointer;font-size:13px;line-height:1;padding:0;
+background:rgba(255,255,255,.92);color:#98a2b0;display:flex;align-items:center;
+justify-content:center;box-shadow:0 1px 5px rgba(0,0,0,.16);transition:.13s}
+.mk:hover{background:#fff;transform:scale(1.1)}
+.mk.del:hover,.mk.keep:hover{filter:brightness(1.08)}
+.mk.del{background:#d0402f;color:#fff;box-shadow:0 2px 8px rgba(208,64,47,.45)}
+.mk.keep{background:#2f8b57;color:#fff;box-shadow:0 2px 8px rgba(47,139,87,.45)}
+/* 两枚按钮并排：淘汰在左、保留在右，各 26px，间距 4px */
+.mkrow{position:absolute;top:6px;left:6px;z-index:3;display:flex;gap:4px}
+.mkrow .mk{position:static}
+/* 已判定的图在网格里淡出一点，一眼看出「这片扫过了」；
+   鼠标移上去恢复，方便复核。 */
+.card.verdict img{opacity:.55;transition:.15s}
+.card.verdict:hover img{opacity:1}
+.card.vkeep{border-color:#9ecfae;box-shadow:0 0 0 2px rgba(47,139,87,.14)}
+.card img{width:100%;aspect-ratio:1;object-fit:cover;display:block;cursor:zoom-in;background:#eef0f3}
+.card .bd{padding:7px 9px 9px;display:flex;flex-direction:column;gap:4px;min-width:0}
+/* 卡片上的标记签：与图鉴的 .settags 同款观感（左色块 + 夹名） */
+.card .mks{display:flex;flex-wrap:wrap;gap:3px}
+.card .mks .stg{display:inline-flex;align-items:center;gap:4px;font-size:10px;line-height:13px;
+border-radius:4px;padding:0 5px;color:#fff;white-space:nowrap;max-width:100%;overflow:hidden;
+text-overflow:ellipsis}
+.card .pr{color:var(--brand);font-weight:600;font-size:11.5px;overflow:hidden;
+text-overflow:ellipsis;white-space:nowrap}
+.card .rc{color:var(--ink2);font-size:10.5px;line-height:1.5;overflow:hidden;display:-webkit-box;
+-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.card .rc b{color:var(--ink3);font-weight:400;margin-right:3px}
+.card .ac{display:flex;gap:6px;margin-top:2px;flex-wrap:wrap}
+.card .ac button{font-size:11px;padding:3px 8px}
+.empty{color:var(--ink3);padding:60px 20px;text-align:center}
+/* 翻页条：与图鉴同视觉（页码窗口 ±2，首页/末页常露） */
+#pager{display:none;align-items:center;gap:8px;flex-wrap:wrap;margin:18px 2px}
+#pager .pginfo{color:var(--ink3);font-size:12px}
+#pager .pg{font-size:12.5px;padding:4px 10px}
+#pager .pg.cur{background:var(--accent);border-color:var(--accent);color:#fff}
+#pager .pg[disabled]{opacity:.45;cursor:default}
+#pager .pgdots{color:var(--ink3);font-size:12px}
+.sess{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:10px;
+padding:11px 15px;display:flex;align-items:center;gap:12px;cursor:pointer}
+.sess:hover{border-color:var(--accent)}
+.sess .n{font-weight:600}
+.sess .m{color:var(--ink3);font-size:12px}
+#lb{position:fixed;inset:0;background:rgba(8,9,11,.92);display:none;z-index:50;
+flex-direction:column}
+#lb.on{display:flex}
+#lb .bar{display:flex;align-items:center;gap:10px;padding:9px 14px;color:#e8eaee}
+#lb .bar .cap{font-size:12.5px;color:#aeb6c2;flex:1;overflow:hidden;white-space:nowrap;
+text-overflow:ellipsis}
+#lb .bar button{background:#23262d;border-color:#3a3f49;color:#e8eaee}
+#lb img{flex:1;min-height:0;object-fit:contain;width:100%;cursor:zoom-out}
+#toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:#23262d;
+color:#fff;padding:8px 16px;border-radius:8px;font-size:13px;display:none;z-index:60}
+</style></head>
+<body>
+<div id="top">
+  <h1>风格对比</h1>
+  <span class="lab" id="slab"></span>
+  <span class="meta" id="smeta"></span>
+  <span id="mkbar"></span>
+  <span class="sp"></span>
+  <button onclick="location.href='/'">← 返回图鉴</button>
+</div>
+<div id="wrap"><div class="hint" id="hint"></div><div id="body"></div><div id="pager"></div></div>
+<div id="lb">
+  <div class="bar">
+    <span class="cap" id="lbcap"></span>
+    <button onclick="lbStep(-1)">‹ 上一张</button>
+    <button onclick="lbStep(1)">下一张 ›</button>
+    <button id="lbimp" class="pri">⇢ 导入工作台</button>
+    <button onclick="lbClose()">关闭 (Esc)</button>
+  </div>
+  <img id="lbimg" alt="" onclick="lbClose()">
+</div>
+<div id="toast"></div>
+<script src="/ui_lifecycle.js"></script>
+<script>
+/* 动态对比页：?sel=<id> 渲染图鉴推送的选择会话；无 sel 列出最近会话。
+   每张图带「⇢ 导入工作台」：把配方 POST 给 S（8790）存成新预设。
+   另外**只读**复现图鉴的标记状态（★）：这一页本来就只是「用另一套版式再看
+   一遍同一批图」，看不到标记就等于把图鉴里已经分好堆的结论丢掉一半。
+   标记只显示、不在这里改 —— 写入协议是「整套覆盖」（前端是权威），对比页
+   和常开的图鉴页各持一份内存副本，两边都写会互相盖掉。要改回图鉴改。 */
+const S_BASE='http://127.0.0.1:8790';
+let ITEMS=[],VIEW=[],VI=0,ONLY_MARKED=false;
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function toast(m){const t=$('#toast');t.textContent=m;t.style.display='block';
+  clearTimeout(t._h);t._h=setTimeout(()=>t.style.display='none',3200);}
+function qs(k){return new URLSearchParams(location.search).get(k);}
+
+/* ---------- 标记状态（可读可写） ----------
+   MARK_SETS 按 /api/marks 的原样存；索引做成 uid 精确 + path 兜底两条通道，
+   与图鉴 uidPath() 同一口径 —— 图鉴重建后 run/index 推断可能漂移，只认 uid
+   会让标记「凭空消失」。
+
+   写入为什么不用整体覆盖：图鉴页的写协议是「把内存里那份 sets 整份 PUT」，
+   因为它是权威。对比页不是 —— 它只在加载时读过一次 /api/marks，期间用户
+   在图鉴里标的图它完全不知道。照抄整体覆盖 = 把人家刚标的全抹掉。
+   所以这里走 /api/marks/apply：只说「这几张图 → 加进/移出这个夹」，
+   服务端现读现改。两个页面同时开着也不会互删。 */
+const MCOLORS=['#e05a4f','#2f7fd4','#17a673','#c98a12','#8b5cf6','#0f9bb5','#d9488b'];
+/* 淘汰 = 红、保留 = 绿，固定占两个色位。用户口径就是「红框淘汰、绿框保留」，
+   所以这两个夹的颜色是钉死的，不参与自动配色轮转。
+
+   VERDICT_SLOT 是「写回服务端的 color 值」，必须是 MCOLORS 的合法下标 ——
+   这里踩过一次：原先用 MCOLORS.indexOf(VERDICT_COLOR[id]) 反查，
+   而 #d0402f / #2f8b57 都不在 MCOLORS 里，反查得到 -1，
+   -1 是合法 int，被原样存进了 _marks.json。前端有取模保护所以看不出来，
+   但图鉴页读这个值时 MCOLORS[-1] 是 undefined，色号就脏了。
+   现在显式给下标：红用 0 号位（#e05a4f 系），绿用 2 号位（#17a673 系），
+   显示色仍走 VERDICT_COLOR 钉死的红/绿。 */
+const SET_DEL='verdict-reject', SET_KEEP='verdict-keep';
+const VERDICT_COLOR={[SET_DEL]:'#d0402f',[SET_KEEP]:'#2f8b57'};
+const VERDICT_SLOT={[SET_DEL]:0,[SET_KEEP]:2};
+/* ===== 按批次自动分夹 =====
+   问题：固定用 verdict-reject / verdict-keep 两个夹时，所有批次的图都堆在一起
+   （实测用户「默认」夹 43 张跨了 14 个批次，找不回来）。
+   做法：夹 id 从「本页这批图的批次」派生 —— 同批次的图进同一个夹，
+   不同批次天然分开，用户不用手动选夹、也不会串。
+
+   批次从 uid 里取：uid = `<绝对路径>#<批次>#<序号>`，
+   所以 rsplit('#',2)[1] 就是批次（已验证：路径段不含 '#'，后缀恒为两段）。
+   拿不到 uid 时退回 'x'，保证同一页里至少能聚在一起，不会每张一个夹。 */
+function batchOf(it){
+  const u=String((it&&it.uid)||'');
+  const parts=u.split('#');
+  if(parts.length>=3){
+    const b=parts[parts.length-2];
+    /* _UNNAMED / None 是「图片不在任何批次目录里」时的占位（历史数据里很常见，
+       用户那 43 张里有 26 张是 _UNNAMED）。它们不是真批次，
+       归到一个固定的 x 夹里，别让每个占位各自成夹。 */
+    if(b&&b!=='None'&&b!=='_UNNAMED'&&b!=='_unnamed') return b;
+    return 'x';
+  }
+  return 'x';
+}
+/* 本页（当前这批图）的主批次：取众数，避免个别图 uid 缺失把整批带偏。
+   多数场景下一整批就是同一个批次，众数 = 该批次。 */
+function pageBatch(){
+  const cnt={};
+  (ITEMS||[]).forEach(it=>{const b=batchOf(it);cnt[b]=(cnt[b]||0)+1;});
+  let best='x',n=-1;
+  for(const b in cnt) if(cnt[b]>n){best=b;n=cnt[b];}
+  return best;
+}
+/* 派生夹：id 与名字都带批次。
+   名字写成「淘汰·926266f5」而不是只写「淘汰」—— 图鉴页的夹列表里
+   一眼能看出这批是哪来的，也避免多个批次的「淘汰」夹同名难分辨。 */
+function verdictSet(kind,batch){
+  const b=batch||'x';
+  const base=kind==='del'?SET_DEL:SET_KEEP;
+  const label=kind==='del'?'淘汰':'保留';
+  return {id:base+'@'+b, name:label+'·'+b};
+}
+/* 兼容：老数据里那两条**不带批次后缀**的夹（历史版本标的图）仍要认得出，
+   否则升级后旧标记会「消失」。判定时两个 id 都算命中。 */
+function verdictSetIds(kind){
+  const base=kind==='del'?SET_DEL:SET_KEEP;
+  return base;
+}
+function isVerdictSet(id,kind){
+  const base=verdictSetIds(kind);
+  return String(id||'')===base || String(id||'').indexOf(base+'@')===0;
+}
+/* ===== 老夹的「继承」：别让同一批图分裂成两个夹 =====
+   升级前（V2.32）所有判定都写进无后缀的 verdict-keep / verdict-reject。
+   用户实测：他那 92 张那批的 15 张「保留」全在无后缀的 verdict-keep 里。
+   升级后如果无脑新建 verdict-keep@926266f5，同一批图就会分裂成两个夹，
+   在用户看来等于「我之前标的没了」。
+
+   所以写入前先看：有没有一个**无后缀的**判定夹，且它里面已经有本批次的图？
+   有 → 复用它（继续往里加），不新建。
+   这样老数据平滑延续，新区分批次照常生效。 */
+function inheritSetId(kind,batch){
+  const base=verdictSetIds(kind);
+  if(!batch||batch==='x') return base+'@x';   // 占位批次没什么好继承的
+  const legacy=(MARK_SETS||[]).find(s=>s.id===base);
+  if(!legacy) return base+'@'+batch;
+  const hit=(legacy.paths||[]).some(u=>batchOf({uid:u})===batch);
+  return hit?base:base+'@'+batch;
+}
+/* 统一的「这张图该写进哪个判定夹」入口。setVerdict / clearVerdicts 都用它，
+   避免两处各判一次导致行为不一致。 */
+function targetSet(kind,it){
+  const batch=batchOf(it);
+  const id=inheritSetId(kind,batch);
+  if(id===verdictSetIds(kind)){
+    // 继承到老夹：名字沿用它的原名，别硬改成带后缀的
+    const legacy=(MARK_SETS||[]).find(s=>s.id===id);
+    return {id:id,name:(legacy&&legacy.name)||(kind==='del'?'淘汰':'保留')};
+  }
+  return verdictSet(kind,batch);
+}
+let MARK_SETS=[],MK_UID={},MK_PATH={},MK_ACTIVE='';
+function uidPath(u){
+  const i=String(u||'').lastIndexOf('#');
+  if(i<0) return String(u||'');
+  const j=String(u).lastIndexOf('#',i-1);
+  return j<0?String(u).slice(0,i):String(u).slice(0,j);
+}
+function pathKey(p){return String(p||'').replace(/\\/g,'/').toLowerCase();}
+function setColor(s,idx){
+  /* 判定夹（含按批次派生的 verdict-*@<batch>）颜色钉死：红淘汰 / 绿保留。
+     别退回自动配色 —— 用户口径就是「红框淘汰、绿框保留」，色号一变就失去意义。 */
+  if(s&&(isVerdictSet(s.id,'del')||isVerdictSet(s.id,'keep'))){
+    return isVerdictSet(s.id,'del')?VERDICT_COLOR[SET_DEL]:VERDICT_COLOR[SET_KEEP];
+  }
+  const c=(s&&typeof s.color==='number')?s.color:idx;
+  return MCOLORS[((c%MCOLORS.length)+MCOLORS.length)%MCOLORS.length];
+}
+function mkIndex(){
+  MK_UID={};MK_PATH={};
+  (MARK_SETS||[]).forEach((s,si)=>{
+    (s.paths||[]).forEach(u=>{
+      MK_UID[u]=s;
+      const pk=pathKey(uidPath(u));
+      // path 兜底只在 uid 认不出时用；同名跨批次时保留第一个（别乱换夹）
+      if(!(pk in MK_PATH)) MK_PATH[pk]=s;
+    });
+  });
+}
+/* 这张图落在哪几个标记夹里（可能同时属于多个夹） */
+function setsOf(it){
+  const out=[];
+  (MARK_SETS||[]).forEach((s,si)=>{
+    const hit=(it&&it.uid&&MK_UID[it.uid]===s)
+      || MK_PATH[pathKey(it&&it.path)]===s;
+    if(hit) out.push({s:s,color:setColor(s,si)});
+  });
+  return out;
+}
+function isMarked(it){return setsOf(it).length>0;}
+/* 这张图的判定：'del' 淘汰 / 'keep' 保留 / '' 未判。
+   保留优先：判成保留后又误点淘汰，取值以「保留」为准（避免一闪而过的错判被当成最终结论）。
+   注意判定夹现在按批次派生（verdict-keep@<batch>），所以用前缀匹配而不是全等 ——
+   否则升级后所有标记都会读不出来。 */
+function verdictOf(it){
+  const ids=setsOf(it).map(h=>h.s.id);
+  if(ids.some(id=>isVerdictSet(id,'keep'))) return 'keep';
+  if(ids.some(id=>isVerdictSet(id,'del'))) return 'del';
+  return '';
+}
+function findSet(id){return (MARK_SETS||[]).find(s=>s.id===id)||null;}
+function markChips(it){
+  const hits=setsOf(it);
+  if(!hits.length) return '';
+  return '<div class="mks">'+hits.map(h=>
+    '<span class="stg" style="background:'+h.color+'" title="已标记到「'+esc(h.s.name)+'」'
+    +'（点卡片上的按钮可改）">★ '+esc(h.s.name)+'</span>').join('')+'</div>';
+}
+/* 卡片左上角的两枚按钮：× 淘汰（红）/ ✓ 保留（绿）。
+   已判定的那枚变实心，另一枚仍可点（改判就是点另一枚）。
+   再点已选中的那枚 = 取消判定，方便点错了当场撤。
+   尺寸 26px、位置 left/top 6px —— 与图鉴 .mk 完全一致（用户明确要求）。 */
+function mkButtons(it,i){
+  const v=verdictOf(it);
+  const btn=(kind,glyph,tone)=>{
+    const on=v===kind;
+    const bg=tone==='del'?'#d0402f':'#2f8b57';
+    const fg=tone==='del'?'#c05a4c':'#3f8a5e';
+    const label=kind==='del'?'淘汰':'保留';
+    return '<button class="mk '+tone+(on?' '+tone:'')+'" '
+      +'style="'+(on?'':'background:rgba(255,255,255,.92);color:'+fg+';')+'" '
+      +'title="'+(on?'已是「'+label+'」——再点取消':'标记为'+label+'（'+(kind==='del'?'红':'绿')+'）')+'" '
+      +'onclick="event.stopPropagation();setVerdict('+i+',\''+kind+'\')">'+glyph+'</button>';
+  };
+  return '<div class="mkrow">'+btn('del','×','del')+btn('keep','✓','keep')+'</div>';
+}
+function syncMarkBar(){
+  const el=$('#mkbar');if(!el) return;
+  if(location.protocol==='file:'){el.innerHTML='';return;}
+  const nDel=ITEMS.filter(it=>verdictOf(it)==='del').length;
+  const nKeep=ITEMS.filter(it=>verdictOf(it)==='keep').length;
+  const nMark=ITEMS.filter(isMarked).length;
+  el.innerHTML='<span class="mkcnt">淘汰 <b style="color:#d0402f">'+nDel+'</b>'
+    +' · 保留 <b style="color:#2f8b57">'+nKeep+'</b>'
+    +' · 已标记 <b>'+nMark+'</b> / '+ITEMS.length+' 张</span>'
+    +'<button class="'+(ONLY_MARKED?'cur':'')+'" onclick="toggleOnlyMarked()">'
+    +(ONLY_MARKED?'显示全部':'只看已标记')+'</button>'
+    +'<button onclick="clearVerdicts()" title="清空本页这批图的淘汰/保留判定">清空判定</button>';
+}
+function toggleOnlyMarked(){
+  ONLY_MARKED=!ONLY_MARKED;
+  rebuildView();PAGE=1;renderGrid();syncMarkBar();
+}
+async function loadMarks(){
+  if(location.protocol==='file:') return;
+  try{
+    const r=await fetch('/api/marks',{cache:'no-store'});
+    if(!r.ok) return;
+    const m=await r.json();
+    MARK_SETS=Array.isArray(m&&m.sets)?m.sets:[];
+    MK_ACTIVE=String((m&&m.active)||'');
+    mkIndex();
+  }catch(e){/* 图鉴服务没起时不显示标记，不打断对比页本身的用途 */}
+}
+/* 把「这张图 → 这个夹」的变化局部写回。
+   成功后再重读一次 /api/marks：服务端是唯一真相，别拿本地推断硬画 ——
+   同一张图可能同时在两个夹里（淘汰过又保留），本地拼出来的状态会漂。 */
+/* 色位从 setId 的**前缀**判，不能直接查表 ——
+   判定夹 id 现在带批次后缀（verdict-reject@926266f5），
+   VERDICT_SLOT[setId] 会取到 undefined，undefined 不是合法 color 会被服务端丢弃。 */
+function slotFor(setId){
+  if(isVerdictSet(setId,'del')) return VERDICT_SLOT[SET_DEL];
+  if(isVerdictSet(setId,'keep')) return VERDICT_SLOT[SET_KEEP];
+  return undefined;
+}
+let _mkBusy=false;
+async function applyMark(uid,path,setId,setName,remove){
+  if(location.protocol==='file:'){
+    toast('静态打开的文件不支持标记（要走图鉴服务）');return false;
+  }
+  if(_mkBusy) return false;
+  _mkBusy=true;
+  try{
+    const op={set:setId,name:setName,uids:[uid||path],remove:!!remove};
+    // 显式下标，绝不反查（反查查不到会得到 -1，-1 是合法 int 会脏数据）
+    const sl=slotFor(setId);
+    if(typeof sl==='number') op.color=sl;
+    const r=await fetch('/api/marks/apply',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ops:[op]})});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const j=await r.json();
+    if(!j||!j.ok) throw new Error((j&&j.error)||'服务端拒绝');
+    await loadMarks();
+    return true;
+  }catch(e){
+    toast('标记失败：'+e.message+'（图鉴服务未运行？）');
+    return false;
+  }finally{_mkBusy=false;}
+}
+/* 卡片上的 ×/✓：写入 + 就地重绘那一张卡片的状态（不整页重排，避免滚动位置跳走）
+   夹按「这张图自己的批次」派生 —— 用 it 而不是 pageBatch()：
+   万一这批图混了两个批次（用户手动挑过一批），每张也会各回各的夹，不互相污染。
+   targetSet 会优先继承同批次的老夹（见 inheritSetId），避免同批分裂。 */
+async function setVerdict(itemIdx,kind){
+  const it=ITEMS[itemIdx];
+  if(!it) return;
+  const mk=targetSet(kind,it);
+  const other=targetSet(kind==='del'?'keep':'del',it);
+  const cur=verdictOf(it);
+  const setName=mk.name;
+  // 再点同一枚 = 取消
+  const removing=(cur===kind);
+  // 改用另一枚判定时，先把旧判定摘掉，否则一张图会同时挂在「淘汰」和「保留」两个夹
+  if(!removing&&cur&&cur!==kind){
+    await applyMark(it.uid,it.path,other.id,other.name,true);
+  }
+  const ok=await applyMark(it.uid,it.path,mk.id,setName,removing);
+  if(ok){
+    paintCardState(itemIdx);
+    syncMarkBar();
+    if(ONLY_MARKED&&removing){rebuildView();PAGE=1;renderGrid();}
+    toast(removing?('已取消「'+setName+'」'):('已标记「'+setName+'」'));
+  }
+}
+/* 只刷新一张卡片的标记外观（角标/边线/标签），不动网格顺序 */
+function paintCardState(itemIdx){
+  const it=ITEMS[itemIdx];if(!it) return;
+  const v=verdictOf(it);
+  document.querySelectorAll('.card[data-idx="'+itemIdx+'"]').forEach(c=>{
+    c.classList.toggle('verdict',!!v);
+    c.classList.toggle('marked',isMarked(it));
+    c.classList.toggle('vkeep',v==='keep');
+    const box=c.querySelector('.mkrow');
+    if(box){
+      const bd=box.querySelector('.mk.del'), bk=box.querySelector('.mk.keep');
+      if(bd){bd.classList.toggle('del',v==='del');
+        bd.style.background=v==='del'?'':'rgba(255,255,255,.92)';
+        bd.style.color=v==='del'?'':'#c05a4c';
+        bd.title=v==='del'?'已是「淘汰」——再点取消':'标记为淘汰（红）';}
+      if(bk){bk.classList.toggle('keep',v==='keep');
+        bk.style.background=v==='keep'?'':'rgba(255,255,255,.92)';
+        bk.style.color=v==='keep'?'':'#3f8a5e';
+        bk.title=v==='keep'?'已是「保留」——再点取消':'标记为保留（绿）';}
+    }
+    const bd2=c.querySelector('.bd');
+    if(bd2){
+      const old=bd2.querySelector('.mks');
+      if(old) old.remove();
+      const chips=markChips(it);
+      if(chips) bd2.insertAdjacentHTML('afterbegin',chips);
+    }
+  });
+}
+async function clearVerdicts(){
+  const dels=ITEMS.filter(it=>verdictOf(it)==='del');
+  const keeps=ITEMS.filter(it=>verdictOf(it)==='keep');
+  if(!dels.length&&!keeps.length){toast('这批图还没有判定');return;}
+  if(!confirm('清空本批 '+ITEMS.length+' 张图上的「淘汰/保留」判定？\n'
+    +'（只会清掉这批图的判定，其他批次、其他夹的标记不动）')) return;
+  if(_mkBusy) return;
+  _mkBusy=true;
+  try{
+    /* 判定夹按批次派生，所以不能只发一条 op —— 按「目标夹 × 判定」分组，
+       每组一条 op。否则跨批次的图会被写进同一个夹里（正是要修的问题）。 */
+    const groups={};   // key = id + '\u0000' + name
+    const add=(kind,list)=>{
+      list.forEach(it=>{
+        const mk=targetSet(kind,it);
+        const k=mk.id+'\u0000'+mk.name;
+        (groups[k]=groups[k]||{set:mk.id,name:mk.name,uids:[],remove:true})
+          .uids.push(it.uid||it.path);
+      });
+    };
+    add('del',dels); add('keep',keeps);
+    const ops=Object.values(groups);
+    const r=await fetch('/api/marks/apply',{method:'POST',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify({ops:ops})});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    await loadMarks();
+    /* 清空后会留下空夹。由图鉴页手动建的夹（用户自己命名的那种）不能动，
+       但**判定夹是自动派生的**（id 形如 verdict-keep@<batch>），
+       每标一批再清空就多一个空夹，几十批下来夹列表全是空的。
+       所以派生夹一旦空掉就顺手删 —— 这是自动产物，用户没「拥有」它。
+
+       **但无后缀的老夹（verdict-keep / verdict-reject）绝不删**：
+       那是升级前所有判定共用的夹，是用户自己的历史数据。
+       即使这次清空后它变空了，也可能还有别的批次依赖它（继承逻辑）。
+       remove 只解引用，图本身不会被删。 */
+    const empty=[];
+    (MARK_SETS||[]).forEach(s=>{
+      const derived=(String(s.id).indexOf('@')>0);
+      if(!(s.paths||[]).length
+         && derived
+         && (isVerdictSet(s.id,'del')||isVerdictSet(s.id,'keep'))){
+        empty.push({set:s.id,name:s.name,uids:[],remove:true,drop:true});
+      }
+    });
+    if(empty.length){
+      await fetch('/api/marks/apply',{method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({ops:empty})});
+      await loadMarks();
+    }
+    renderGrid();syncMarkBar();
+    toast(empty.length?('已清空本批判定（并移除 '+empty.length+' 个空夹）'):'已清空本批判定');
+  }catch(e){toast('清空失败：'+e.message);}
+  finally{_mkBusy=false;}
+}
+function recipeOf(it){
+  return {styles:(it.styles||[]).map(n=>({catalog:'',name:n})),
+          loras:(it.loras||[]).map(l=>({name:(l&&l.n!=null)?l.n:l,
+            strength:(l&&l.s!=null)?l.s:null,use_triggers:true})).filter(l=>l.name)};
+}
+/* 参数 p 是「视图位置」（VIEW 的下标），不是 ITEMS 的下标 ——
+   开了「只看已标记」之后两者会错位，按 ITEMS 下标取会导错图。 */
+function importToS(p){
+  const it=ITEMS[VIEW[p]];if(!it)return;
+  const r=recipeOf(it);
+  const def=(it.preset&&it.preset!=='(未命名)')?it.preset:'对比导入';
+  const name=prompt('导入到 S 工作台的预设名称：',def+' 导入');
+  if(!name)return;
+  fetch(S_BASE+'/api/save-style-lora-preset',{method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({name:name,styles:r.styles,loras:r.loras})})
+    .then(x=>{if(!x.ok)throw new Error('HTTP '+x.status);return x.json();})
+    .then(j=>{if(j.ok)toast('已导入工作台：「'+name+'」（'+r.styles.length+' 风格 / '+r.loras.length+' LoRA）');
+      else throw new Error(j.error||'未知错误');})
+    .catch(e=>toast('导入失败：'+e.message+'（S 未运行？）'));
+}
+/* 缩略图加载失败 → 回退原图（每张只兜一次，防死循环）。
+   路径放 data-path 属性（esc 转义），读取时浏览器已解码回原文。 */
+function cardImgErr(el){
+  if(el.dataset.fb)return;
+  el.dataset.fb='1';
+  const p=el.getAttribute('data-path')||'';
+  if(p)el.src='/img?p='+encodeURIComponent(p);
+}
+function card(it,i){
+  const r=recipeOf(it);
+  const s=r.styles.length?r.styles.map(x=>esc(x.name)).join(' + '):'（无风格记录）';
+  const l=r.loras.length?r.loras.map(x=>esc(x.name.replace(/\.safetensors$/,''))
+    +(x.strength!=null?' @'+x.strength:'')).join(' + '):'（无 LoRA 记录）';
+  const v=verdictOf(it);
+  /* 网格走 /thumb?p=（图鉴同款 420px webp，未命中服务端现场生成）；
+     点开放大灯箱才读 /img 原图。
+     data-idx 用**全局**下标（ITEMS 里的位置），不是本页位置 ——
+     卡片按钮写完要回查这张图的状态，用页内下标会指到别的图上。 */
+  return '<div class="card'+(isMarked(it)?' marked':'')+(v?' verdict':'')
+    +(v==='keep'?' vkeep':'')+'" data-idx="'+i+'">'
+    +mkButtons(it,i)
+    +'<img loading="lazy" src="/thumb?p='+encodeURIComponent(it.path)
+    +'" data-path="'+esc(it.path)
+    +'" onerror="cardImgErr(this)" onclick="lbOpen('+i+')" alt="">'
+    +'<div class="bd">'+markChips(it)
+    +'<div class="pr" title="'+esc(it.preset)+'">'+esc(it.preset||'(未命名)')+'</div>'
+    +'<div class="rc"><b>风格</b>'+s+'</div><div class="rc"><b>LoRA</b>'+l+'</div>'
+    +'<div class="ac"><button class="pri" onclick="importToS('+i+')">⇢ 导入工作台</button>'
+    +'<button onclick="lbOpen('+i+')">放大</button></div></div></div>';
+}
+function lbOpen(p){VI=p;syncLb();$('#lb').classList.add('on');}
+function lbClose(){$('#lb').classList.remove('on');}
+function lbStep(d){if(!VIEW.length)return;VI=(VI+d+VIEW.length)%VIEW.length;syncLb();}
+function syncLb(){const it=ITEMS[VIEW[VI]];if(!it)return;
+  $('#lbimg').src='/img?p='+encodeURIComponent(it.path);
+  const v=verdictOf(it);
+  const hits=setsOf(it);
+  $('#lbcap').textContent=(VI+1)+' / '+VIEW.length+'　'+(it.preset||'')
+    +(v==='del'?'　✕ 淘汰':v==='keep'?'　✓ 保留':'　（未判定 · X 淘汰 / V 保留）')
+    +(hits.length>1?'　★ '+hits.map(h=>h.s.name).join(' / '):'');
+  $('#lbimp').onclick=()=>importToS(VI);}
+document.addEventListener('keydown',e=>{
+  if(!$('#lb').classList.contains('on'))return;
+  if(e.key==='Escape')lbClose();
+  if(e.key==='ArrowLeft')lbStep(-1);
+  if(e.key==='ArrowRight')lbStep(1);
+  /* 连续过图：X = 淘汰、V = 保留，判完自动翻下一张，手指不用离开键盘。
+     与图鉴的评级键（1/2/3）保持一致的手感。 */
+  if(e.key==='x'||e.key==='X'){const p=VI;setVerdict(VIEW[p],'del').then(()=>lbStep(1));}
+  if(e.key==='v'||e.key==='V'){const p=VI;setVerdict(VIEW[p],'keep').then(()=>lbStep(1));}});
+/* ---------- 分页（与图鉴同规格：一页 48 张，页码窗口 ±2） ----------
+   ITEMS 是会话的全量；VIEW 是「过完筛选之后的位置表」。
+   分页、灯箱翻页都走 VIEW —— 只看已标记时灯箱不该翻到没标记的图上去。 */
+const PER=48;
+let PAGE=1;
+function rebuildView(){
+  VIEW=ITEMS.map((_,i)=>i).filter(i=>!ONLY_MARKED||isMarked(ITEMS[i]));
+}
+function pageCount(){return Math.max(1,Math.ceil(VIEW.length/PER));}
+function renderGrid(){
+  const lo=(PAGE-1)*PER;
+  $('#body').innerHTML=VIEW.length
+    ?'<div class="grid">'+VIEW.slice(lo,lo+PER).map((idx,k)=>card(ITEMS[idx],lo+k)).join('')+'</div>'
+    :'<div class="empty">这批图里没有已标记的。<br>点卡片左上角的 ×/✓ 判定，或回图鉴把想看的标进某个夹再点「对比查看」。</div>';
+  renderPager();
+  window.scrollTo({top:0});
+}
+function gotoPage(n){
+  const pc=pageCount();
+  n=Math.min(Math.max(1,n|0),pc);
+  if(n===PAGE)return;
+  PAGE=n;
+  renderGrid();
+}
+function renderPager(){
+  const el=$('#pager'),pc=pageCount(),n=VIEW.length;
+  if(n<=PER){el.style.display='none';el.innerHTML='';return;}
+  el.style.display='flex';
+  const lo=Math.max(1,PAGE-2),hi=Math.min(pc,PAGE+2);
+  const nums=[];
+  if(lo>1){nums.push(1);if(lo>2)nums.push('…');}
+  for(let i=lo;i<=hi;i++)nums.push(i);
+  if(hi<pc){if(hi<pc-1)nums.push('…');nums.push(pc);}
+  const pg=(label,page,dis)=>
+    '<button class="pg"'+(dis?' disabled':'')+' onclick="gotoPage('+page+')">'+label+'</button>';
+  el.innerHTML='<span class="pginfo">共 <b>'+n+'</b> 张 · 第 <b>'+PAGE+'</b> / '+pc+' 页</span>'
+    +pg('‹ 上页',PAGE-1,PAGE<=1)
+    +nums.map(x=>x==='…'
+      ?'<span class="pgdots">…</span>'
+      :'<button class="pg'+(x===PAGE?' cur':'')+'" onclick="gotoPage('+x+')">'+x+'</button>').join('')
+    +pg('下页 ›',PAGE+1,PAGE>=pc)
+    +pg('末页 »',pc,PAGE>=pc);
+}
+function renderSession(j){
+  ITEMS=j.selection.items;
+  PAGE=1;
+  rebuildView();
+  $('#slab').textContent=j.selection.label;
+  $('#smeta').textContent=ITEMS.length+' 张 · '+j.selection.created;
+  $('#hint').innerHTML='卡片左上角 <b style="color:#d0402f">×</b> 淘汰、'
+    +'<b style="color:#2f8b57">✓</b> 保留 —— 再点一次可取消，改成另一枚即改判。'
+    +'　大图里用 X / V 键连续判定，判完自动翻下一张。'
+    +'　判定会写回图鉴的「淘汰」「保留」两个收藏夹（图鉴里也能看到）。';
+  syncMarkBar();
+  renderGrid();
+}
+function renderRecent(j){
+  const list=j.recent||[];
+  $('#slab').textContent='选择会话';
+  $('#hint').textContent='在图鉴中筛选后点「对比查看」会把当前命中推送到这里。';
+  $('#body').innerHTML=list.length
+    ?list.map(s=>'<div class="sess" onclick="location.href=\'/compare?sel='+s.id+'\'">'
+      +'<span class="n">'+esc(s.label)+'</span><span class="m">'+s.count+' 张 · '+esc(s.created)
+      +'</span></div>').join('')
+    :'<div class="empty">还没有对比会话 —— 去图鉴筛选一批图，点「对比查看」。</div>';
+}
+(async()=>{
+  const id=qs('sel');
+  // 标记先取：渲染时要靠它决定每张卡片显不显示★、以及「只看已标记」能不能用。
+  // 取不到（图鉴服务没起）就当作没有标记，对比页本身照常能用。
+  await loadMarks();
+  try{
+    if(id){
+      const r=await fetch('/api/selection?id='+encodeURIComponent(id),{cache:'no-store'});
+      const j=await r.json();
+      if(!j.ok){$('#body').innerHTML='<div class="empty">'+esc(j.error||'会话不存在')+'</div>';return;}
+      renderSession(j);
+    }else{
+      const r=await fetch('/api/selection',{cache:'no-store'});
+      const j=await r.json();
+      if(!j.ok){$('#body').innerHTML='<div class="empty">加载失败</div>';return;}
+      renderRecent(j);
+    }
+  }catch(e){$('#body').innerHTML='<div class="empty">加载失败：'+esc(e.message)+'</div>';}
+})();
+</script>
+</body>
+</html>

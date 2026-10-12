@@ -1,0 +1,40 @@
+{
+ "status": 400,
+ "raw": "{\"error\": {\"type\": \"prompt_outputs_failed_validation\", \"message\": \"Prompt outputs failed validation\", \"details\": \"\", \"extra_info\": {}}, \"node_errors\": {\"1\": {\"errors\": [{\"type\": \"value_not_in_list\", \"message\": \"Value not in list\", \"details\": \"model_name: 'OmniSR_X4_DIV2K.safetensors' not in ['RealESRGAN_x4plus_anime_6B.pth']\", \"extra_info\": {\"input_name\": \"model_name\", \"input_config\": [\"COMBO\", {\"multiselect\": false, \"options\": [\"RealESRGAN_x4plus_anime_6B.pth\"]}], \"received_value\": \"OmniSR_X4_DIV2K.safetensors\"}}], \"dependent_outputs\": [\"4\"], \"class_type\": \"UpscaleModelLoader\"}}}",
+ "body": {
+  "error": {
+   "type": "prompt_outputs_failed_validation",
+   "message": "Prompt outputs failed validation",
+   "details": "",
+   "extra_info": {}
+  },
+  "node_errors": {
+   "1": {
+    "errors": [
+     {
+      "type": "value_not_in_list",
+      "message": "Value not in list",
+      "details": "model_name: 'OmniSR_X4_DIV2K.safetensors' not in ['RealESRGAN_x4plus_anime_6B.pth']",
+      "extra_info": {
+       "input_name": "model_name",
+       "input_config": [
+        "COMBO",
+        {
+         "multiselect": false,
+         "options": [
+          "RealESRGAN_x4plus_anime_6B.pth"
+         ]
+        }
+       ],
+       "received_value": "OmniSR_X4_DIV2K.safetensors"
+      }
+     }
+    ],
+    "dependent_outputs": [
+     "4"
+    ],
+    "class_type": "UpscaleModelLoader"
+   }
+  }
+ }
+}

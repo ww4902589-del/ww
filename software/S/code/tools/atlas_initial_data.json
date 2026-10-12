@@ -1,0 +1,19 @@
+{
+  "_marks.json": {
+    "schema_version": 2,
+    "sets": [
+      {
+        "id": "default",
+        "name": "默认",
+        "paths": [],
+        "note": {},
+        "color": 0
+      }
+    ],
+    "active": "default"
+  },
+  "_grades.json": {
+    "schema_version": 1,
+    "grades": {}
+  }
+}

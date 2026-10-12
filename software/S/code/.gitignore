@@ -1,0 +1,26 @@
+# Runtime data and packages are not source
+build/
+run/
+.pytest_cache/
+**/__pycache__/
+*.py[cod]
+*.exe
+*.zip
+*.bak*
+*.log
+tools/_*.json
+!tools/_grades_system.json
+tools/resources.sqlite3*
+tools/风格图鉴.html
+run_after_fix_tests.txt
+
+# Private visual evidence and local release archives
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.gif
+*.bmp
+*.tif
+*.tiff
+changes/local-releases/

@@ -122,6 +122,10 @@ function mgPreview(index){
   MG.preview=MG.images[index];const im=MG.preview;if(!im)return;
   $('#relatedPreview').innerHTML=`<p>面板预览 · ${esc(baseName(im.path))}</p><img src="${imgSrc(im.path)}" data-p="${esc(im.path)}" onerror="imgErr(this)" alt="同类图片预览"><button onclick="MG.preview=null;$('#relatedPreview').innerHTML=''">关闭预览</button>${mgFieldHTML(im)}`;
 }
+// Compare editable mark fields; server revision/dead/dropped are transport metadata.
+function mgMarksKey(doc){
+  return JSON.stringify({sets:(doc?.sets||[]).map(s=>({id:s.id,name:s.name,paths:[...(s.paths||[])],note:s.note||{},color:s.color})),active:doc?.active||''});
+}
 async function mgMark(kind){
   if(MG.busy||!MG.picked.size)return;
   const n=MG.picked.size;
@@ -141,7 +145,7 @@ async function mgMark(kind){
     // Rebase unsent gallery edits on the newly acknowledged marks.
     const serial=mkEdit,local=cloneDoc(marksDoc()),base=cloneDoc(mkBase);
     const r=await fetch('/api/marks');const m=await r.json();if(!r.ok)throw Error('标记已保存，读取失败，请刷新');
-    if(serial===mkEdit&&JSON.stringify(local)===JSON.stringify(base)){
+    if(serial===mkEdit&&mgMarksKey(local)===mgMarksKey(base)){
       mkBase=cloneDoc(m);mkAck=cloneDoc(m);acceptMarks(m);refreshMarks();
     }
     mgRender();toast(`已标记 ${n} 张`);
@@ -162,11 +166,11 @@ function mgDialog(message,input=false){
 }
 setInterval(async()=>{
   if(!useServer||mgMarksPoll||MG.busy||mkBlocked||!mkBase)return;
-  if(JSON.stringify(marksDoc())!==JSON.stringify(mkBase))return;
-  mgMarksPoll=true;const serial=mkEdit,baseline=JSON.stringify(mkBase);
+  if(mgMarksKey(marksDoc())!==mgMarksKey(mkBase))return;
+  mgMarksPoll=true;const serial=mkEdit,baseline=mgMarksKey(mkBase);
   try{
     const r=await fetch('/api/marks');const m=await r.json();if(!r.ok)return;
-    if(!MG.busy&&serial===mkEdit&&baseline===JSON.stringify(mkBase)&&baseline===JSON.stringify(marksDoc())){
+    if(!MG.busy&&serial===mkEdit&&baseline===mgMarksKey(mkBase)&&baseline===mgMarksKey(marksDoc())){
       mkBase=cloneDoc(m);mkAck=cloneDoc(m);acceptMarks(m);refreshMarks();mgRender();
     }
   }catch(e){}finally{mgMarksPoll=false;}

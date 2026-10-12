@@ -1,0 +1,752 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ComfyBatch V2.16</title>
+<style>
+:root{--bg:#f5f2ec;--card:#fffdf9;--ink:#201f1c;--muted:#736e65;--line:#ddd6ca;--accent:#ad3d2b;--green:#27704f}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 "Microsoft YaHei",sans-serif}main{max-width:1280px;margin:auto;padding:24px}.top{display:flex;justify-content:space-between;align-items:end;margin-bottom:18px}h1{font:700 30px Georgia,serif;margin:0}.tag{color:var(--muted)}.status{padding:8px 12px;border-radius:99px;background:#eee;color:#555}.ok{background:#dcefe4;color:var(--green)}.bad{background:#f5dcd7;color:#8d3022}.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:0 4px 18px #382b1810}.wide{grid-column:1/-1}h2{font-size:17px;margin:0 0 14px}.fields{display:grid;grid-template-columns:1fr 1fr;gap:11px}label{display:block;color:var(--muted);font-size:12px}input,select,textarea,button{width:100%;margin-top:5px;border:1px solid var(--line);border-radius:8px;padding:10px;background:white;color:var(--ink)}textarea{min-height:90px;resize:vertical}button{cursor:pointer;background:var(--ink);color:white;font-weight:600}button.secondary{background:white;color:var(--ink)}button.danger{background:var(--accent)}button:disabled{opacity:.4;cursor:not-allowed}.actions{display:flex;gap:8px}.actions>*{flex:1}.preview{max-height:520px;overflow:auto;border-top:1px solid var(--line);margin-top:12px}.item{padding:10px 0;border-bottom:1px solid #ece7df}.item.selected{background:#f8eee9}.item textarea{min-height:78px}.task-head{display:grid;grid-template-columns:34px 1fr 70px 70px 36px;gap:6px;align-items:end}.pick{width:auto;margin:0 0 10px 8px}.preset-box,.selection-tools{border:1px solid var(--line);border-radius:10px;padding:10px;margin:10px 0;background:#faf7f1}.preset-badge{display:inline-block;padding:2px 7px;border-radius:99px;background:#eadfd5;color:#70392f;font-size:11px;margin:5px 0}.chip{border:1px solid var(--line);background:#f3efe7;border-radius:9px;padding:8px;margin-top:6px}.chip small{display:block;color:var(--muted)}.lora-row{display:grid;grid-template-columns:1fr 80px 1.2fr 82px 36px;gap:6px;margin-top:6px;align-items:end}.bar{height:10px;background:#e9e4dc;border-radius:99px;overflow:hidden;margin:12px 0}.bar i{display:block;height:100%;width:0;background:var(--accent);transition:.2s}.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.metric{background:#f3efe7;border-radius:8px;padding:10px}.metric strong{display:block;font-size:20px}.help{font-size:12px;color:var(--muted);margin-top:8px}.switch{display:flex;align-items:center;gap:8px}.switch input{width:auto;margin:0}.hidden{display:none}@media(max-width:800px){.grid,.fields,.task-head,.lora-row{grid-template-columns:1fr}.wide{grid-column:auto}}
+.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:14px}.gallery figure{margin:0}.gallery img{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:8px;background:#eee}.gallery figcaption{font-size:11px;margin-top:4px;color:var(--muted)}.effective{margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:10px;background:#f8f5ef}.effective b{color:var(--green)}.effective.bad b{color:var(--accent)}
+.style-preview{display:flex;gap:10px;align-items:center;min-height:88px;margin:8px 0;padding:8px;border:1px solid var(--line);border-radius:10px;background:#f8f5ef}.style-preview img,.style-thumb{width:112px;height:82px;object-fit:cover;border-radius:7px;background:#e8e3db}.style-preview b{display:block}.style-preview small{display:block;color:var(--muted);margin-top:3px}.chip-with-thumb{display:grid;grid-template-columns:90px 1fr auto;gap:9px;align-items:center}.chip-with-thumb .style-thumb{width:90px;height:68px}.feedback{margin-top:12px;padding:11px 12px;border:1px solid #b9d9c6;border-radius:10px;background:#edf8f0;color:#1e5a3d}.feedback b{display:block;margin-bottom:4px}.image-badge{display:inline-block;padding:2px 7px;border-radius:99px;background:#e3eef7;color:#315b78;font-size:11px;margin:5px 0 5px 5px}
+.mapping-dialog{width:min(720px,92vw);border:1px solid var(--line);border-radius:14px;padding:20px;background:var(--card);color:var(--ink);box-shadow:0 20px 70px #0004}.mapping-dialog::backdrop{background:#211b1688}.mapping-dialog h2{margin-bottom:6px}.mapping-dialog .help{margin-bottom:12px}
+.source-preview{display:grid;grid-template-columns:132px 1fr;gap:12px;align-items:start}.source-preview img{width:132px;max-height:132px;object-fit:contain;border-radius:9px;background:#eee}.source-meta{font-size:12px;color:var(--muted)}
+.workspace{display:grid;grid-template-columns:230px minmax(0,1fr);gap:20px;align-items:start}.step-nav{position:sticky;top:18px;background:#211f1b;color:#fff;border-radius:16px;padding:14px;box-shadow:0 12px 30px #30271922}.step-nav h3{font-size:12px;letter-spacing:.08em;color:#bdb7ad;margin:4px 8px 12px}.step-tab{display:flex;align-items:center;gap:10px;text-align:left;border:0;background:transparent;color:#d9d5cf;margin:4px 0;padding:10px}.step-tab span{display:grid;place-items:center;width:27px;height:27px;border-radius:50%;background:#ffffff12}.step-tab.active{background:#fff;color:#211f1b}.step-tab.active span{background:var(--accent);color:#fff}.content{min-width:0}.step-panel{display:none}.step-panel.active{display:block;animation:stepIn .18s ease-out}.grid{grid-template-columns:1fr}.top{position:sticky;top:0;z-index:10;padding:12px 0;background:linear-gradient(var(--bg) 75%,transparent)}.top-status{display:flex;gap:8px;align-items:center}.page-kicker{font-size:12px;color:var(--accent);font-weight:700;letter-spacing:.08em}.section-lead{display:flex;justify-content:space-between;gap:16px;align-items:start;margin-bottom:14px}.section-lead p{margin:3px 0 0;color:var(--muted)}.sticky-actions{position:sticky;bottom:12px;z-index:12;display:grid;grid-template-columns:110px 1fr 1fr 1.2fr;gap:8px;margin-top:16px;padding:10px;border:1px solid var(--line);border-radius:14px;background:#fffdf9ee;backdrop-filter:blur(12px);box-shadow:0 12px 36px #30271922}.sticky-actions button{margin:0}.toast-stack{position:fixed;top:20px;right:20px;z-index:50;display:grid;gap:8px;width:min(360px,calc(100vw - 40px))}.toast{padding:12px 14px;border-radius:10px;background:#211f1b;color:#fff;box-shadow:0 10px 30px #0003;animation:stepIn .18s ease-out}.toast.success{background:#246444}.toast.error{background:#9d3425}.busy{position:relative;pointer-events:none;opacity:.75}.busy::after{content:"";display:inline-block;width:12px;height:12px;margin-left:8px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin .7s linear infinite}.truth-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:8px}.truth-row{padding:9px 10px;border-radius:8px;background:#f2eee7}.truth-row.full{grid-column:1/-1}.truth-row small{display:block;color:var(--muted)}.truth-row strong{display:block;overflow-wrap:anywhere}.mode-note{padding:10px 12px;border-left:3px solid #6288a4;background:#eef5fa;color:#315b78;margin:10px 0}.advanced{margin-top:12px;border:1px solid var(--line);border-radius:10px;padding:10px}.advanced summary{cursor:pointer;font-weight:700}.advanced[open] summary{margin-bottom:12px}@keyframes spin{to{transform:rotate(360deg)}}@keyframes stepIn{from{opacity:.35;transform:translateY(4px)}to{opacity:1;transform:none}}
+@media(max-width:900px){main{padding:14px}.workspace{grid-template-columns:1fr}.step-nav{position:static;display:flex;overflow:auto}.step-nav h3{display:none}.step-tab{min-width:max-content}.sticky-actions{grid-template-columns:1fr 1fr}.truth-grid{grid-template-columns:1fr}.truth-row.full{grid-column:auto}}
+</style>
+</head>
+<body><main>
+<div id="toasts" class="toast-stack" aria-live="polite"></div>
+<div class="top"><div><div class="page-kicker">LOCAL COMFYUI CONTROL</div><h1>S · ComfyBatch V2.16</h1><div class="tag">按步骤完成导入、分配、检查与生成</div></div><div class="top-status"><div id="connection" class="status">正在检查</div></div></div>
+<div class="workspace"><aside class="step-nav"><h3>工作步骤</h3><button class="step-tab active" data-step-target="1" onclick="goStep(1)"><span>1</span>本地环境</button><button class="step-tab" data-step-target="2" onclick="goStep(2)"><span>2</span>导入与任务</button><button class="step-tab" data-step-target="3" onclick="goStep(3)"><span>3</span>分配设定</button><button class="step-tab" data-step-target="4" onclick="goStep(4)"><span>4</span>实际检查</button><button class="step-tab" data-step-target="5" onclick="goStep(5)"><span>5</span>运行结果</button></aside><div class="content"><div class="grid">
+<section class="card wide step-panel active" data-step="1"><div class="section-lead"><div><h2>本地环境</h2><p>确认本地 ComfyUI、工作流和输出位置。</p></div></div><div class="fields">
+<label>ComfyUI 目录<input id="comfyRoot" value="E:\ComfyUI-aki\ComfyUI-aki-v3\ComfyUI"></label>
+<label>ComfyUI 地址<input id="comfyUrl" value="http://127.0.0.1:8188"></label>
+<label>工作流目录<input id="workflowRoot" value="E:\工作流"></label>
+<label>输出目录<input id="outputRoot" value="C:\Users\wyj\Desktop\D"></label>
+</div><button class="secondary" onclick="refreshInventory(this)">重新扫描本地资源</button><div id="counts" class="help"></div><div class="mode-note">基础功能完全本地运行，不启用 LLM 时不会消耗 Token。</div></section>
+
+<section class="card step-panel" data-step="2"><div class="section-lead"><div><h2>导入与整理任务</h2><p>提示词文件和图片合集使用同一套选择、分配与队列规则。</p></div></div><div class="fields"><label>提示词文件<input id="bundleFile" type="file" accept=".json,.csv,.txt,.md,.docx,.xlsx"></label><label>图片合集<input id="imageFiles" type="file" multiple accept=".png,.jpg,.jpeg,.webp"></label><label>图片处理模式<select id="imageMode"><option value="faithful_upscale">保真像素放大</option><option value="ai_enhance" selected>AI 高清重绘</option><option value="outpaint">画布扩展</option></select></label></div><button id="mappingButton" class="secondary" onclick="openMappingDialog()" disabled>打开 Excel 字段映射窗口</button><div class="help">文档支持 JSON、TXT、Word 与 Excel；图片支持 PNG、JPG 和 WEBP。图片会安全复制到 ComfyUI 输入目录，原文件不被修改。</div><div id="bundleInfo" class="help">尚未导入</div><div class="selection-tools"><div class="fields"><label>编号范围<input id="promptRange" placeholder="例如：1,3,5-12,20-25"></label><label>分配风格／LoRA 预设<select id="assignPreset"></select></label><label>分配图像规格<select id="assignImagePreset"></select></label></div><div class="actions"><button class="secondary" onclick="selectRange()">选择编号</button><button class="secondary" onclick="selectAllPrompts()">全选</button><button class="secondary" onclick="invertPromptSelection()">反选</button><button class="secondary" onclick="clearPromptSelection()">清空</button></div><div class="actions"><button onclick="assignPresetToSelection()">应用风格／LoRA</button><button class="secondary" onclick="assignPresetToSelection(true)">恢复全局风格</button><button onclick="assignImagePresetToSelection()">应用图像规格</button><button class="secondary" onclick="assignImagePresetToSelection(true)">恢复全局规格</button></div><div id="selectionStatus" class="help">已选择 0 条</div><div id="assignmentFeedback" class="help">可为同一批任务分别分配不同的风格组合和图像规格。</div></div><div id="preview" class="preview"></div></section>
+
+<section class="card step-panel" data-step="3"><div class="section-lead"><div><h2>分配生成设定</h2><p>普通设置保持简洁，需要时再展开高级选项。</p></div></div>
+<div class="preset-box"><div class="fields"><label>预设名称<input id="presetName" placeholder="例如：水彩＋米山舞"></label><label>已保存预设<select id="presetPicker" onchange="loadPreset(true)"></select></label></div><div class="actions"><button class="secondary" onclick="savePreset(true)">另存为新预设</button><button class="secondary" onclick="savePreset(false)">更新当前预设</button><button class="secondary" onclick="loadPreset(false)">重新载入预设</button><button class="danger" onclick="deletePreset()">删除预设</button></div><div class="help">选择设定后立即生效并显示其中全部风格与 LoRA；任务级设定优先于全局配置。除非主动删除，设定会在刷新和重启后保留。</div></div>
+<div id="deletedPresets" class="deleted-presets" hidden></div>
+<div class="fields"><label>工作流<select id="workflow" onchange="renderWorkflowVariants()"></select></label><label>执行分支<select id="workflowVariant" onchange="renderModels();renderConfigFeedback()"></select></label></div>
+<div class="fields"><label>模型<select id="model" onchange="renderLoraOptions();renderConfigFeedback()"></select></label><label>风格应用方式<select id="styleApplication" onchange="renderConfigFeedback()"><option value="native" selected>工作流原生风格组合器</option><option value="prompt">提示词融合（兼容模式）</option></select></label></div>
+<div class="fields"><label>风格库<select id="styleLibrary" onchange="renderStyles()"></select></label><label>具体风格<select id="styleName" onchange="renderStylePreview()"></select></label></div><div id="stylePreview" class="style-preview"></div><button class="secondary" onclick="addStyle()">加入风格组合</button><div id="styles"></div>
+<div class="fields"><label>全局图像规格<select id="globalImagePreset" onchange="applyGlobalImagePreset()"></select></label><label>画面比例<select id="aspect" onchange="renderConfigFeedback()"><option>16:9 (Widescreen)</option><option>3:2 (Landscape)</option><option>4:3 (Landscape)</option><option>1:1 (Square)</option><option>9:16 (Portrait)</option></select></label></div>
+<label>全局负面提示词（应用到全部任务）<textarea id="globalNegative" placeholder="例如：photorealistic, multiple people, character sheet, triptych"></textarea></label>
+<label>LoRA（可多选）<select id="loraPick"></select></label><div class="actions"><button class="secondary" onclick="addLora()">加入 LoRA</button></div><div id="loras"></div>
+<details class="advanced"><summary>高级生成保护</summary><label class="switch"><input id="singleSubject" type="checkbox" checked>单人单画面保护（检测明显三栏并自动重试）</label><label>最多重试次数<input id="maxRetries" type="number" min="0" max="5" value="2"></label></details>
+</section>
+
+<div class="workbench" id="paramWorkbench"><div class="section-lead"><div><h2>参数工作台</h2><p>这里改的参数会真正写入提交给 ComfyUI 的工作流。留空表示沿用工作流自身的设定。</p></div><button class="secondary" onclick="loadWorkbench(this)">读取可用参数</button></div><div class="wb-scope"><label>作用范围<select id="paramScope" onchange="renderWorkbench()"><option value="batch">整个批次</option><option value="workflow">保存为该工作流默认值</option><option value="task">仅选中的任务</option></select></label><span id="paramScopeHint" class="help"></span></div><div id="paramGroups" class="wb-groups"></div><div class="actions"><button id="applyParams" onclick="applyWorkbench(this)">应用参数</button><button class="secondary" onclick="clearWorkbench(this)">清空未应用的输入</button></div><div id="paramFeedback" class="help"></div></div>
+<section class="card wide step-panel" data-step="4"><div class="section-lead"><div><h2>实际生效检查</h2><p>这里显示准备写入 ComfyUI 的真实工作流、节点和尺寸。</p></div></div><div id="configFeedback" class="feedback"><b>当前配置反馈</b>正在读取可用模型、风格、LoRA 与图像规格。</div><button id="preflightButton" class="secondary" onclick="preflightAction(this)">检查实际生效配置</button><div id="effective" class="effective"><b>实际生效检查：</b>尚未检查。</div><details class="advanced"><summary>可选 LLM 精修</summary><label class="switch"><input id="llmEnabled" type="checkbox" onchange="toggleLLM()">启用兼容 OpenAI 接口的分析（关闭时零 LLM token）</label><div id="llmFields" class="fields hidden">
+<label>接口地址<input id="llmUrl" placeholder="http://127.0.0.1:1234/v1"></label><label>模型名<input id="llmModel" placeholder="本地或远程模型名"></label><label>API Key<input id="llmKey" type="password" autocomplete="off"></label><label>温度<input id="llmTemp" type="number" min="0" max="2" step="0.1" value="0.2"></label>
+<label style="grid-column:1/-1">精修规则<textarea id="llmInstruction">在不改变原始服饰约束的前提下，补全为明确的二维服装设计提示词。保持每条设计、场景、姿势和构图彼此可辨识；只返回 JSON 数组，每项包含 title、prompt，可选包含 negative_prompt。</textarea></label></div><div class="help">启用后只发送提示词文本和提示词元数据；密钥不会写入运行报告。</div></details></section>
+
+<section class="card wide step-panel" data-step="5"><div class="section-lead"><div><h2>运行与结果</h2><p>实时查看队列、失败任务和生成结果。</p></div></div><div class="actions"><button class="secondary" onclick="control('pause',this)">暂停</button><button class="secondary" onclick="control('resume',this)">继续</button><button class="danger" onclick="control('cancel',this)">取消剩余任务</button></div><div class="bar"><i id="progress"></i></div><div class="metrics"><div class="metric"><span>总数</span><strong id="total">0</strong></div><div class="metric"><span>已提交</span><strong id="submitted">0</strong></div><div class="metric"><span>已完成</span><strong id="completed">0</strong></div><div class="metric"><span>失败</span><strong id="errors">0</strong></div></div><div id="runText" class="help">等待导入与配置</div><div id="abortBanner" class="abort-banner" hidden></div><div class="review-toolbar"><span class="help">审图快捷键：<b>J</b>/<b>K</b> 上下、<b>Y</b> 通过、<b>N</b> 打回、<b>Enter</b> 看原图</span><button class="secondary" onclick="confirmAllPending(this)">全部通过</button><button class="secondary" onclick="openDrawer('inspect',this)">生效检查与依赖</button><button class="secondary" onclick="reloadSchema(this)">重新读取节点定义</button><span id="reviewSummary" class="help"></span></div><div id="reviewBoard" class="review-board"></div><div id="gallery" class="gallery"></div></section>
+</div><div class="sticky-actions"><button id="backStep" class="secondary" onclick="changeStep(-1)">上一步</button><button id="nextStep" class="secondary" onclick="changeStep(1)">下一步</button><button class="secondary" onclick="goStep(4);preflightAction($('preflightButton'))">实际检查</button><button id="start" onclick="startBatch(this)">启动真实批次</button></div></div></div></main>
+<aside id="drawer" class="drawer" hidden><div class="drawer-head"><h3 id="drawerTitle">问题详情</h3><button class="secondary" onclick="closeDrawer()">关闭</button></div><div id="drawerBody" class="drawer-body"></div></aside>
+<dialog id="viewer" class="viewer"><div class="viewer-head"><span id="viewerCaption"></span><button class="secondary" onclick="$('viewer').close()">关闭</button></div><img id="viewerImage" alt="原图"></dialog>
+<dialog id="mappingDialog" class="mapping-dialog"><h2>Excel 字段映射</h2><div class="help">自动识别不准确时，在这里指定每种内容所在的列。重新应用只改变当前导入结果，不修改原 Excel。</div><div class="fields"><label>任务标题列<select id="mappingTitle"></select></label><label>正面提示词列<select id="mappingPositive"></select></label><label>负面提示词列<select id="mappingNegative"></select></label><label>保留为元数据的列<input id="mappingMetadata" placeholder="用逗号分隔；留空表示保留其它全部列"></label></div><div class="actions"><button onclick="applyMapping()">应用映射并重新提取</button><button class="secondary" onclick="$('mappingDialog').close()">取消</button></div></dialog>
+<script>
+let inventory={styles:[],loras:[],models:[],workflows:[],style_lora_presets:[],image_presets:[]},bundle=null,importMapping=null,selectedLoras=[],selectedStyles=[],comfyConnected=false,loraSaveTimers={},selectedPromptIndexes=new Set();let activePresetId='';
+const $=id=>document.getElementById(id); const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let currentStep=Number(localStorage.getItem('comfybatch-step')||1),pollTimer=null,lastRunStatus='';
+function goStep(step){currentStep=Math.max(1,Math.min(5,Number(step)||1));localStorage.setItem('comfybatch-step',String(currentStep));document.querySelectorAll('.step-panel').forEach(x=>x.classList.toggle('active',Number(x.dataset.step)===currentStep));document.querySelectorAll('.step-tab').forEach(x=>x.classList.toggle('active',Number(x.dataset.stepTarget)===currentStep));$('backStep').disabled=currentStep===1;$('nextStep').disabled=currentStep===5;window.scrollTo({top:0,behavior:'smooth'});if(currentStep===3&&!workbench)loadWorkbench()}
+function changeStep(delta){goStep(currentStep+delta)}
+function notify(message,type='success'){const host=$('toasts'),row=document.createElement('div');row.className='toast '+type;row.textContent=message;host.appendChild(row);setTimeout(()=>row.remove(),3200)}
+function setBusy(button,busy,label='处理中'){if(!button)return;if(busy){button.dataset.oldText=button.textContent;button.textContent=label;button.classList.add('busy');button.disabled=true}else{button.textContent=button.dataset.oldText||button.textContent;button.classList.remove('busy');button.disabled=false}}
+async function api(path,options={}){
+  // Every write carries this page's id so the server can enforce the editing lease.
+  if(options.method==='POST'&&typeof withClient==='function'){
+    let parsed=null;
+    try{parsed=options.body?JSON.parse(options.body):{}}catch(e){parsed=null}
+    if(parsed&&typeof parsed==='object')options=Object.assign({},options,{body:JSON.stringify(withClient(parsed))});
+  }
+  const r=await fetch(path,{headers:{'Content-Type':'application/json'},...options});const v=await r.json();if(!v.ok){const e=new Error(v.error||'请求失败');e.payload=v;throw e}return v}
+function opts(el,rows,label,value){el.innerHTML=rows.map(x=>`<option value="${esc(value(x))}">${esc(label(x))}</option>`).join('')||'<option value="">未发现</option>'}
+async function refreshInventory(button){setBusy(button,true,'正在扫描');try{const v=await api('/api/configure',{method:'POST',body:JSON.stringify({comfy_root:$('comfyRoot').value,comfy_url:$('comfyUrl').value,workflow_roots:[$('workflowRoot').value],output_root:$('outputRoot').value})});inventory=v.inventory;renderInventory();if(button)notify('本地资源扫描完成')}catch(e){notify(e.message,'error')}finally{setBusy(button,false)}}
+function triggerLabel(status){return status==='manual'?'已记忆触发词':status==='confirmed'?'已读取触发词':'触发词未知'}
+function presets(){return inventory.style_lora_presets||[]}
+function presetById(id){return presets().find(x=>x.id===id)}
+function imagePresets(){return inventory.image_presets||[]}
+function imagePresetById(id){return imagePresets().find(x=>x.id===id)}
+function renderPresetOptions(){const a=activePresetId||$('presetPicker').value,b=$('assignPreset').value;$('presetPicker').innerHTML='<option value="">自定义全局配置（未载入设定）</option>'+presets().map(x=>`<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('');opts($('assignPreset'),presets(),x=>x.name,x=>x.id);if(presets().some(x=>x.id===a))$('presetPicker').value=a;if(presets().some(x=>x.id===b))$('assignPreset').value=b;showPresetName()}
+function renderImagePresetOptions(){const global=$('globalImagePreset').value,assigned=$('assignImagePreset').value;opts($('globalImagePreset'),imagePresets(),x=>x.name,x=>x.id);opts($('assignImagePreset'),imagePresets(),x=>x.name,x=>x.id);const defaultPreset=imagePresets().find(x=>x.id==='wide-m')||imagePresets()[0];$('globalImagePreset').value=imagePresetById(global)?global:(defaultPreset?.id||'');if(imagePresetById(assigned))$('assignImagePreset').value=assigned;applyGlobalImagePreset()}
+function applyGlobalImagePreset(){const preset=imagePresetById($('globalImagePreset').value);if(preset)$('aspect').value=preset.aspect_ratio;renderConfigFeedback()}
+function currentImagePreset(){return imagePresetById($('globalImagePreset').value)}
+function showPresetName(){const x=presetById($('presetPicker').value);if(x)$('presetName').value=x.name}
+async function savePreset(asNew){const id=asNew?'':$('presetPicker').value,name=$('presetName').value.trim();if(!name)return alert('请输入预设名称');if(!asNew&&!id)return alert('请先选择要更新的预设');try{const v=await api('/api/save-style-lora-preset',{method:'POST',body:JSON.stringify({id,name,styles:selectedStyles,loras:selectedLoras})});inventory.style_lora_presets=v.presets;activePresetId=v.preset.id;renderPresetOptions();$('presetPicker').value=v.preset.id;$('assignPreset').value=v.preset.id;$('presetName').value=v.preset.name;renderBundle();renderConfigFeedback()}catch(e){alert(e.message)}}
+function enrichPresetLora(x){const source=inventory.loras.find(row=>row.value===x.name)||{};return {...x,display_name:source.display_name||source.name||x.name,trigger_words:[...(source.trigger_words||[])],trigger_status:source.trigger_status||'unknown',use_triggers:x.use_triggers!==false}}
+function enrichPresetStyle(x){const source=inventory.styles.find(row=>row.library===x.catalog&&row.name===x.name)||{};return {...source,...x,display_name:source.display_name||source.name_cn||x.name,thumbnail:source.thumbnail||''}}
+function loadPreset(fromSelection=false){const x=presetById($('presetPicker').value);if(!x){activePresetId='';renderConfigFeedback();if(!fromSelection)alert('没有可载入的预设');return}activePresetId=x.id;$('presetName').value=x.name;selectedStyles=(x.styles||[]).map(enrichPresetStyle);selectedLoras=(x.loras||[]).map(enrichPresetLora);renderStyleBasket();renderLoras()}
+async function deletePreset(){const id=$('presetPicker').value,x=presetById(id);if(!x)return alert('没有可删除的预设');if(!confirm(`删除预设“${x.name}”？已使用它的提示词将恢复全局配置。`))return;try{const v=await api('/api/delete-style-lora-preset',{method:'POST',body:JSON.stringify({id})});inventory.style_lora_presets=v.presets;bundle=v.bundle||bundle;if(activePresetId===id)activePresetId='';renderPresetOptions();renderBundle();renderConfigFeedback()}catch(e){alert(e.message)}}
+function updateSelectionStatus(){$('selectionStatus').textContent=`已选择 ${selectedPromptIndexes.size} 条${bundle?' / 共 '+bundle.items.length+' 条':''}`}
+function togglePrompt(index,checked){checked?selectedPromptIndexes.add(index):selectedPromptIndexes.delete(index);renderBundle()}
+function parseRangeText(text,total){const result=new Set();for(const token of text.trim().split(/[,，;；\s]+/).filter(Boolean)){const m=token.match(/^(\d+)\s*[-—~至]\s*(\d+)$/);if(m){let a=Number(m[1]),b=Number(m[2]);if(a>b)[a,b]=[b,a];for(let i=a;i<=b;i++)result.add(i)}else if(/^\d+$/.test(token))result.add(Number(token));else throw new Error('无法识别的编号：'+token)}for(const i of result)if(i<1||i>total)throw new Error(`编号 ${i} 超出范围 1-${total}`);return result}
+function selectRange(){if(!bundle)return alert('请先导入提示词合集');try{selectedPromptIndexes=parseRangeText($('promptRange').value,bundle.items.length);renderBundle()}catch(e){alert(e.message)}}
+function selectAllPrompts(){if(!bundle)return;selectedPromptIndexes=new Set(bundle.items.map((_,i)=>i+1));renderBundle()}
+function invertPromptSelection(){if(!bundle)return;selectedPromptIndexes=new Set(bundle.items.map((_,i)=>i+1).filter(i=>!selectedPromptIndexes.has(i)));renderBundle()}
+function clearPromptSelection(){selectedPromptIndexes.clear();renderBundle()}
+async function assignPresetToSelection(clear=false){if(!bundle)return alert('请先导入提示词合集');if(!selectedPromptIndexes.size)return alert('请先选择提示词');const presetId=clear?'':$('assignPreset').value;if(!clear&&!presetId)return alert('请先保存或选择预设');try{const v=await api('/api/assign-style-lora-preset',{method:'POST',body:JSON.stringify({preset_id:presetId,indexes:[...selectedPromptIndexes]})});bundle=v.bundle;$('assignmentFeedback').textContent=clear?`已让 ${selectedPromptIndexes.size} 条提示词恢复全局风格与 LoRA。`:`已为 ${selectedPromptIndexes.size} 条提示词分配：${presetById(presetId)?.name||'设定'}。`;renderBundle()}catch(e){alert(e.message)}}
+async function assignImagePresetToSelection(clear=false){if(!bundle)return alert('请先导入提示词合集');if(!selectedPromptIndexes.size)return alert('请先选择提示词');const presetId=clear?'':$('assignImagePreset').value;if(!clear&&!presetId)return alert('请先选择图像规格');try{const v=await api('/api/assign-image-preset',{method:'POST',body:JSON.stringify({preset_id:presetId,indexes:[...selectedPromptIndexes]})});bundle=v.bundle;$('assignmentFeedback').textContent=clear?`已让 ${selectedPromptIndexes.size} 条提示词恢复全局图像规格。`:`已为 ${selectedPromptIndexes.size} 条提示词分配：${imagePresetById(presetId)?.name||'图像规格'}。`;renderBundle()}catch(e){alert(e.message)}}
+function renderLoraOptions(){const model=inventory.models.find(x=>x.value===$('model').value)||{};const rows=inventory.loras.filter(x=>!model.family||model.family==='unknown'||x.family==='unknown'||x.family===model.family);opts($('loraPick'),rows,x=>`${x.display_name||x.value} · ${triggerLabel(x.trigger_status)} · ${x.family||'unknown'}`,x=>x.value)}
+function styleSource(catalog=$('styleLibrary').value,name=$('styleName').value){return inventory.styles.find(x=>x.library===catalog&&x.name===name)}
+function styleThumbnailUrl(x){return x?.thumbnail?`/api/style-thumbnail?library=${encodeURIComponent(x.library||x.catalog)}&name=${encodeURIComponent(x.name)}`:''}
+function renderStyles(){const lib=$('styleLibrary').value;opts($('styleName'),inventory.styles.filter(x=>x.library===lib),x=>x.display_name||x.name_cn||x.name,x=>x.name);renderStylePreview()}
+function renderStylePreview(){const x=styleSource(),url=styleThumbnailUrl(x);$('stylePreview').innerHTML=x?`${url?`<img src="${esc(url)}" alt="${esc(x.display_name||x.name)}" onerror="this.style.display='none'">`:''}<div><b>${esc(x.display_name||x.name_cn||x.name)}</b><small>原名：${esc(x.name)}</small><small>${url?'预览图来自原风格节点':'暂无预览图'}</small></div>`:'<div>尚未发现可用风格</div>'}
+function addStyle(){const catalog=$('styleLibrary').value,name=$('styleName').value;if(!catalog||!name||selectedStyles.some(x=>x.catalog===catalog&&x.name===name))return;if(selectedStyles.length>=4)return alert('一次最多组合4个风格');const source=styleSource(catalog,name)||{};selectedStyles.push({...source,catalog,name});renderStyleBasket()}
+function renderStyleBasket(){$('styles').innerHTML=selectedStyles.map((x,i)=>{const url=styleThumbnailUrl(x);return `<div class="chip chip-with-thumb">${url?`<img class="style-thumb" src="${esc(url)}" alt="${esc(x.display_name||x.name)}" onerror="this.style.visibility='hidden'">`:'<div class="style-thumb"></div>'}<div><b>${i===0?'主风格':'辅助风格'}：${esc(x.display_name||x.name_cn||x.name)}</b><small>原名：${esc(x.name)}</small><small>${esc(x.prompt||'该风格没有可预览的模板文字')}</small></div><button class="danger" onclick="selectedStyles.splice(${i},1);renderStyleBasket()">移除</button></div>`}).join('');renderConfigFeedback()}
+function addLora(){const name=$('loraPick').value,source=inventory.loras.find(x=>x.value===name);if(source&&!selectedLoras.some(x=>x.name===name)){selectedLoras.push({name,display_name:source.display_name||source.name||name,strength:1,trigger_words:[...(source.trigger_words||[])],trigger_status:source.trigger_status,use_triggers:source.use_triggers!==false});renderLoras()}}
+async function rememberLora(index){const x=selectedLoras[index];if(!x)return;try{const v=await api('/api/save-lora-profile',{method:'POST',body:JSON.stringify({name:x.name,display_name:x.display_name,trigger_words:x.trigger_words,use_triggers:x.use_triggers})});Object.assign(x,v.profile);const source=inventory.loras.find(row=>row.value===x.name);if(source)Object.assign(source,v.profile);renderLoraOptions()}catch(e){alert('LoRA 资料保存失败：'+e.message)}}
+function updateLoraTriggers(index,value){selectedLoras[index].trigger_words=value.split(/[,，;；]/).map(x=>x.trim()).filter(Boolean)}
+function renderLoras(){$('loras').innerHTML=selectedLoras.map((x,i)=>`<div class="lora-row"><label>中文名称（自动记忆）<input value="${esc(x.display_name||x.name)}" oninput="selectedLoras[${i}].display_name=this.value" onchange="rememberLora(${i})"><small title="${esc(x.name)}">文件：${esc(x.name)}</small></label><label>强度<input type="number" min="-2" max="2" step="0.05" value="${x.strength}" onchange="selectedLoras[${i}].strength=Number(this.value);renderConfigFeedback()"></label><label>触发词（自动记忆）<input value="${esc((x.trigger_words||[]).join(', '))}" oninput="updateLoraTriggers(${i},this.value)" onchange="rememberLora(${i})"></label><label class="switch"><input type="checkbox" ${x.use_triggers?'checked':''} onchange="selectedLoras[${i}].use_triggers=this.checked;rememberLora(${i})">使用触发词</label><button class="danger" onclick="selectedLoras.splice(${i},1);renderLoras()">×</button></div>`).join('');renderConfigFeedback()}
+function toggleLLM(){$('llmFields').classList.toggle('hidden',!$('llmEnabled').checked)}
+$('bundleFile').addEventListener('change',async e=>{const f=e.target.files[0];if(!f)return;const input=e.target;input.disabled=true;notify(`正在读取 ${f.name}`,'info');try{const bytes=new Uint8Array(await f.arrayBuffer());let binary='';for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));const v=await api('/api/import',{method:'POST',body:JSON.stringify({filename:f.name,base64:btoa(binary)})});bundle=v.bundle;importMapping=v.mapping||null;$('mappingButton').disabled=!importMapping;bundle.items.forEach(x=>x.count=1);selectedPromptIndexes.clear();renderBundle();notify(`已提取 ${bundle.items.length} 条任务`)}catch(err){notify(err.message,'error')}finally{input.disabled=false}});
+async function fileBase64(file){const bytes=new Uint8Array(await file.arrayBuffer());let binary='';for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));return btoa(binary)}
+$('imageFiles').addEventListener('change',async e=>{const files=[...e.target.files];if(!files.length)return;const input=e.target;input.disabled=true;notify(`正在导入 ${files.length} 张图片`,'info');try{const rows=[];for(let i=0;i<files.length;i++){rows.push({filename:files[i].name,base64:await fileBase64(files[i])});$('bundleInfo').textContent=`正在读取图片 ${i+1}/${files.length}`};const v=await api('/api/import-images',{method:'POST',body:JSON.stringify({mode:$('imageMode').value,files:rows})});bundle=v.bundle;importMapping=null;$('mappingButton').disabled=true;bundle.items.forEach(x=>x.count=1);selectedPromptIndexes.clear();renderBundle();notify(`已建立 ${bundle.items.length} 个图片任务`)}catch(err){notify(err.message,'error')}finally{input.disabled=false}});
+function mappingOptions(el,allowBlank=false){const rows=importMapping?.headers||[];el.innerHTML=(allowBlank?'<option value="">不使用此列</option>':'')+rows.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('')}
+function openMappingDialog(){if(!importMapping)return alert('请先导入 Excel 文件');mappingOptions($('mappingTitle'),true);mappingOptions($('mappingPositive'));mappingOptions($('mappingNegative'),true);const chosen=importMapping.selected||importMapping.detected||{};$('mappingTitle').value=chosen.title||'';$('mappingPositive').value=chosen.positive||'';$('mappingNegative').value=chosen.negative||'';$('mappingMetadata').value=Array.isArray(chosen.metadata)?chosen.metadata.join('，'):'';$('mappingDialog').showModal()}
+async function applyMapping(){const mapping={title:$('mappingTitle').value,positive:$('mappingPositive').value,negative:$('mappingNegative').value,metadata:$('mappingMetadata').value};try{const v=await api('/api/remap-import',{method:'POST',body:JSON.stringify({mapping})});bundle=v.bundle;importMapping={...(v.mapping||importMapping),selected:mapping};bundle.items.forEach(x=>x.count=1);selectedPromptIndexes.clear();renderBundle();$('mappingDialog').close()}catch(e){alert(e.message)}}
+async function control(action,button){const labels={pause:'正在暂停',resume:'正在继续',cancel:'正在取消'};setBusy(button,true,labels[action]||'处理中');try{await api('/api/'+action,{method:'POST',body:'{}'});notify({pause:'已暂停提交新任务',resume:'已继续运行',cancel:'已取消剩余任务'}[action]||'操作完成');poll(true)}catch(e){notify(e.message,'error')}finally{setBusy(button,false)}}
+function currentWorkflow(){return inventory.workflows.find(x=>x.value===$('workflow').value)||{}}
+function currentWorkflowVariant(){return (currentWorkflow().variants||[]).find(x=>x.id===$('workflowVariant').value)||null}
+function renderWorkflowVariants(){const workflow=currentWorkflow(),old=$('workflowVariant').value,rows=workflow.variants||[];opts($('workflowVariant'),rows,x=>`${x.name} · ${x.sampler_count||0}次采样${x.upscale_count?` · ${x.upscale_count}个放大步骤`:''}`,x=>x.id);const preferred=rows.find(x=>x.id===old)||rows.find(x=>x.active)||rows[0];if(preferred)$('workflowVariant').value=preferred.id;renderModels()}
+function renderModels(){const workflow=currentWorkflow(),variant=currentWorkflowVariant(),loader=variant?.model_loader||workflow.model_loader;const rows=inventory.models.filter(x=>(!loader||x.loader===loader)&&(!workflow.model_family||workflow.model_family==='unknown'||x.family===workflow.model_family));const old=$('model').value;opts($('model'),rows,x=>`${x.value} [${x.family}]`,x=>x.value);if(rows.some(x=>x.value===old))$('model').value=old;else{const red=rows.find(x=>/redcraft|红潮|红red/i.test(x.value));if(red)$('model').value=red.value}renderLoraOptions();renderConfigFeedback()}
+function presetSignature(styles,loras){return JSON.stringify({styles:(styles||[]).map(x=>[x.catalog,x.name]),loras:(loras||[]).map(x=>[x.name,Number(x.strength||1),x.use_triggers!==false])})}
+function taskPresetSummaries(){if(!bundle)return[];const groups=new Map();for(const item of bundle.items||[]){const id=item.metadata?.style_lora_preset_id||'';if(!id)continue;groups.set(id,(groups.get(id)||0)+Number(item.count||1))}return [...groups].map(([id,count])=>({id,count,preset:presetById(id)}))}
+function renderConfigFeedback(){const el=$('configFeedback');if(!el)return;const chosen=selectedStyles.length?selectedStyles.map(x=>x.display_name||x.name_cn||x.name).join(' + '):(styleSource()?.display_name||styleSource()?.name_cn||styleSource()?.name||'未选择');const loras=selectedLoras.length?selectedLoras.map(x=>`${x.display_name||x.name} ×${Number(x.strength||1).toFixed(2)}`).join('，'):'未添加';const image=currentImagePreset(),active=presetById(activePresetId),exact=active&&presetSignature(active.styles,active.loras)===presetSignature(selectedStyles,selectedLoras);const globalLabel=active?`${active.name}${exact?'':'（已临时修改）'}`:'自定义全局配置';const taskRows=taskPresetSummaries(),taskText=taskRows.length?taskRows.map(x=>{if(!x.preset)return esc(`已失效设定 ${x.id}：${x.count} 个任务`);const styles=(x.preset.styles||[]).map(s=>enrichPresetStyle(s).display_name||s.name).join(' + ')||'无风格';const ls=(x.preset.loras||[]).map(l=>`${enrichPresetLora(l).display_name||l.name} ×${Number(l.strength||1).toFixed(2)}`).join('，')||'无 LoRA';return esc(`${x.preset.name}：${x.count} 个任务；风格 ${styles}；LoRA ${ls}`)}).join('<br>'):'未分配（全部使用全局配置）',variant=currentWorkflowVariant();el.innerHTML=`<b>当前配置反馈（这里显示的就是启动时实际写入工作流的配置）</b><div>执行分支：${esc(variant?.name||'当前已启用分支')} · ${variant?.sampler_count||0}次采样${variant?.upscale_count?` · ${variant.upscale_count}个放大步骤`:''}</div><div>模型：${esc($('model')?.value||'未选择')}</div><div>全局设定：${esc(globalLabel)}</div><div>全局风格：${esc(chosen)} · ${selectedStyles.length?`已加入 ${selectedStyles.length} 个组合风格`:'使用当前具体风格'} · ${$('styleApplication')?.value==='native'?'原生组合器':'提示词融合'}</div><div>全局 LoRA：${esc(loras)}</div><div>任务级设定（优先覆盖全局）：${taskText}</div><div>全局图像规格：${esc(image?.name||'自定义')} · 实际比例 ${esc($('aspect')?.value||'未选择')} · ${Number(image?.megapixels||1.2).toFixed(1)} MP</div>`}
+function renderInventory(){comfyConnected=!!inventory.comfy_connected;const c=$('connection');c.textContent=comfyConnected?'ComfyUI 已连接':'ComfyUI 未连接：请先启动 ComfyUI';c.className='status '+(comfyConnected?'ok':'bad');opts($('workflow'),inventory.workflows.filter(x=>x.compatible),x=>x.name,x=>x.value);const libraryMap=new Map();inventory.styles.forEach(x=>{if(!libraryMap.has(x.library))libraryMap.set(x.library,x.library_cn||x.library)});const libs=[...libraryMap].map(([value,label])=>({value,label}));opts($('styleLibrary'),libs,x=>x.label,x=>x.value);const twoD=[...$('styleLibrary').options].find(x=>/Anime-Cel|anime_/i.test(x.value));if(twoD)$('styleLibrary').value=twoD.value;renderWorkflowVariants();renderStyles();renderPresetOptions();renderImagePresetOptions();renderBundle();renderConfigFeedback();$('counts').textContent=`发现 ${inventory.workflows.length} 个工作流、${inventory.models.length} 个模型、${inventory.loras.length} 个 LoRA、${inventory.styles.length} 个风格、${presets().length} 个持久预设、${imagePresets().length} 个图像规格。`;$('start').disabled=!comfyConnected}
+function renderBundle(){if(!bundle){updateSelectionStatus();renderConfigFeedback();return}selectedPromptIndexes=new Set([...selectedPromptIndexes].filter(i=>i>=1&&i<=bundle.items.length));const expanded=bundle.items.reduce((sum,x)=>sum+Number(x.count||1),0),kind=bundle.source_format==='images'?'图片':'提示词';$('bundleInfo').textContent=`${bundle.name} · 提取 ${bundle.items.length} 条${kind}任务 · 实际任务 ${expanded} 个 · ${bundle.source_format.toUpperCase()}`;$('preview').innerHTML=bundle.items.map((x,i)=>{const n=i+1,id=x.metadata?.style_lora_preset_id||'',p=presetById(id),label=p?.name||(id?'已删除预设':'');const imageId=x.metadata?.image_preset_id||'',image=imagePresetById(imageId),imageLabel=image?.name||x.metadata?.image_preset_name||(imageId?'已删除图像规格':'全局图像规格'),source=x.metadata?.source_image||'',dims=x.metadata?.source_dimensions||[],sourceBlock=source?`<div class="source-preview"><img loading="lazy" src="/api/source-image?path=${encodeURIComponent(source)}" alt="${esc(x.title)}"><div class="source-meta"><b>${esc(x.metadata?.processing_mode_name||'图片任务')}</b><div>原文件：${esc(x.metadata?.source_filename||'')}</div><div>原尺寸：${esc(dims.length?dims.join('×'):'未知')}</div><div>输入位置：${esc(source)}</div></div></div>`:'';return `<div class="item ${selectedPromptIndexes.has(n)?'selected':''}"><div class="task-head"><input class="pick" type="checkbox" ${selectedPromptIndexes.has(n)?'checked':''} onchange="togglePrompt(${n},this.checked)"><input value="${esc(x.title)}" oninput="bundle.items[${i}].title=this.value"><label>数量<input type="number" min="1" max="99" value="${x.count||1}" onchange="bundle.items[${i}].count=Math.max(1,Number(this.value));renderBundle()"></label><button class="secondary" onclick="duplicateTask(${i})">复制</button><button class="danger" onclick="deleteTask(${i})">×</button></div>${sourceBlock}${label?`<span class="preset-badge">风格预设：${esc(label)}</span>`:'<span class="preset-badge">风格：全局配置</span>'}<span class="image-badge">图像：${esc(imageLabel)}</span><label>正面提示词<textarea oninput="bundle.items[${i}].prompt=this.value">${esc(x.prompt)}</textarea></label><label>本任务负面提示词（可留空）<textarea oninput="bundle.items[${i}].negative_prompt=this.value" placeholder="只作用于这一条任务">${esc(x.negative_prompt||'')}</textarea></label></div>`}).join('');updateSelectionStatus();renderConfigFeedback()}
+function duplicateTask(index){bundle.items.splice(index+1,0,JSON.parse(JSON.stringify(bundle.items[index])));selectedPromptIndexes.clear();renderBundle()}
+function deleteTask(index){bundle.items.splice(index,1);selectedPromptIndexes.clear();renderBundle()}
+async function syncBundle(){const items=[];for(const item of bundle.items){for(let i=0;i<Number(item.count||1);i++)items.push({title:Number(item.count||1)>1?`${item.title}-${i+1}`:item.title,prompt:item.prompt,negative_prompt:item.negative_prompt||'',metadata:item.metadata||{}})}const v=await api('/api/update-bundle',{method:'POST',body:JSON.stringify({items})});bundle=v.bundle}
+function batchConfig(){const image=currentImagePreset();return {workflow_path:$('workflow').value,workflow_variant:$('workflowVariant').value,style_application:$('styleApplication').value,model:$('model').value,styles:selectedStyles,style_library:$('styleLibrary').value,style_name:selectedStyles.length?'':$('styleName').value,loras:selectedLoras,aspect_ratio:$('aspect').value,megapixels:Number(image?.megapixels||1.2),output_dir:$('outputRoot').value,negative_prompt:$('globalNegative').value,single_subject_guard:$('singleSubject').checked,max_retries:Number($('maxRetries').value),llm:{enabled:$('llmEnabled').checked,base_url:$('llmUrl').value,model:$('llmModel').value,api_key:$('llmKey').value,temperature:Number($('llmTemp').value),instruction:$('llmInstruction').value},resource_overrides:batchOverrides}}
+function renderEffective(r){const el=$('effective'),errors=r.errors||[],warnings=r.warnings||[],size=r.dimensions?`${r.dimensions.width}×${r.dimensions.height}`:'未确定',wf=r.workflow||{},nodes=r.nodes||{},variant=r.variant||{};const nodeText=kind=>(nodes[kind]||[]).length?(nodes[kind]||[]).join('、'):'未发现';const overrideCount=bundle?(bundle.items||[]).filter(x=>x.metadata?.image_preset_id||x.metadata?.style_lora_preset_id).length:0;el.className='effective '+(r.ready?'':'bad');el.innerHTML=`<b>实际生效检查：${r.ready?'可以生成':'不能生成'}</b><div class="truth-grid"><div class="truth-row full"><small>实际工作流</small><strong>${esc(wf.name||'未确定')}</strong><small>${esc(wf.path||'')}</small></div><div class="truth-row"><small>执行分支</small><strong>${esc(variant.name||'当前已启用分支')} · ${variant.sampler_count||0}次采样 · ${variant.upscale_count||0}个放大步骤</strong></div><div class="truth-row"><small>工作流指纹</small><strong>${esc(wf.fingerprint||'未生成')}</strong></div><div class="truth-row"><small>工作流格式</small><strong>${esc(r.format||'未知')}</strong></div><div class="truth-row"><small>模型</small><strong>${esc(r.model?.name||'未选择')} · ${esc(r.model?.loader||'不可用')}</strong></div><div class="truth-row"><small>最终提交尺寸</small><strong>${esc(size)}</strong></div><div class="truth-row"><small>采样器节点</small><strong>${esc(nodeText('samplers'))}</strong></div><div class="truth-row"><small>放大节点</small><strong>${esc(nodeText('upscale'))}</strong></div><div class="truth-row"><small>提示词节点</small><strong>${esc(nodeText('prompt'))}</strong></div><div class="truth-row"><small>图片输入节点</small><strong>${esc(nodeText('image_input'))}${r.input_image?.requested?` · ${r.input_image.supported?'已接入':'不支持'}`:' · 当前无图片任务'}</strong></div><div class="truth-row"><small>尺寸节点</small><strong>${esc(nodeText('dimensions'))}</strong></div><div class="truth-row"><small>保存节点</small><strong>${esc(nodeText('save'))}</strong></div><div class="truth-row"><small>风格</small><strong>${esc(r.style?.mode||'未选择')} · ${r.style?.count||0} 个</strong></div><div class="truth-row"><small>LoRA</small><strong>${esc(r.lora?.mode||'未选择')} · ${r.lora?.count||0} 个</strong></div><div class="truth-row"><small>负面提示词</small><strong>${esc(r.negative_prompt?.mode||'未填写')}</strong></div><div class="truth-row"><small>任务级覆盖</small><strong>${overrideCount?`${overrideCount} 条任务将覆盖部分全局设置`:'无'}</strong></div></div>${warnings.map(x=>`<div>提醒：${esc(x)}</div>`).join('')}${errors.map(x=>`<div>错误：${esc(x)}</div>`).join('')}`}
+async function preflight(body=batchConfig()){const v=await api('/api/preflight',{method:'POST',body:JSON.stringify(body)});renderEffective(v.report||v.preflight);return v.report||v.preflight}
+/* ---- 参数工作台 ---------------------------------------------------------
+   The controls are generated from the server's parameter registry, so the page
+   cannot offer a parameter the compiler does not understand, and every field
+   shows both the value you would set and the value currently in effect. */
+let workbench=null, batchParams={};
+
+async function loadWorkbench(btn){
+  if(btn)setBusy(btn,true);
+  try{
+    const v=await api('/api/params');
+    workbench=v.params||{};
+    batchParams=Object.assign({},workbench.batch_values||{});
+    renderWorkbench();
+    if(btn)notify('已读取参数清单','success');
+  }catch(e){notify(e.message,'error')}finally{if(btn)setBusy(btn,false)}
+  refreshDeletedPresets();
+}
+
+function allParamSpecs(){return workbench?((workbench.groups||[]).flatMap(g=>g.params)):[]}
+
+function renderWorkbench(){
+  const host=$('paramGroups');
+  if(!host||!workbench)return;
+  const scope=$('paramScope').value;
+  const applied=workbench.applied||{}, defaults=workbench.workflow_defaults||{};
+  $('paramScopeHint').textContent = scope==='task'
+    ? `任务级参数只写入选中的任务（当前已分配 ${workbench.task_assigned_count||0} 条）。先在「导入与任务」里勾选任务范围。`
+    : scope==='workflow'
+      ? '保存为该工作流的默认值，以后每次运行都会带上。工作流结构改变后需要重新确认。'
+      : '只对本次批次生效，关闭页面即失效。';
+  host.innerHTML=(workbench.groups||[]).map(g=>`<div class="wb-group"><h3>${esc(g.label)}</h3>
+    <div class="wb-grid">${g.params.map(p=>fieldHtml(p,applied,defaults)).join('')}</div></div>`).join('');
+}
+
+function fieldHtml(p,applied,defaults){
+  const id='param-'+p.key;
+  const inBatch=batchParams[p.key], inDefault=defaults[p.key], inApplied=applied[p.key];
+  const value = inBatch!==undefined ? inBatch : (inDefault!==undefined ? inDefault : '');
+  const shown = inBatch!==undefined ? 'batch' : (inDefault!==undefined ? 'def' : '');
+  const hint=[];
+  if(inDefault!==undefined)hint.push('工作流默认值 '+esc(String(inDefault)));
+  if(inApplied!==undefined)hint.push('实际生效 '+esc(String(inApplied)));
+  if(p.help)hint.push(esc(p.help));
+  let control='';
+  if(p.kind==='bool'){
+    control='<select id="'+id+'">'+['','true','false'].map(o=>{
+      const sel=(value===''&&o==='')||(value===true&&o==='true')||(value===false&&o==='false')?' selected':'';
+      return `<option value="${o}"${sel}>${o===''?'沿用工作流':o==='true'?'是':'否'}</option>`;
+    }).join('')+'</select>';
+  }else if(p.kind==='enum'){
+    const opts=p.options||[];
+    control='<select id="'+id+'"><option value="">沿用工作流'+(value!==''?'（当前 '+esc(String(value))+'）':'')+'</option>'
+      +opts.map(o=>`<option value="${esc(o)}"${o===value?' selected':''}>${esc(o)}</option>`).join('')+'</select>';
+  }else{
+    const attrs=(p.step!==undefined?' step="'+p.step+'"':'')+(p.min!==undefined?' min="'+p.min+'"':'')+(p.max!==undefined?' max="'+p.max+'"':'');
+    control='<input id="'+id+'" type="number"'+attrs+' value="'+(value===''?'':esc(String(value)))+'" placeholder="沿用工作流">';
+  }
+  const badge = shown==='batch'?'<span class="wb-badge batch">批次值</span>':shown==='def'?'<span class="wb-badge def">默认值</span>':'';
+  return '<div class="'+(shown?'wb-field set':'wb-field')+'" id="field-'+p.key+'"><label>'+esc(p.label)+badge+control+'</label>'
+    +'<div class="hint">'+(p.stage?('第 '+p.stage+' 个采样器 · '):'')+hint.join(' · ')+'</div></div>';
+}
+
+function collectWorkbench(){
+  const values={}, cleared=[];
+  for(const p of allParamSpecs()){
+    const el=$('param-'+p.key);
+    if(!el)continue;
+    const raw=el.value;
+    if(raw===''||raw===null){ if(batchParams[p.key]!==undefined)cleared.push(p.key); continue }
+    values[p.key] = p.kind==='bool' ? (raw==='true') : raw;
+  }
+  return {values,cleared};
+}
+
+async function applyWorkbench(btn){
+  if(!workbench){await loadWorkbench(); if(!workbench)return}
+  const scope=$('paramScope').value;
+  const collected=collectWorkbench();
+  const values=collected.values;
+  if(!Object.keys(values).length&&!collected.cleared.length){notify('没有要应用的参数','error');return}
+  const body={workflow_path:workbench.workflow_path||$('workflow').value,scope,params:values};
+  for(const k of collected.cleared)body.params[k]='';
+  if(scope==='task'){
+    const indexes=[...selectedPromptIndexes];
+    if(!indexes.length){notify('请先在「导入与任务」里勾选任务','error');return}
+    body.indexes=indexes;
+  }
+  setBusy(btn,true);
+  try{
+    const v=await api('/api/params/apply',{method:'POST',body:JSON.stringify(body)});
+    const problems=v.problems||[];
+    const blocking=problems.filter(p=>p.workflow_level);
+    workbench=v.params||workbench;
+    if(scope==='batch')batchParams=Object.assign({},values);
+    else batchParams={};
+    renderWorkbench();
+    $('paramFeedback').innerHTML = blocking.length
+      ? '<b style="color:#8d3022">参数未通过校验，已全部忽略：</b>'+blocking.map(p=>'<div>· '+esc(p.detail||p.title)+'</div>').join('')
+      : (problems.length?'部分参数已忽略：'+problems.map(p=>esc(p.title)).join('、')+'。':'参数已应用')
+        +(scope==='workflow'?' 已保存为该工作流默认值。':scope==='task'?(' 已写入 '+(body.indexes||[]).length+' 条任务。'):' 本次批次生效。')
+        +'<div class="review-actions" style="margin-top:8px"><button class="secondary" onclick="preflightAction($(\'preflightButton\'))">立即检查实际生效</button></div>';
+    notify(blocking.length?'参数被拒绝':'参数已应用',blocking.length?'error':'success');
+  }catch(e){notify(e.message,'error')}finally{setBusy(btn,false)}
+}
+
+async function clearWorkbench(btn){
+  batchParams={};
+  if(btn)setBusy(btn,true);
+  try{await loadWorkbench();notify('已清空未应用的输入','success')}catch(e){notify(e.message,'error')}finally{if(btn)setBusy(btn,false)}
+}
+
+/* ---- 事件流、编辑租约、单实例激活 --------------------------------------
+   Three things that keep several open pages from corrupting each other:
+     * SSE replaces polling, so every page sees the same server state;
+     * one page holds the editing lease, the rest are read-only;
+     * a second launch activates the running instance instead of starting a new
+       backend. */
+const CLIENT_ID_KEY='comfybatch-client-id';
+const clientId=(()=>{
+  let id=sessionStorage.getItem(CLIENT_ID_KEY);
+  if(!id){id='p-'+Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4);sessionStorage.setItem(CLIENT_ID_KEY,id)}
+  return id;
+})();
+let eventSource=null, lastActivatedAt=0, leaseState={held:false,mine:false,holder:null};
+
+function connectEvents(){
+  if(typeof EventSource==='undefined'){return}   // polling stays as the fallback
+  if(eventSource){eventSource.close()}
+  eventSource=new EventSource(`/api/events?client_id=${encodeURIComponent(clientId)}`);
+  eventSource.addEventListener('snapshot',(event)=>{
+    let payload=null;
+    try{payload=JSON.parse(event.data)}catch(e){return}
+    if(payload.status){applyStatus(payload.status);lastRunStatus=payload.status.status}
+    if(payload.bundle&&(!bundle||(typeof isReadOnly==='function'&&isReadOnly()))){
+      bundle=payload.bundle;bundle.items.forEach(x=>x.count=x.count||1);renderBundle()
+    }
+    if(payload.instance_id){document.body.dataset.instance=payload.instance_id}
+    applyLease(payload.lease||{});
+    renderReview(payload.review);
+    if(payload.activated_at&&payload.activated_at>lastActivatedAt){
+      lastActivatedAt=payload.activated_at;
+      onActivated();
+    }
+  });
+  eventSource.onerror=()=>{
+    // The stream drops when the server exits; retry rather than dying silently.
+    eventSource.close();eventSource=null;
+    setTimeout(connectEvents,1500);
+  };
+}
+
+/* Shared by the SSE handler and the polling fallback, so both paths render the
+   same way and one cannot drift from the other. */
+function applyStatus(s){
+  if(!s)return;
+  ['total','submitted','completed','errors'].forEach(k=>{const el=$(k);if(el)el.textContent=s[k]||0});
+  $('progress').style.width=(s.total?Math.round(100*(s.completed+s.errors)/s.total):0)+'%';
+  $('runText').textContent=`状态：${s.status}${s.current?' · 当前：'+s.current:''}${s.report?' · 报告：'+s.report:''}`;
+  $('start').disabled=!comfyConnected||isReadOnly()||['running','paused','starting'].includes(s.status);
+  $('gallery').innerHTML=(s.results||[]).filter(x=>x.copied_to).map(x=>`<figure><img loading="lazy" src="/api/image?path=${encodeURIComponent(x.copied_to)}"><figcaption>${esc(x.index+'. '+x.title)}${x.quality?.repeated_panels?' · 疑似多栏':''}</figcaption></figure>`).join('');
+}
+
+function applyLease(lease){
+  leaseState=lease||{held:false,mine:false,holder:null};
+  document.body.classList.toggle('readonly',isReadOnly());
+  renderLeaseBanner();
+}
+
+function isReadOnly(){return leaseState.held&&!leaseState.mine}
+
+function renderLeaseBanner(){
+  let banner=$('leaseBanner');
+  if(!banner){
+    banner=document.createElement('div');
+    banner.id='leaseBanner';
+    const host=document.querySelector('.workspace')||document.body;
+    host.insertBefore(banner,host.firstChild);
+  }
+  if(!isReadOnly()){
+    banner.className='';
+    const pill=leaseState.mine?'<span class="lease-pill mine">本页可编辑</span>':'';
+    banner.innerHTML=pill;
+    return;
+  }
+  const holder=(leaseState.holder||{}).client_id||'另一个页面';
+  banner.className='readonly-banner';
+  banner.innerHTML=`另一个页面正在编辑（${esc(holder)}），本页为只读，避免两边保存不同配置互相覆盖。`
+    +`<button class="secondary lease-ok" onclick="takeOverLease(this)">接管编辑</button>`;
+}
+
+async function takeOverLease(btn){
+  setBusy(btn,true,'接管中');
+  try{
+    const v=await api('/api/lease/claim',{method:'POST',body:JSON.stringify({client_id:clientId,force:true,label:'接管'})});
+    applyLease(v.lease||{});
+    notify('已接管编辑','success');
+  }catch(e){notify(e.message,'error')}finally{setBusy(btn,false)}
+}
+
+async function releaseLease(){
+  try{await api('/api/lease/release',{method:'POST',body:JSON.stringify({client_id:clientId})})}catch(e){}
+}
+
+function onActivated(){
+  // A second launch asked this instance to come forward: show the running task.
+  goStep(5);
+  notify('已切换到正在运行的窗口','success');
+  poll(true);
+}
+
+/* Every write carries the client id, which is what lets the server tell two
+   pages apart. */
+function withClient(body){
+  if(body&&typeof body==='object')return Object.assign({},body,{client_id:clientId});
+  return {client_id:clientId};
+}
+
+/* ---- 已删除的出厂预设 ---------------------------------------------------
+   Deletions leave a tombstone so a stale copy of the settings file cannot bring
+   the preset back. This panel is the only place that may undo that, and it has
+   to be clicked: it lists what was deleted and offers an explicit restore. */
+async function refreshDeletedPresets(){
+  const host=$('deletedPresets');
+  if(!host)return;
+  try{
+    const v=await api('/api/deleted-presets');
+    const deleted=Object.entries(v.deleted||{});
+    if(!deleted.length){host.hidden=true;host.innerHTML='';return}
+    host.hidden=false;
+    host.innerHTML=`<b>已删除的出厂预设 ${deleted.length} 个</b>
+      <div class="help">删除会被记录，重新打开软件也不会自己回来。只有点下面的按钮才会重新创建它们。</div>
+      <ul>${deleted.map(([id,info])=>`<li>${esc(info.name||id)}（${esc(info.deleted_at||'')}）</li>`).join('')}</ul>
+      <div class="row"><span class="help">共出厂 ${v.shipped} 个预设</span>
+      <button class="secondary" onclick="restoreDefaultPresets(this)">恢复出厂预设</button></div>`;
+  }catch(e){host.hidden=true}
+}
+
+async function restoreDefaultPresets(btn){
+  setBusy(btn,true,'恢复中');
+  try{
+    const v=await api('/api/restore-default-presets',{method:'POST',body:'{}'});
+    notify(v.restored.length?`已恢复 ${v.restored.length} 个出厂预设`:'没有需要恢复的预设','success');
+    await refreshInventory();
+    await refreshDeletedPresets();
+  }catch(e){notify(e.message,'error')}finally{setBusy(btn,false)}
+}
+
+function staleNotice(v){
+  const stale=(v&&v.stale_rules)||[];
+  if(!stale.length)return '';
+  return ` 有 ${stale.length} 条替换规则因为工作流改动而暂停生效，可在「生效检查与依赖」里沿用。`;
+}
+
+async function preflightAction(button){if(typeof isReadOnly==='function'&&isReadOnly()){notify('本页为只读（另一个页面正在编辑）。要在这里操作请点顶部的「接管编辑」。','error');renderLeaseBanner();return}setBusy(button,true,'正在检查');try{const result=await preflight();notify(result.ready?'实际配置检查通过':'实际配置不能生成',result.ready?'success':'error');return result}catch(e){
+  // The server returns the blocking problems, warnings and stale rules with the
+  // failure; render them so the user sees the cause, not just a message.
+  const payload=e.payload||{};
+  const report=payload.preflight||{};
+  $('effective').className='effective bad';
+  const problems=(payload.blocking||[]).length?payload.blocking:(report.blocking||[]);
+  const warnings=report.warnings||[];
+  $('effective').innerHTML=`<b>实际生效检查：不能生成</b><div>${esc(e.message)}</div>`
+    +problems.map(p=>`<div>· ${esc(p.title||'')}${p.node_id?` 节点 ${esc(p.node_id)}（${esc(p.class_type||'')}）`:''}${p.input_name?` 参数 ${esc(p.input_name)}`:''}${p.received_value!=null?` 当前值 ${esc(String(p.received_value))}`:''}${(p.candidates||[]).length?` · 可用候选 ${esc(p.candidates.join('、'))}`:''}</div>`).join('')
+    +warnings.map(w=>`<div>提示：${esc(w)}</div>`).join('')
+    +staleNotice(payload);
+  notify(e.message,'error');
+  openDrawer('inspect').catch(()=>{});
+  throw e}finally{setBusy(button,false)}}
+async function startBatch(button){if(typeof isReadOnly==='function'&&isReadOnly()){notify('本页为只读（另一个页面正在编辑）。要在这里操作请点顶部的「接管编辑」。','error');renderLeaseBanner();return}if(!comfyConnected)return notify('ComfyUI 未启动，无法提交任务','error');if(!bundle||!bundle.items.length)return notify('请先导入提示词合集','error');setBusy(button,true,'正在提交');try{await syncBundle();const body=batchConfig();await preflight(body);await api('/api/start',{method:'POST',body:JSON.stringify(body)});goStep(5);notify('批次已提交到 ComfyUI');poll(true)}catch(e){$('effective').className='effective bad';$('effective').innerHTML=`<b>实际生效检查：不能生成</b><div>${esc(e.message)}</div>`;notify(e.message,'error')}finally{setBusy(button,false)}}
+async function poll(immediate=false){if(pollTimer){clearTimeout(pollTimer);pollTimer=null}try{const v=await api('/api/status?client_id='+encodeURIComponent(typeof clientId==='string'?clientId:'')),s=v.status;if(v.bundle&&(!bundle||(typeof isReadOnly==='function'&&isReadOnly()))){
+  bundle=v.bundle;bundle.items.forEach(x=>x.count=x.count||1);
+  if(!selectedPromptIndexes)selectedPromptIndexes=new Set();
+  renderBundle()
+}applyStatus(s);if(typeof applyLease==='function')applyLease(v.lease||{});renderReview(v.review);if(lastRunStatus&&lastRunStatus!==s.status&&['completed','completed_with_errors','cancelled','aborted'].includes(s.status))notify(`运行状态：${s.status}`,s.errors?'error':'success');lastRunStatus=s.status;pollTimer=setTimeout(()=>poll(),['running','paused','starting'].includes(s.status)?650:2200)}catch(e){pollTimer=setTimeout(()=>poll(),2500)}}
+goStep(currentStep);refreshInventory();poll(true);
+</script>
+<style>
+.review-board{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(430px,1fr));margin-top:14px}
+.review-card{border:1px solid #2e3a4d;border-radius:10px;background:#161d28;padding:12px;display:grid;gap:10px;grid-template-columns:210px 1fr}
+.review-card.is-active{outline:2px solid #4c8dff}
+.review-card .thumb{position:relative;cursor:zoom-in}
+.review-card .thumb img{width:100%;border-radius:8px;display:block;background:#0d1218}
+.review-card h4{margin:0;font-size:14px}
+.review-card .kv{display:grid;grid-template-columns:auto 1fr;gap:2px 8px;font-size:12px;margin:6px 0}
+.review-card .kv dt{color:#8fa3bf}
+.review-card .kv dd{margin:0;word-break:break-all}
+.review-card .prompt{font-size:12px;color:#b9c7da;max-height:78px;overflow:auto;background:#0f141c;border-radius:6px;padding:6px}
+.review-actions{display:flex;flex-wrap:wrap;gap:6px}
+.review-actions button{padding:5px 9px;font-size:12px}
+.badge{padding:2px 8px;border-radius:999px;font-size:11px;border:1px solid #3a4a61}
+.badge.pending{background:#243044;color:#b9c7da}
+.badge.approved{background:#14352a;border-color:#2f6b52;color:#7fe0b0}
+.badge.rejected{background:#3a1c1c;border-color:#7a3a3a;color:#ff9d9d}
+.badge.replaced{background:#332b12;border-color:#6b5a2f;color:#e8cf87}
+.review-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:12px}
+.abort-banner{margin-top:10px;padding:10px 12px;border-radius:8px;background:#3a1c1c;border:1px solid #7a3a3a;color:#ffbdbd;font-size:13px}
+.drawer{position:fixed;top:0;right:0;width:min(560px,94vw);height:100vh;background:#111823;border-left:1px solid #2e3a4d;z-index:60;display:flex;flex-direction:column}
+.drawer-head{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid #2e3a4d}
+.drawer-head h3{margin:0;font-size:15px}
+.drawer-body{overflow:auto;padding:12px 14px;display:grid;gap:12px}
+.issue{border:1px solid #4a3a3a;border-left:4px solid #b8564f;border-radius:8px;padding:10px 12px;background:#1a1a20}
+.issue.warn{border-left-color:#c8a24a}
+.issue h5{margin:0 0 6px;font-size:13px}
+.issue p{margin:4px 0;font-size:12px;color:#c4d0e0}
+.issue ul{margin:4px 0 0 16px;font-size:12px;color:#a9d3b6}
+.issue details{margin-top:6px}
+.issue summary{cursor:pointer;font-size:12px;color:#8fa3bf}
+.issue pre{white-space:pre-wrap;word-break:break-all;font-size:11px;background:#0d1218;padding:8px;border-radius:6px;max-height:260px;overflow:auto}
+.provenance{font-size:11px;border-collapse:collapse;width:100%}
+.provenance th,.provenance td{border-bottom:1px solid #24303f;padding:3px 6px;text-align:left}
+.provenance td.src{color:#8fa3bf}
+.viewer{width:min(1500px,96vw);border:none;border-radius:10px;background:#0d1218;color:#e7eef8;padding:10px}
+.viewer::backdrop{background:#000c}
+.viewer img{max-width:100%;max-height:86vh;display:block;margin:0 auto}
+.viewer-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:13px}
+.workbench{margin-top:16px;border-top:1px solid var(--line);padding-top:14px}
+.wb-scope{display:flex;align-items:end;gap:12px;margin:10px 0}
+.wb-scope label{max-width:340px}
+.wb-groups{display:grid;gap:12px}
+.wb-group{border:1px solid var(--line);border-radius:10px;padding:12px}
+.wb-group h3{margin:0 0 10px;font-size:14px}
+.wb-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
+.wb-field label{font-size:12px}
+.wb-field .hint{color:var(--muted);font-size:11px;margin-top:3px;line-height:1.35}
+.wb-field.set input,.wb-field.set select{border-color:var(--accent);background:#fff7f5}
+.wb-badge{display:inline-block;padding:1px 6px;border-radius:999px;font-size:10px;border:1px solid var(--line);margin-left:4px}
+.wb-badge.def{background:#eef4ff;border-color:#b9cdf0}
+.wb-badge.batch{background:#fdf0ec;border-color:#e6bcae}
+.readonly-banner{position:sticky;top:0;z-index:50;padding:9px 12px;border-radius:8px;
+  background:#3a3320;border:1px solid #7a6a3a;color:#ffdf9d;font-size:13px;margin-bottom:10px}
+.readonly-banner button{margin-left:10px;width:auto;padding:4px 10px;font-size:12px}
+body.readonly .step-panel .card button:not(.lease-ok),
+body.readonly #start,body.readonly #applyParams{opacity:.5}
+.lease-pill{margin-left:8px;font-size:11px;padding:2px 8px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+.lease-pill.mine{background:#dcefe4;color:var(--green);border-color:#a9cfba}
+.deleted-presets{margin-top:10px;padding:10px 12px;border-radius:8px;background:#fbf7ee;
+  border:1px solid #e0d6c0;font-size:12px}
+.deleted-presets .row{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:6px}
+.deleted-presets button{width:auto;padding:4px 10px;font-size:12px}
+.deleted-presets ul{margin:4px 0 0 16px;color:var(--muted)}
+</style>
+<script>
+/* Per-image review, error drawer and keyboard triage.
+   Rendered from server state only: the page never builds paths or reads report
+   files itself. */
+let reviewState={run_id:'',results:[],review:{},statuses:[],redo_modes:[],aborted_reason:''};
+let activeIndex=-1;
+// Replacements the user chose for this batch only. Permanent ones live on the
+// server and are merged there, so this never needs to know about them.
+let batchOverrides={};
+let lastInspect={};
+const BADGE_CLASS={'待确认':'pending','已通过':'approved','需重做':'rejected','已替换':'replaced'};
+
+function renderReview(v){
+  if(!v)return;
+  reviewState=Object.assign(reviewState,v||{});
+  const s=reviewState.results||[];
+  const banner=$('abortBanner');
+  if(reviewState.aborted_reason){banner.hidden=false;banner.textContent='批次已提前停止：'+reviewState.aborted_reason}
+  else{banner.hidden=true;banner.textContent=''}
+  const by=reviewState.review?.by_status||{};
+  $('reviewSummary').textContent=s.length?`共 ${s.length} 张 · 待确认 ${by['待确认']||0} · 已通过 ${by['已通过']||0} · 需重做 ${by['需重做']||0} · 已替换 ${by['已替换']||0}`:'';
+  $('reviewBoard').innerHTML=s.map(cardHtml).join('');
+}
+
+function cardHtml(x){
+  const status=x.review_status||'待确认';
+  const gen=x.generation||{};
+  const base=x.base_dimensions||{}, final=x.final_dimensions||{};
+  const size=(base.width&&final.width)
+    ? `原始 ${base.width}×${base.height} → 最终 ${final.width}×${final.height}${x.upscale_factor?`（×${x.upscale_factor}）`:''}`
+    : (final.width?`${final.width}×${final.height}`:'');
+  const loras=(gen.loras||[]).map(l=>l.name).filter(Boolean);
+  const styles=(gen.styles||[]).map(st=>st.name||st.catalog).filter(Boolean);
+  const errs=x.errors||[];
+  const issue=errs.length?issuesHtml(errs):'';
+  return `<article class="review-card ${x.index===activeIndex?'is-active':''}" id="card-${x.index}" onclick="setActive(${x.index})">
+    <div>
+      <div class="thumb" onclick="event.stopPropagation();openViewer(${x.index})">
+        ${x.copied_to?`<img loading="lazy" src="/api/image?path=${encodeURIComponent(x.copied_to)}" alt="结果 ${x.index}">`:`<div class="help">${x.status==='completed'?'无成图':'尚未生成'}</div>`}
+      </div>
+      <div class="review-actions" style="margin-top:8px">
+        <button class="secondary" onclick="event.stopPropagation();reviewConfirm(${x.index},'已通过')">通过</button>
+        <button class="secondary" onclick="event.stopPropagation();reviewReject(${x.index})">打回重做</button>
+        <button class="secondary" onclick="event.stopPropagation();reviewNote(${x.index})">记录问题</button>
+      </div>
+    </div>
+    <div>
+      <h4>${esc(x.index+'. '+(x.title||''))} <span class="badge ${BADGE_CLASS[status]||'pending'}">${esc(status)}</span></h4>
+      <dl class="kv">
+        <dt>状态</dt><dd>${esc(x.status||'')}${x.elapsed!=null?` · ${x.elapsed}s`:''}${gen.workflow_variant?` · 分支 ${esc(gen.workflow_variant)}`:''}</dd>
+        <dt>工作流</dt><dd>${esc((gen.workflow_path||'').split(/[\\\\/]/).pop()||'')}</dd>
+        <dt>模型</dt><dd>${esc(gen.model||'')}</dd>
+        <dt>风格</dt><dd>${esc(styles.join('、')||'（无）')}</dd>
+        <dt>LoRA</dt><dd>${esc(loras.join('、')||'（无）')}</dd>
+        ${size?`<dt>尺寸</dt><dd>${esc(size)}${gen.megapixels?` · ${gen.megapixels}MP`:''}</dd>`:''}
+        ${seedHtml(x)}
+        <dt>检查</dt><dd>${x.quality?.repeated_panels?'疑似多栏/三视图':'通过'}</dd>
+        <dt>输出</dt><dd>${esc(x.copied_to||'')}</dd>
+      </dl>
+      ${x.note?`<div class="prompt">问题记录：${esc(x.note)}</div>`:''}
+      <div class="prompt">正面：${esc((x.compiled_prompt||x.prompt||'').slice(0,400))}</div>
+      <div class="prompt">负面：${esc((x.negative_prompt||'').slice(0,200)||'（未填写）')}</div>
+      ${(x.attempts||[]).length>1?`<div class="help">已生成 ${x.attempts.length} 次，当前显示最后一次</div>`:''}
+      ${(x.history||[]).length?`<div class="help">历史版本 ${x.history.length} 个（已替换，记录保留）</div>`:''}
+      ${issue}
+    </div>
+  </article>`;
+}
+
+function issuesHtml(errors){
+  return errors.map(p=>`<div class="issue ${p.severity==='warning'?'warn':''}">
+    <h5>${esc(p.title||'问题')}${p.workflow_level?' · 工作流级':''}</h5>
+    ${p.node_id?`<p>节点 ${esc(p.node_id)}${p.node_type?`（${esc(p.node_type)}）`:''}${p.input_name?` · 参数 ${esc(p.input_name)}`:''}</p>`:''}
+    ${p.received_value!=null?`<p>当前值：<code>${esc(String(p.received_value))}</code></p>`:''}
+    ${(p.candidates||[]).length?`<p>合法候选：${esc(p.candidates.slice(0,8).join('、'))}</p>`:''}
+    ${p.detail?`<p>${esc(p.detail)}</p>`:''}
+    ${(p.fixes||[]).length?`<ul>${p.fixes.map(f=>`<li>${esc(f)}</li>`).join('')}</ul>`:''}
+    ${p.raw?`<details><summary>原始 ComfyUI 信息</summary><pre>${esc(JSON.stringify(p.raw,null,1))}</pre></details>`:''}
+  </div>`).join('');
+}
+
+function setActive(index){activeIndex=index;document.querySelectorAll('.review-card').forEach(el=>el.classList.toggle('is-active',el.id==='card-'+index))}
+
+async function reviewConfirm(index,status,note){
+  try{
+    const v=await api('/api/review/confirm',{method:'POST',body:JSON.stringify({index,status,note:note||''})});
+    renderReview(v.review);notify(`第 ${index} 张已标记为 ${status}`,'success');
+  }catch(e){notify(e.message,'error')}
+}
+
+async function reviewReject(index){
+  const note=prompt('打回原因（可留空）：','');
+  if(note===null)return;
+  const mode=(prompt('重做方式：same_seed 同种子 / new_seed 换种子 / edited_prompt 改提示词 / reupscale_only 仅重做放大','new_seed')||'new_seed').trim();
+  if(!['same_seed','new_seed','edited_prompt','reupscale_only'].includes(mode)){notify('不支持的重做方式：'+mode,'error');return}
+  try{
+    await api('/api/review/redo',{method:'POST',body:JSON.stringify({index,mode,note})});
+    notify(`第 ${index} 张已按 ${mode} 重新生成`,'success');
+    poll(true);
+  }catch(e){notify(e.message,'error')}
+}
+
+async function reviewNote(index){
+  const note=prompt('问题记录：','');
+  if(note===null)return;
+  await reviewConfirm(index,'需重做',note);
+}
+
+async function confirmAllPending(btn){
+  const pending=(reviewState.results||[]).filter(x=>x.copied_to&&(x.review_status||'待确认')==='待确认').map(x=>x.index);
+  if(!pending.length){notify('没有待确认的成图','error');return}
+  setBusy(btn,true);
+  try{
+    const v=await api('/api/review/confirm',{method:'POST',body:JSON.stringify({indexes:pending,status:'已通过'})});
+    renderReview(v.review);notify(`已通过 ${pending.length} 张`,'success');
+  }catch(e){notify(e.message,'error')}finally{setBusy(btn,false)}
+}
+
+async function reloadSchema(btn){
+  setBusy(btn,true);
+  try{
+    const v=await api('/api/reload-schema',{method:'POST',body:'{}'});
+    notify(`已读取 ${v.nodes} 个节点定义`,'success');
+  }catch(e){notify(e.message,'error')}finally{setBusy(btn,false)}
+}
+
+function openViewer(index){
+  const row=(reviewState.results||[]).find(x=>x.index===index);
+  if(!row||!row.copied_to){notify('这一张还没有成图','error');return}
+  $('viewerImage').src='/api/image?path='+encodeURIComponent(row.copied_to);
+  $('viewerCaption').textContent=`${row.index}. ${row.title||''} · ${row.generation?.model||''}`;
+  $('viewer').showModal();
+}
+
+/* ---- 软件内替换缺失资源 -------------------------------------------------
+   A missing model is resolved here, in the software, instead of the user having
+   to find the folder and rename files. Nothing is substituted silently: the user
+   picks a real candidate, and the choice is visible in the audit afterwards. */
+function replaceHtml(p){
+  if(!p.node_id||!p.input_name)return '';
+  if(p.category!=='missing_resource')return '';
+  const candidates=(p.candidates||[]).filter(Boolean);
+  if(!candidates.length)return '';
+  const id=`rep-${p.node_id}-${p.input_name}`, sel=`sel-${id}`;
+  return `<div class="replace">
+    <label>替换为<select id="${sel}">${candidates.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('')}</select></label>
+    <div class="review-actions">
+      <button class="secondary" onclick="applyReplacement('${esc(p.node_id)}','${esc(p.input_name)}','batch','${esc(p.node_type||'')}')">仅本次批次生效</button>
+      <button onclick="applyReplacement('${esc(p.node_id)}','${esc(p.input_name)}','permanent','${esc(p.node_type||'')}')">保存为永久规则</button>
+    </div>
+  </div>`;
+}
+
+function staleRulesHtml(rules){
+  if(!rules.length)return '';
+  return `<div class="issue warn"><h5>有 ${rules.length} 条替换规则因为工作流文件改动而暂停生效</h5>
+    <table class="provenance"><tr><th>节点</th><th>参数</th><th>替换为</th></tr>
+    ${rules.map(r=>`<tr><td>${esc(r.node_id)} ${esc(r.node_type||'')}</td><td>${esc(r.input_name)}</td><td>${esc(r.value)}</td></tr>`).join('')}
+    </table>
+    <p>工作流改动后节点编号的含义可能已经变了，所以这些规则不会自动生效。
+       确认节点编号仍然对应后，可以点下面的按钮重新启用；也可以忽略，重新选一次。</p>
+    <div class="review-actions"><button class="secondary" onclick="reapplyRules()">沿用旧替换规则</button></div>
+  </div>`;
+}
+
+async function reapplyRules(){
+  const workflowPath=lastInspect.workflow_path||$('workflow').value;
+  try{
+    await api('/api/resource/reapply',{method:'POST',body:JSON.stringify({workflow_path:workflowPath})});
+    notify('已重新启用旧替换规则','success');
+    await openDrawer('inspect');
+    preflightAction($('preflightButton'));
+  }catch(e){notify(e.message,'error')}
+}
+
+function rulesHtml(rules){
+  if(!rules.length)return '';
+  return `<details open><summary>已保存的替换规则（${rules.length}）</summary>
+    <table class="provenance"><tr><th>节点</th><th>参数</th><th>替换为</th><th></th></tr>
+    ${rules.map(r=>`<tr><td>${esc(r.node_id)} ${esc(r.node_type||'')}</td><td>${esc(r.input_name)}</td>
+      <td>${esc(r.value)}</td>
+      <td><button class="secondary" onclick="forgetReplacement('${esc(r.node_id)}','${esc(r.input_name)}')">删除</button></td></tr>`).join('')}
+    </table></details>`;
+}
+
+function foldersHtml(dirs){
+  const names=Object.keys(dirs||{});
+  if(!names.length)return '';
+  return `<details><summary>模型目录（把缺失文件放进对应目录后点「重新检查」）</summary>
+    <div class="review-actions">${names.map(n=>`<button class="secondary" onclick="openFolder('${esc(n)}')">打开 ${esc(n)}</button>`).join('')}</div>
+    ${names.map(n=>`<div class="help">${esc(n)}：${esc(dirs[n])}</div>`).join('')}
+  </details>`;
+}
+
+async function applyReplacement(nodeId,inputName,scope,nodeType){
+  const pick=$(`sel-rep-${nodeId}-${inputName}`);
+  const value=pick?pick.value:'';
+  if(!value){notify('请先选择替换目标','error');return}
+  const workflowPath=lastInspect.workflow_path||$('workflow').value;
+  try{
+    await api('/api/resource/apply',{method:'POST',body:JSON.stringify({
+      workflow_path:workflowPath,node_id:nodeId,input_name:inputName,value,scope,node_type:nodeType})});
+    if(scope==='batch'){
+      batchOverrides=Object.assign({},batchOverrides);
+      batchOverrides[nodeId]=Object.assign({},batchOverrides[nodeId]||{},{[inputName]:value});
+      notify(`已应用：节点 ${nodeId} 的 ${inputName} → ${value}（仅本次批次）`,'success');
+    }else{
+      notify(`已保存永久规则：节点 ${nodeId} 的 ${inputName} → ${value}`,'success');
+    }
+    await openDrawer('inspect');
+    preflightAction($('preflightButton'));
+  }catch(e){notify(e.message,'error')}
+}
+
+async function forgetReplacement(nodeId,inputName){
+  const workflowPath=lastInspect.workflow_path||$('workflow').value;
+  try{
+    await api('/api/resource/forget',{method:'POST',body:JSON.stringify({workflow_path:workflowPath,node_id:nodeId,input_name:inputName})});
+    notify('已删除该替换规则','success');
+    await openDrawer('inspect');
+  }catch(e){notify(e.message,'error')}
+}
+
+async function openFolder(name){
+  try{await api('/api/open-folder',{method:'POST',body:JSON.stringify({folder:name})})}
+  catch(e){notify(e.message,'error')}
+}
+
+/* Seed display: the seed is what decides whether a redo can reproduce an image,
+   so it is shown on every card and carried in the review record. */
+function seedHtml(x){
+  const seeds=(x.generation||{}).seeds||{};
+  const keys=Object.keys(seeds);
+  if(!keys.length)return '';
+  return keys.map(k=>`<dt>种子</dt><dd>${esc(k)} = <code>${esc(String(seeds[k]))}</code></dd>`).join('');
+}
+
+async function openDrawer(which,btn){
+  const drawer=$('drawer');
+  drawer.hidden=false;
+  $('drawerTitle').textContent='生效检查与依赖';
+  $('drawerBody').innerHTML='<div class="help">正在读取…</div>';
+  try{
+    const v=(await api('/api/inspect?v=1')).inspect||{};
+    lastInspect=v;
+    const blocking=v.blocking||[];
+    const audit=v.audit||{};
+    const counts=audit.source_counts||{};
+    const overrides=(audit.overrides||[]).slice(0,200);
+    $('drawerBody').innerHTML=`
+      <div class="help">节点定义 ${v.schema_nodes||0} 个 · 预检 ${v.ready?'通过':'未通过'} · 提交图输入 ${audit.input_count||0} 个</div>
+      <div class="help">来源统计：连线 ${counts.linked||0} · 控件 ${counts.widget||0} · 本次覆盖 ${counts.override||0} · 注入 ${counts.injected||0}</div>
+      ${blocking.length?blocking.map(p=>issuesHtml([p])+replaceHtml(p)).join('')
+        :(audit.input_count?`<div class="help">没有阻断问题。</div>`
+          :'<div class="help">还没有可检查的提交图。先点「实际检查」或启动一次批次，这里会显示本次生效的实际参数。</div>')}
+      ${staleRulesHtml(v.stale_rules||[])}
+      ${rulesHtml(v.rules||[])}
+      ${foldersHtml(v.model_directories||{})}
+      ${overrides.length?`<details open><summary>本次运行覆盖的参数（${overrides.length}）</summary>
+        <table class="provenance"><tr><th>节点</th><th>参数</th><th>值</th><th>来源</th></tr>
+        ${overrides.map(o=>`<tr><td>${esc(o.node_id)} ${esc(o.class_type||'')}</td><td>${esc(o.input)}</td><td>${esc(String(o.value).slice(0,60))}</td><td class="src">${esc(o.source_cn||o.source)}</td></tr>`).join('')}
+        </table></details>`:''}
+    `;
+  }catch(e){
+    $('drawerBody').innerHTML=`<div class="issue"><h5>无法读取检查结果</h5><p>${esc(e.message)}</p><p>请先执行一次「实际检查」或启动批次。</p></div>`;
+  }
+}
+
+function closeDrawer(){$('drawer').hidden=true}
+
+document.addEventListener('keydown',e=>{
+  if(e.target.matches('input,textarea,select'))return;
+  if(!document.getElementById('viewer').open&&$('drawer')&&!$('drawer').hidden&&e.key==='Escape'){closeDrawer();return}
+  const rows=(reviewState.results||[]).filter(x=>x.copied_to);
+  if(!rows.length)return;
+  const at=rows.findIndex(x=>x.index===activeIndex);
+  if(e.key==='j'||e.key==='J'){const next=rows[Math.min(rows.length-1,at+1)];setActive(next.index);document.getElementById('card-'+next.index)?.scrollIntoView({block:'nearest'})}
+  else if(e.key==='k'||e.key==='K'){const prev=rows[Math.max(0,at-1)];setActive(prev.index);document.getElementById('card-'+prev.index)?.scrollIntoView({block:'nearest'})}
+  else if((e.key==='y'||e.key==='Y')&&at>=0){reviewConfirm(rows[at].index,'已通过')}
+  else if((e.key==='n'||e.key==='N')&&at>=0){reviewReject(rows[at].index)}
+  else if(e.key==='Enter'&&at>=0){openViewer(rows[at].index)}
+});
+
+connectEvents();
+</script></body></html>

@@ -146,10 +146,10 @@ async function mgMark(kind){
   // Share the gallery's write queue; acknowledged snapshots include these deltas.
   mkQueue=mkQueue.then(async()=>{
     if(mkBlocked||!mkBase)throw Error('收藏尚未同步完成，请重连后再标记');
+    const serial=mkEdit,local=cloneDoc(marksDoc()),base=cloneDoc(mkBase);
     const response=await fetch('/api/marks/apply',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ops})});
     const result=await response.json();if(!response.ok)throw Error(result.error||'标记失败');
-    // Rebase unsent gallery edits on the newly acknowledged marks.
-    const serial=mkEdit,local=cloneDoc(marksDoc()),base=cloneDoc(mkBase);
+    // Gallery edits made while this request is pending must keep their local snapshot.
     const r=await fetch('/api/marks');const m=await r.json();if(!r.ok)throw Error('标记已保存，读取失败，请刷新');
     if(serial===mkEdit&&mgMarksEqual(local,base)){
       mkBase=cloneDoc(m);mkAck=cloneDoc(m);acceptMarks(m);refreshMarks();
@@ -172,7 +172,7 @@ function mgDialog(message,input=false){
 }
 setInterval(async()=>{
   if(!useServer||mgMarksPoll||MG.busy||mkBlocked||!mkBase)return;
-  if(!mgMarksEqual(marksDoc(),mkBase)||!mgMarksEqual(mkBase,mkAck))return;
+  if(!mgMarksEqual(marksDoc(),mkBase)||mgMarksKey(mkBase)!==mgMarksKey(mkAck))return;
   mgMarksPoll=true;const serial=mkEdit,baseline=mgMarksKey(mkBase);
   try{
     const r=await fetch('/api/marks');const m=await r.json();if(!r.ok)return;

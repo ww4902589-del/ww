@@ -9,3 +9,5 @@
   `handoff/web-*`; S / ComfyBatch milestones use the `handoff/local-s-*` branch
   required by their delivery guide.
 - Never commit credentials, tokens, `.env` files, or generated dependency directories.
+
+- For the desktop S target or style-workbench V3.2 planning, first read `software/S/MAINTENANCE_INDEX.md`. It records the verified desktop version, local source catalogue and the current remote-source gap; use the matching local source before applying old main-branch code.
